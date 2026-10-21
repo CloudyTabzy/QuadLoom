@@ -143,20 +143,30 @@ pub fn write_rosy(path: &Path, directions: &[DVec3]) -> Result<(), IoError> {
     std::fs::write(path, text).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
 }
 
-/// Reads a `.rosy` file for a mesh with `faces` triangles.
+/// Reads a `.rosy` file for a mesh with `faces` triangles: an integer face
+/// count, the symmetry (must be 4), then three finite numbers per face.
 pub fn read_rosy(path: &Path, faces: usize) -> Result<Vec<DVec3>, IoError> {
+    let invalid = |what: &str| IoError::Invalid(format!("{}: {what}", path.display()));
     let text = std::fs::read_to_string(path).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))?;
-    let mut numbers = text.split_whitespace().map(str::parse::<f64>);
-    let mut next = |what: &str| -> Result<f64, IoError> {
-        numbers
-            .next()
-            .and_then(Result::ok)
-            .ok_or_else(|| IoError::Invalid(format!("{}: expected {what}", path.display())))
-    };
-    let count = next("the face count")? as usize;
-    let _symmetry = next("the symmetry")?;
-    if count != faces {
-        return Err(IoError::Invalid(format!("{}: {count} directions for {faces} faces", path.display())));
+    let mut tokens = text.split_whitespace();
+    let count: usize = tokens
+        .next()
+        .and_then(|t| t.parse().ok())
+        .ok_or_else(|| invalid("expected an integer face count"))?;
+    let symmetry: u32 =
+        tokens.next().and_then(|t| t.parse().ok()).ok_or_else(|| invalid("expected the symmetry"))?;
+    if symmetry != 4 {
+        return Err(invalid(&format!("a {symmetry}-RoSy field; only cross fields (4) are supported")));
     }
-    (0..count).map(|_| Ok(DVec3::new(next("x")?, next("y")?, next("z")?))).collect()
+    if count != faces {
+        return Err(invalid(&format!("{count} directions for {faces} faces")));
+    }
+    let mut number = || -> Result<f64, IoError> {
+        tokens
+            .next()
+            .and_then(|t| t.parse::<f64>().ok())
+            .filter(|x| x.is_finite())
+            .ok_or_else(|| invalid("expected a finite direction component"))
+    };
+    (0..count).map(|_| Ok(DVec3::new(number()?, number()?, number()?))).collect()
 }

@@ -114,7 +114,7 @@ pub struct DualEdge {
 }
 
 /// Every interior edge shared by exactly two faces, in a deterministic order
-/// (by the first face, then its corner). Edges of more than two faces (not
+/// (by the face that completes the pair, then its corner). Edges of more than two faces (not
 /// expected after repair) are skipped.
 pub fn dual_edges(triangles: &[[u32; 3]]) -> Vec<DualEdge> {
     let mut first: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();

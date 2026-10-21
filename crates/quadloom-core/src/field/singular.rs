@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn sphere_and_torus_obey_poincare_hopf() {
         let (p, t) = crate::remesh::tests::sphere_mesh(12, 24);
-        let field = smooth_field(&p, &t, &[], &[], 0.0).unwrap();
+        let field = smooth_field(&p, &t, &[], &[], 0.0, &crate::control::Control::default()).unwrap();
         let indices = vertex_indices(&p, &t, &field.powers);
         assert_eq!(indices.iter().sum::<i32>(), 8, "sphere: χ = 2 → 8 quarters");
         // The smoothest cross field on a sphere has the cube's eight +¼ singularities.
@@ -109,7 +109,7 @@ mod tests {
             indices.iter().filter(|&&k| k != 0).collect::<Vec<_>>()
         );
         let (p, t) = torus(32, 16);
-        let field = smooth_field(&p, &t, &[], &[], 0.0).unwrap();
+        let field = smooth_field(&p, &t, &[], &[], 0.0, &crate::control::Control::default()).unwrap();
         let indices = vertex_indices(&p, &t, &field.powers);
         // Only the total is fixed: on a coarse torus the relaxed energy (|z| may
         // dip near singularities) admits ± pairs; Task 4 compares counts with

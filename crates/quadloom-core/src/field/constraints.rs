@@ -14,16 +14,16 @@ pub fn sufficient_features(feature_length: f64, area: f64, sharp_factor: f64) ->
     area > 0.0 && feature_length / area.sqrt() > sharp_factor
 }
 
-/// Constrained edges of one face must agree this well (|Σ ℓ·e^{4iφ}| / Σ ℓ)
-/// to fix its cross; edges at right angles agree exactly.
-const MIN_AGREEMENT: f64 = 0.5;
+/// Constrained edges of one face whose crosses lie within this angle (°) of
+/// each other are averaged; otherwise the longest edge decides.
+const AGREEMENT_DEG: f64 = 1.0;
 
 /// Every face beside a feature edge or a border edge, aligned to it (the
 /// oracle's feature constraints plus `align_borders`). A face with several
-/// such edges takes their length-weighted average as crosses (power 4), so
-/// edges at right angles agree; if they genuinely conflict (a bevel strip's
-/// triangle between edges 45° apart) the face is left to the smooth solve
-/// rather than forced, which would create singularities between them.
+/// such edges follows the longest (ties: the first in corner order), so it
+/// lies exactly along one of its features, as tracing needs; edges at right
+/// angles (or within [`AGREEMENT_DEG`] of it) describe the same cross and are
+/// averaged.
 pub fn hard_constraints(
     positions: &[DVec3],
     triangles: &[[u32; 3]],
@@ -41,18 +41,34 @@ pub fn hard_constraints(
     let mut hard = Vec::new();
     for (f, t) in triangles.iter().enumerate() {
         let f = f as u32;
-        let (mut sum, mut total) = (Cx::ZERO, 0.0);
-        for (a, b) in (0..3).map(|i| (t[i], t[(i + 1) % 3])) {
-            let key = (a.min(b), a.max(b));
-            if features.contains(&key) || uses.get(&key) == Some(&1) {
-                let edge = positions[b as usize] - positions[a as usize];
-                sum = sum + frames.power(f, edge, ROSY).scale(edge.length());
-                total += edge.length();
-            }
+        if frames.is_degenerate(f) {
+            continue;
         }
-        if total > 0.0 && !frames.is_degenerate(f) && sum.norm() >= MIN_AGREEMENT * total {
-            hard.push(Hard { face: f, direction: frames.direction(f, sum.arg() / ROSY) });
-        }
+        let constrained: Vec<DVec3> = (0..3)
+            .map(|i| (t[i], t[(i + 1) % 3]))
+            .filter(|&(a, b)| {
+                let key = (a.min(b), a.max(b));
+                features.contains(&key) || uses.get(&key) == Some(&1)
+            })
+            .map(|(a, b)| positions[b as usize] - positions[a as usize])
+            .collect();
+        let Some(longest) =
+            constrained.iter().copied().reduce(|x, y| if y.length() > x.length() { y } else { x })
+        else {
+            continue;
+        };
+        let reference = frames.power(f, longest, ROSY);
+        let tolerance = (ROSY * AGREEMENT_DEG).to_radians().cos();
+        let agreeing: Vec<DVec3> = constrained
+            .iter()
+            .copied()
+            .filter(|&e| {
+                let z = frames.power(f, e, ROSY);
+                z.re * reference.re + z.im * reference.im >= tolerance
+            })
+            .collect();
+        let sum = agreeing.iter().fold(Cx::ZERO, |acc, &e| acc + frames.power(f, e, ROSY).scale(e.length()));
+        hard.push(Hard { face: f, direction: frames.direction(f, sum.arg() / ROSY) });
     }
     hard
 }
@@ -186,7 +202,7 @@ mod tests {
         let (p, t, features) = cube(6);
         assert!(!features.is_empty());
         let hard = hard_constraints(&p, &t, &features);
-        let field = smooth_field(&p, &t, &hard, &[], 0.0).unwrap();
+        let field = smooth_field(&p, &t, &hard, &[], 0.0, &crate::control::Control::default()).unwrap();
         for d in &field.directions {
             assert!(axis_misalignment(*d) < 1.0, "{d:?}");
         }
@@ -196,7 +212,7 @@ mod tests {
     fn cylinder_follows_curvature() {
         let (p, t) = cylinder(40, 48);
         let soft = curvature_alignment(&p, &t);
-        let field = smooth_field(&p, &t, &[], &soft, 0.3).unwrap();
+        let field = smooth_field(&p, &t, &[], &soft, 0.3, &crate::control::Control::default()).unwrap();
         for (f, d) in field.directions.iter().enumerate() {
             let [a, b, c] = t[f].map(|v| p[v as usize]);
             let z = (a.z + b.z + c.z) / 3.0;
@@ -223,11 +239,16 @@ mod tests {
     }
 
     #[test]
-    fn conflicting_edges_leave_the_face_free() {
-        // An equilateral triangle on the border: its edges are 60° apart, so
-        // no cross fits them all; forcing one would only create singularities.
-        let p = [DVec3::ZERO, DVec3::X, DVec3::new(0.5, 3f64.sqrt() / 2.0, 0.0)];
-        assert!(hard_constraints(&p, &[[0, 1, 2]], &[]).is_empty());
+    fn conflicting_edges_follow_the_longest() {
+        // Two border sides 20° apart: the face follows the longer one exactly
+        // (averaging pinned it 10° off both).
+        let a = 20f64.to_radians();
+        let p = [DVec3::ZERO, DVec3::new(3.0, 0.0, 0.0), DVec3::new(a.cos(), a.sin(), 0.0)];
+        let hard = hard_constraints(&p, &[[0, 1, 2]], &[[0, 1], [0, 2]]);
+        assert_eq!(hard.len(), 1);
+        let d = hard[0].direction;
+        let misalignment = d.x.abs().max(d.y.abs()).acos().to_degrees();
+        assert!(misalignment < 1e-6, "{d:?} is {misalignment}° off the longest edge");
     }
 
     #[test]

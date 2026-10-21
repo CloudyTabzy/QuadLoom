@@ -93,7 +93,8 @@ pub struct FieldReport {
 pub struct FieldOutput {
     /// One unit direction per triangle (one of its cross's four).
     pub directions: Vec<DVec3>,
-    /// `(vertex, index in quarters)` for every singular vertex, by vertex id.
+    /// `(vertex, index in quarters)` for every singular vertex, by vertex id
+    /// (a vertex shared by parts that only touch there sums their indices).
     pub singularities: Vec<(u32, i32)>,
     pub report: FieldReport,
 }
@@ -125,11 +126,39 @@ pub fn compute(
         CurvatureAlignment::Auto => !sufficient_features(feature_length, area, params.sharp_factor),
     };
     let parts = components::split(triangles, positions.len());
+    // Each feature edge, once, under the part its first vertex belongs to.
+    let mut part_of_vertex = vec![usize::MAX; positions.len()];
+    for (k, part) in parts.iter().enumerate() {
+        for &f in &part.faces {
+            for v in triangles[f as usize] {
+                part_of_vertex[v as usize] = k;
+            }
+        }
+    }
+    let mut part_features: Vec<Vec<[u32; 2]>> = vec![Vec::new(); parts.len()];
+    for &[a, b] in feature_edges {
+        if let Some(bucket) = part_features.get_mut(part_of_vertex[a as usize]) {
+            bucket.push([a, b]);
+        }
+    }
+    let done = std::sync::atomic::AtomicUsize::new(0);
     let results: Vec<Result<PartField, Error>> = parts
         .par_iter()
-        .map(|part| {
+        .zip(&part_features)
+        .map(|(part, features)| {
             control.checkpoint(stage)?;
-            Ok(part_field(positions, triangles, feature_edges, &part.faces, aligned, params.alignment_weight))
+            let field = part_field(
+                positions,
+                triangles,
+                features,
+                &part.faces,
+                aligned,
+                params.alignment_weight,
+                control,
+            )?;
+            let finished = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            control.set_progress(stage, finished as f32 / parts.len().max(1) as f32);
+            Ok(field)
         })
         .collect();
     let mut output = FieldOutput { directions: vec![DVec3::ZERO; triangles.len()], ..FieldOutput::default() };
@@ -144,6 +173,16 @@ pub fn compute(
         output.report.fallback_parts += usize::from(field.fallback);
     }
     output.singularities.sort_unstable();
+    // A vertex where parts only touch appears once per part: merge.
+    let mut merged: Vec<(u32, i32)> = Vec::with_capacity(output.singularities.len());
+    for (v, k) in output.singularities.drain(..) {
+        match merged.last_mut() {
+            Some(last) if last.0 == v => last.1 += k,
+            _ => merged.push((v, k)),
+        }
+    }
+    merged.retain(|&(_, k)| k != 0);
+    output.singularities = merged;
     for &(_, k) in &output.singularities {
         if k > 0 {
             output.report.positive_quarters += i64::from(k);
@@ -164,6 +203,7 @@ struct PartField {
 }
 
 /// One connected part: its own vertex numbering, solve, and singularities.
+/// A failed solve falls back to the propagated field; cancellation is passed on.
 fn part_field(
     positions: &[DVec3],
     triangles: &[[u32; 3]],
@@ -171,7 +211,8 @@ fn part_field(
     faces: &[u32],
     aligned: bool,
     alignment_weight: f64,
-) -> PartField {
+    control: &Control,
+) -> Result<PartField, Error> {
     let mut vertices: Vec<u32> = faces.iter().flat_map(|&f| triangles[f as usize]).collect();
     vertices.sort_unstable();
     vertices.dedup();
@@ -184,8 +225,9 @@ fn part_field(
     let hard = hard_constraints(&part_positions, &part_triangles, &part_features);
     let soft = if aligned { curvature_alignment(&part_positions, &part_triangles) } else { Vec::new() };
     let (directions, powers, fallback) =
-        match smooth_field(&part_positions, &part_triangles, &hard, &soft, alignment_weight) {
+        match smooth_field(&part_positions, &part_triangles, &hard, &soft, alignment_weight, control) {
             Ok(field) => (field.directions, field.powers, false),
+            Err(e) if e.kind == crate::error::ErrorKind::Cancelled => return Err(e),
             Err(_) => {
                 let (d, z) = propagated(&part_positions, &part_triangles, &hard);
                 (d, z, true)
@@ -197,7 +239,7 @@ fn part_field(
         .filter(|&(_, k)| k != 0)
         .map(|(v, k)| (vertices[v], k))
         .collect();
-    PartField { directions, singularities, hard_faces: hard.len(), fallback }
+    Ok(PartField { directions, singularities, hard_faces: hard.len(), fallback })
 }
 
 /// The recovery field when a solve fails: constraint directions spread
