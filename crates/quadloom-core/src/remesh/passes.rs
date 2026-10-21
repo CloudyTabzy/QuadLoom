@@ -60,10 +60,16 @@ impl Pass<'_> {
         (self.mesh.position(self.mesh.from(h)) - self.mesh.position(self.mesh.to(h))).length()
     }
 
-    fn half_edge_alive(&self, h: HalfEdge) -> bool {
-        // A half-edge is alive if the directed edge it names still maps to it.
+    /// The live half-edge between `h`'s endpoints, in either direction (`None`
+    /// once the edge is gone). Sweeps snapshot half-edge ids, and an operation
+    /// on a neighbour re-creates the faces around an edge (new ids) without
+    /// removing the edge itself; looking it up again keeps such an edge in the
+    /// sweep. Skipping stale ids instead left a 2.15-long panel edge unsplit
+    /// through all 15 iterations on `khronos/CommercialRefrigerator`, since the
+    /// fan beside it re-formed every iteration.
+    fn current(&self, h: HalfEdge) -> Option<HalfEdge> {
         let (a, b) = (self.mesh.from(h), self.mesh.to(h));
-        self.mesh.find_half_edge(a, b) == Some(h)
+        self.mesh.find_half_edge(a, b).or_else(|| self.mesh.find_half_edge(b, a))
     }
 
     /// Splits every edge longer than 4/3 of its local target at its midpoint.
@@ -75,14 +81,19 @@ impl Pass<'_> {
                 if self.mesh.face_count() >= self.max_faces {
                     return total + splits;
                 }
-                if !self.half_edge_alive(h) {
-                    continue;
-                }
+                let Some(h) = self.current(h) else { continue };
                 let (a, b) = (self.mesh.from(h), self.mesh.to(h));
                 if self.length(h) <= SPLIT_ABOVE * self.size(a, b) {
                     continue;
                 }
-                let mid = 0.5 * (self.mesh.position(a) + self.mesh.position(b));
+                // On the input (a feature edge's midpoint on its feature line),
+                // not on the chord: smoothing may not get to move it there.
+                let chord = 0.5 * (self.mesh.position(a) + self.mesh.position(b));
+                let mid = if self.mesh.is_feature(a, b) {
+                    self.projector.onto_features(chord)
+                } else {
+                    self.projector.onto_surface(chord)
+                };
                 if let Some(m) = self.mesh.split(h, mid) {
                     let s = 0.5 * (self.sizes[a as usize] + self.sizes[b as usize]);
                     if self.sizes.len() <= m as usize {
@@ -111,9 +122,7 @@ impl Pass<'_> {
             self.mesh.half_edges().into_iter().map(|h| (self.length(h), h)).collect();
         edges.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
         for (_, h) in edges {
-            if !self.half_edge_alive(h) {
-                continue;
-            }
+            let Some(h) = self.current(h) else { continue };
             let (a, b) = (self.mesh.from(h), self.mesh.to(h));
             let size = self.size(a, b);
             if self.length(h) >= COLLAPSE_BELOW * size {
@@ -156,15 +165,34 @@ impl Pass<'_> {
                 || n == gone
                 || (q - target).length() <= limit.max(LONG_EDGE_SLACK * (q - old_end).length())
         };
-        let ring_ok =
-            self.mesh.one_ring(keep).all(|n| fits(n, pk)) && self.mesh.one_ring(gone).all(|n| fits(n, pg));
+        // One walk around each endpoint serves every check below.
+        let faces = self.faces_around_all(&[keep, gone]);
+        let ring_ok = faces.iter().all(|&f| {
+            let corners = self.mesh.face_corners(f);
+            corners.iter().all(|&n| {
+                (!corners.contains(&keep) || fits(n, pk)) && (!corners.contains(&gone) || fits(n, pg))
+            })
+        });
         if !ring_ok
-            || !self.stays_close(keep, gone, target)
-            || !self.faces_survive(&[keep, gone], target, Some((keep, gone)))
+            || !self.stays_close(&faces, keep, gone, target)
+            || !self.faces_survive_among(&faces, &[keep, gone], target, Some((keep, gone)))
         {
             return false;
         }
         self.mesh.collapse_prechecked(h, target)
+    }
+
+    /// The faces around any of `vertices`, each once.
+    fn faces_around_all(&self, vertices: &[u32]) -> Vec<u32> {
+        let mut faces: Vec<u32> = Vec::with_capacity(16);
+        for &v in vertices {
+            for f in self.mesh.faces_around(v) {
+                if !faces.contains(&f) {
+                    faces.push(f);
+                }
+            }
+        }
+        faces
     }
 
     /// Whether the faces left by collapsing `gone` into `keep` at `target`
@@ -172,9 +200,7 @@ impl Pass<'_> {
     /// Those points lie on the input surface, and coarsening is what pulls the
     /// surface away from it: projection keeps every *vertex* on the surface,
     /// but only this keeps the faces near where the removed vertex was.
-    fn stays_close(&self, keep: u32, gone: u32, target: DVec3) -> bool {
-        let mut faces = self.mesh.faces_around(keep);
-        faces.extend(self.mesh.faces_around(gone));
+    fn stays_close(&self, faces: &[u32], keep: u32, gone: u32, target: DVec3) -> bool {
         let moved = |v: u32| if v == keep || v == gone { target } else { self.mesh.position(v) };
         let remaining: Vec<[DVec3; 3]> = faces
             .iter()
@@ -194,33 +220,38 @@ impl Pass<'_> {
     /// `collapsing = Some((a, b))`, faces holding both disappear: they count
     /// towards the "before" quality but not the "after".
     fn faces_survive(&self, movers: &[u32], target: DVec3, collapsing: Option<(u32, u32)>) -> bool {
+        self.faces_survive_among(&self.faces_around_all(movers), movers, target, collapsing)
+    }
+
+    /// [`faces_survive`](Self::faces_survive) over `faces`, the faces around
+    /// `movers` (as [`faces_around_all`](Self::faces_around_all) lists them).
+    fn faces_survive_among(
+        &self,
+        faces: &[u32],
+        movers: &[u32],
+        target: DVec3,
+        collapsing: Option<(u32, u32)>,
+    ) -> bool {
         let mut worst_before = 1.0f64;
         let mut worst_after = 1.0f64;
-        let mut seen: Vec<u32> = Vec::with_capacity(16);
-        for &v in movers {
-            for f in self.mesh.faces_around(v) {
-                if seen.contains(&f) {
-                    continue;
-                }
-                seen.push(f);
-                let corners = self.mesh.face_corners(f);
-                let old = corners.map(|c| self.mesh.position(c));
-                worst_before = worst_before.min(radius_ratio(old));
-                if let Some((a, b)) = collapsing
-                    && corners.contains(&a)
-                    && corners.contains(&b)
-                {
-                    continue;
-                }
-                let new = corners.map(|c| if movers.contains(&c) { target } else { self.mesh.position(c) });
-                let normal = (new[1] - new[0]).cross(new[2] - new[0]).normalize_or_zero();
-                if normal.dot(self.mesh.face_normal(f)) < MIN_NORMAL_DOT
-                    || normal.dot(self.mesh.reference_normal(f)) <= MIN_REFERENCE_DOT
-                {
-                    return false;
-                }
-                worst_after = worst_after.min(radius_ratio(new));
+        for &f in faces {
+            let corners = self.mesh.face_corners(f);
+            let old = corners.map(|c| self.mesh.position(c));
+            worst_before = worst_before.min(radius_ratio(old));
+            if let Some((a, b)) = collapsing
+                && corners.contains(&a)
+                && corners.contains(&b)
+            {
+                continue;
             }
+            let new = corners.map(|c| if movers.contains(&c) { target } else { self.mesh.position(c) });
+            let normal = (new[1] - new[0]).cross(new[2] - new[0]).normalize_or_zero();
+            if normal.dot(self.mesh.face_normal(f)) < MIN_NORMAL_DOT
+                || normal.dot(self.mesh.reference_normal(f)) <= MIN_REFERENCE_DOT
+            {
+                return false;
+            }
+            worst_after = worst_after.min(radius_ratio(new));
         }
         worst_after > 0.0 && worst_after >= (1.0 - QUALITY_TOLERANCE) * QUALITY_FLOOR.min(worst_before)
     }
@@ -232,9 +263,7 @@ impl Pass<'_> {
     pub fn equalize_valence(&mut self) -> usize {
         let mut flips = 0;
         for h in self.mesh.half_edges() {
-            if !self.half_edge_alive(h) {
-                continue;
-            }
+            let Some(h) = self.current(h) else { continue };
             let Some(t) = self.mesh.twin(h) else { continue };
             let (a, b) = (self.mesh.from(h), self.mesh.to(h));
             if self.mesh.is_feature(a, b) {

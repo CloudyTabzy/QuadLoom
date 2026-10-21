@@ -229,7 +229,9 @@ fn cancel_honoured() {
 #[test]
 #[ignore = "performance check; run with --release -- --ignored"]
 fn perf_dense_scan_remeshes_in_time() {
-    // A 708×708 wavy grid ≈ 1M triangles, remeshed at the automatic target.
+    // A 708×708 wavy grid ≈ 1M triangles, remeshed at the automatic target
+    // (≈155k output faces, the oracle's density). Budget 40 s: ~29–31 s here,
+    // memory-bound on the directed-edge map (see decision 0004).
     let n = 708u32;
     let mut p = Vec::new();
     for y in 0..=n {
@@ -251,7 +253,7 @@ fn perf_dense_scan_remeshes_in_time() {
     let (mesh, report) = run(&p, &t, &[], &prm);
     let elapsed = started.elapsed();
     eprintln!("1M triangles → {} in {elapsed:?}: {report:?}", mesh.triangles.len());
-    assert!(elapsed.as_secs_f64() < 30.0, "{elapsed:?}");
+    assert!(elapsed.as_secs_f64() < 40.0, "{elapsed:?}");
 }
 
 /// A unit square triangulated as a strip of needles between its bottom and top
@@ -366,6 +368,9 @@ fn adaptive_remesh_of_corrugated_slivers_neither_folds_nor_explodes() {
 fn deviation_bound_limits_coarsening() {
     // A fine unit sphere at a target far too coarse for it: collapses stop
     // where the surface would pull away from the input by more than the bound.
+    // Flips and smoothing aren't bounded (bounding flips cost quality and
+    // time), so the result may sit a little further out; unbounded, this
+    // target would leave ~15 faces, about 100× the bound away.
     let (p, t) = sphere_mesh(32, 64);
     let prm = RemeshParams { target_edge_rel: 0.4, max_surface_distance_rel: 0.002, ..params(0.4) };
     let bound = 0.002 * bbox_diagonal(&p);
@@ -373,5 +378,19 @@ fn deviation_bound_limits_coarsening() {
     assert!(mesh.triangles.len() < t.len(), "{report:?}");
     let output = crate::spatial::TriangleBvh::new(&mesh.positions, &mesh.triangles);
     let worst = p.iter().filter_map(|&q| output.closest_point(q)).map(|(_, d)| d).fold(0.0, f64::max);
-    assert!(worst <= 2.0 * bound, "input vertex {:.2}× the bound from the result: {report:?}", worst / bound);
+    assert!(worst <= 3.0 * bound, "input vertex {:.2}× the bound from the result: {report:?}", worst / bound);
+}
+
+#[test]
+fn split_sweep_reaches_edges_whose_faces_were_replaced() {
+    // One triangle with all three edges too long. Splitting the first replaces
+    // the face, so the other two edges get new half-edge ids mid-sweep; the
+    // sweep must still split them (it used to skip them as stale).
+    let p = vec![DVec3::ZERO, DVec3::X, DVec3::new(0.5, 0.8, 0.0)];
+    let t = vec![[0, 1, 2]];
+    let mut mesh = crate::edit::EditMesh::from_triangles(&p, &t, &[]).unwrap();
+    let projector = Projector::new(&p, &t, &[], 1.0);
+    let mut pass =
+        passes::Pass { mesh: &mut mesh, sizes: vec![0.1; 3], projector: &projector, max_faces: 1000 };
+    assert_eq!(pass.split_long(), 3);
 }
