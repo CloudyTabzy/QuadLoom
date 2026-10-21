@@ -2,12 +2,47 @@
 //!
 //! Exporters routinely split vertices at UV seams and hard normals; to us those
 //! are the same point, and leaving them split would turn every seam into a hole.
+//!
+//! Only vertices on *open* edges of the unwelded mesh take part: seam splits
+//! always leave open edges, while separate closed parts that merely touch (a
+//! bolt sitting on a panel) have none, so they're never glued together.
 
 use std::collections::HashMap;
 
 pub use glam::DVec3;
 
+use crate::control::{Control, Stage};
+use crate::error::Error;
 use crate::unionfind::UnionFind;
+
+/// Vertices lying on an edge used by exactly one face. Exact duplicate faces
+/// (same three vertices in any order) count once, so they can't hide an open edge.
+pub fn open_edge_vertices(vertex_count: usize, triangles: &[[u32; 3]]) -> Vec<bool> {
+    let mut distinct: Vec<[u32; 3]> = triangles
+        .iter()
+        .map(|t| {
+            let mut key = *t;
+            key.sort_unstable();
+            key
+        })
+        .collect();
+    distinct.sort_unstable();
+    distinct.dedup();
+    let mut keys: Vec<(u32, u32)> = distinct
+        .iter()
+        .flat_map(|t| (0..3).map(move |i| (t[i].min(t[(i + 1) % 3]), t[i].max(t[(i + 1) % 3]))))
+        .filter(|(a, b)| a != b)
+        .collect();
+    keys.sort_unstable();
+    let mut open = vec![false; vertex_count];
+    for group in keys.chunk_by(|x, y| x == y) {
+        if let [(a, b)] = group {
+            open[*a as usize] = true;
+            open[*b as usize] = true;
+        }
+    }
+    open
+}
 
 /// The welded mesh and how input vertices map onto it.
 #[derive(Clone, Debug, PartialEq)]
@@ -20,15 +55,21 @@ pub struct Weld {
     pub remap: Vec<u32>,
 }
 
-/// Merges vertices closer than `epsilon` (absolute). Each cluster keeps the
-/// position of its lowest-index vertex, so the result is order-independent.
-/// `epsilon <= 0` merges exact duplicates only.
-pub fn weld(positions: &[DVec3], triangles: &[[u32; 3]], epsilon: f64) -> Weld {
+/// Merges `eligible` vertices closer than `epsilon` (absolute). Each cluster
+/// keeps the position of its lowest-index vertex, so the result is
+/// order-independent. `epsilon <= 0` merges exact duplicates only.
+pub fn weld(
+    positions: &[DVec3],
+    triangles: &[[u32; 3]],
+    epsilon: f64,
+    eligible: &[bool],
+    control: &Control,
+) -> Result<Weld, Error> {
     let mut sets = UnionFind::new(positions.len());
     if epsilon > 0.0 {
-        union_within(positions, epsilon, &mut sets);
+        union_within(positions, epsilon, eligible, &mut sets, control)?;
     } else {
-        union_exact(positions, &mut sets);
+        union_exact(positions, eligible, &mut sets);
     }
 
     let mut new_index = vec![u32::MAX; positions.len()];
@@ -42,22 +83,34 @@ pub fn weld(positions: &[DVec3], triangles: &[[u32; 3]], epsilon: f64) -> Weld {
     }
     let remap: Vec<u32> = (0..positions.len() as u32).map(|v| new_index[sets.find(v) as usize]).collect();
     let triangles = triangles.iter().map(|t| t.map(|i| remap[i as usize])).collect();
-    Weld { merged: positions.len() - welded.len(), positions: welded, triangles, remap }
+    Ok(Weld { merged: positions.len() - welded.len(), positions: welded, triangles, remap })
 }
 
 /// Grid hashing with cells of size `epsilon`: any pair within `epsilon` lies in
 /// the same or a neighbouring cell, so 27 lookups per vertex suffice.
-fn union_within(positions: &[DVec3], epsilon: f64, sets: &mut UnionFind) {
+fn union_within(
+    positions: &[DVec3],
+    epsilon: f64,
+    eligible: &[bool],
+    sets: &mut UnionFind,
+    control: &Control,
+) -> Result<(), Error> {
+    let is_eligible = |i: usize| eligible.get(i).copied().unwrap_or(false);
     // Float-to-int casts saturate, so absurd coordinates can't overflow.
     let cell = |p: DVec3| {
         [(p.x / epsilon).floor() as i64, (p.y / epsilon).floor() as i64, (p.z / epsilon).floor() as i64]
     };
     let mut grid: HashMap<[i64; 3], Vec<u32>> = HashMap::new();
-    for (i, &p) in positions.iter().enumerate() {
+    for (i, &p) in positions.iter().enumerate().filter(|(i, _)| is_eligible(*i)) {
         grid.entry(cell(p)).or_default().push(i as u32);
     }
     let eps2 = epsilon * epsilon;
+    let mut ticker = control.ticker(Stage::Repair, positions.len());
     for (i, &p) in positions.iter().enumerate() {
+        ticker.tick(i)?;
+        if !is_eligible(i) {
+            continue;
+        }
         let [cx, cy, cz] = cell(p);
         for dx in -1..=1i64 {
             for dy in -1..=1i64 {
@@ -72,10 +125,12 @@ fn union_within(positions: &[DVec3], epsilon: f64, sets: &mut UnionFind) {
             }
         }
     }
+    Ok(())
 }
 
-fn union_exact(positions: &[DVec3], sets: &mut UnionFind) {
-    let mut order: Vec<u32> = (0..positions.len() as u32).collect();
+fn union_exact(positions: &[DVec3], eligible: &[bool], sets: &mut UnionFind) {
+    let mut order: Vec<u32> =
+        (0..positions.len() as u32).filter(|&i| eligible.get(i as usize).copied().unwrap_or(false)).collect();
     let key = |i: u32| positions[i as usize].to_array().map(f64::to_bits);
     order.sort_unstable_by_key(|&i| (key(i), i));
     for pair in order.windows(2) {
@@ -88,6 +143,7 @@ fn union_exact(positions: &[DVec3], sets: &mut UnionFind) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::control::Control;
 
     fn v(x: f64, y: f64, z: f64) -> DVec3 {
         DVec3::new(x, y, z)
@@ -108,7 +164,7 @@ mod tests {
         let positions =
             [v(0., 0., 0.), v(1., 0., 0.), v(1., 1., 0.), v(0., 0., 0.), v(1., 1., 0.), v(0., 1., 0.)];
         let triangles = [[0, 1, 2], [3, 4, 5]];
-        let w = weld(&positions, &triangles, 1e-9);
+        let w = weld(&positions, &triangles, 1e-9, &[true; 16], &Control::default()).unwrap();
         assert_eq!(w.positions.len(), 4);
         assert_eq!(w.merged, 2);
         assert_eq!(boundary_edges(&w.triangles), 4);
@@ -119,7 +175,7 @@ mod tests {
     fn weld_keeps_separate_touching_parts() {
         let positions =
             [v(0., 0., 0.), v(1., 0., 0.), v(0., 1., 0.), v(0., 0., 1e-3), v(1., 0., 1e-3), v(0., 1., 1e-3)];
-        let w = weld(&positions, &[[0, 1, 2], [3, 4, 5]], 1e-6);
+        let w = weld(&positions, &[[0, 1, 2], [3, 4, 5]], 1e-6, &[true; 16], &Control::default()).unwrap();
         assert_eq!(w.positions.len(), 6);
         assert_eq!(w.merged, 0);
     }
@@ -128,7 +184,7 @@ mod tests {
     fn weld_merges_within_epsilon_across_cell_borders() {
         // 0.5e-6 apart but straddling a grid cell boundary.
         let positions = [v(0.999_999_9e-6, 0., 0.), v(1.000_000_4e-6, 0., 0.), v(1., 1., 1.)];
-        let w = weld(&positions, &[[0, 1, 2]], 1e-6);
+        let w = weld(&positions, &[[0, 1, 2]], 1e-6, &[true; 16], &Control::default()).unwrap();
         assert_eq!(w.merged, 1);
     }
 
@@ -136,18 +192,49 @@ mod tests {
     fn weld_is_deterministic_under_permutation() {
         let a = [v(0., 0., 0.), v(1., 0., 0.), v(0., 0., 0.), v(0., 1., 0.)];
         let b = [v(0., 1., 0.), v(0., 0., 0.), v(1., 0., 0.), v(0., 0., 0.)];
-        let wa = weld(&a, &[[0, 1, 3], [2, 3, 1]], 1e-9);
-        let wb = weld(&b, &[[1, 2, 0], [3, 0, 2]], 1e-9);
+        let wa = weld(&a, &[[0, 1, 3], [2, 3, 1]], 1e-9, &[true; 16], &Control::default()).unwrap();
+        let wb = weld(&b, &[[1, 2, 0], [3, 0, 2]], 1e-9, &[true; 16], &Control::default()).unwrap();
         assert_eq!(wa.positions.len(), wb.positions.len());
         assert_eq!(wa.merged, wb.merged);
         // Same input → same output, every time.
-        assert_eq!(weld(&a, &[[0, 1, 3], [2, 3, 1]], 1e-9).remap, wa.remap);
+        assert_eq!(
+            weld(&a, &[[0, 1, 3], [2, 3, 1]], 1e-9, &[true; 16], &Control::default()).unwrap().remap,
+            wa.remap
+        );
+    }
+
+    #[test]
+    fn closed_mesh_has_no_open_edge_vertices() {
+        let tetra = [[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]];
+        assert!(open_edge_vertices(4, &tetra).iter().all(|&o| !o));
+        assert!(open_edge_vertices(3, &[[0, 1, 2]]).iter().all(|&o| o));
+    }
+
+    #[test]
+    fn duplicate_faces_do_not_hide_open_edges() {
+        // The same triangle twice (in any rotation/winding) is still one open triangle.
+        assert!(open_edge_vertices(3, &[[0, 1, 2], [2, 1, 0]]).iter().all(|&o| o));
+    }
+
+    #[test]
+    fn ineligible_vertices_are_never_welded() {
+        let positions = [v(0., 0., 0.), v(0., 0., 0.), v(1., 0., 0.)];
+        let w = weld(&positions, &[[0, 1, 2]], 1e-6, &[false, true, true], &Control::default()).unwrap();
+        assert_eq!(w.merged, 0);
+    }
+
+    #[test]
+    fn weld_checks_cancel() {
+        let positions: Vec<DVec3> = (0..10_000).map(|i| v(f64::from(i), 0., 0.)).collect();
+        let control = Control::default();
+        control.cancel();
+        assert!(weld(&positions, &[[0, 1, 2]], 1e-6, &[true; 10_000], &control).is_err());
     }
 
     #[test]
     fn zero_epsilon_welds_exact_duplicates_only() {
         let positions = [v(0., 0., 0.), v(0., 0., 0.), v(1e-12, 0., 0.)];
-        let w = weld(&positions, &[[0, 1, 2]], 0.0);
+        let w = weld(&positions, &[[0, 1, 2]], 0.0, &[true; 16], &Control::default()).unwrap();
         assert_eq!(w.merged, 1);
         assert_eq!(w.positions.len(), 2);
     }

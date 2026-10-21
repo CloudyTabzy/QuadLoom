@@ -89,7 +89,14 @@ pub fn repair(
     let diagonal = bbox_diagonal(input.positions());
 
     let (mut positions, mut triangles, input_to_welded) = if params.weld_epsilon_rel >= 0.0 {
-        let welded = weld::weld(input.positions(), input.triangles(), params.weld_epsilon_rel * diagonal);
+        let eligible = weld::open_edge_vertices(input.vertex_count(), input.triangles());
+        let welded = weld::weld(
+            input.positions(),
+            input.triangles(),
+            params.weld_epsilon_rel * diagonal,
+            &eligible,
+            control,
+        )?;
         report.welded_vertices = welded.merged;
         (welded.positions, welded.triangles, welded.remap)
     } else {
@@ -108,6 +115,20 @@ pub fn repair(
         report.removed_duplicates = d.removed_duplicates;
         face_origin = d.kept;
         triangles = d.triangles;
+    } else {
+        // Faces with a repeated corner (often created by welding) can't exist
+        // in a Blender mesh, so they go even when degenerate removal is off.
+        let mut kept = Vec::with_capacity(triangles.len());
+        let mut kept_origin = Vec::with_capacity(triangles.len());
+        for (t, &origin) in triangles.iter().zip(&face_origin) {
+            if t[0] == t[1] || t[1] == t[2] || t[0] == t[2] {
+                report.removed_repeated += 1;
+            } else {
+                kept.push(*t);
+                kept_origin.push(origin);
+            }
+        }
+        (triangles, face_origin) = (kept, kept_origin);
     }
     control.set_progress(stage, 0.35);
     control.checkpoint(stage)?;
@@ -317,6 +338,80 @@ mod tests {
         assert_eq!(mesh.triangles.len(), 2);
         assert_eq!(components.len(), 1);
         assert_eq!(report.skipped_small_components, 0);
+    }
+
+    /// Two closed unit cubes as separate vertex sets, the second shifted by
+    /// `offset` (so they can touch along an edge or a face), with faces shuffled.
+    fn two_cubes(offset: [f32; 3], seed: u64) -> InputMesh {
+        let corners: [[f32; 3]; 8] = [
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 0., 1.],
+            [1., 1., 1.],
+            [0., 1., 1.],
+        ];
+        let tris: [[u32; 3]; 12] = [
+            [0, 3, 2],
+            [0, 2, 1],
+            [4, 5, 6],
+            [4, 6, 7],
+            [0, 1, 5],
+            [0, 5, 4],
+            [3, 7, 6],
+            [3, 6, 2],
+            [0, 4, 7],
+            [0, 7, 3],
+            [1, 2, 6],
+            [1, 6, 5],
+        ];
+        let mut p = Vec::new();
+        for shift in [[0.0f32; 3], offset] {
+            for c in corners {
+                p.extend([c[0] + shift[0], c[1] + shift[1], c[2] + shift[2]]);
+            }
+        }
+        let mut faces: Vec<[u32; 3]> =
+            tris.iter().copied().chain(tris.iter().map(|t| t.map(|v| v + 8))).collect();
+        // Deterministic Fisher-Yates with a tiny LCG.
+        let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        for i in (1..faces.len()).rev() {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            faces.swap(i, (state >> 33) as usize % (i + 1));
+        }
+        let i: Vec<u32> = faces.iter().flatten().copied().collect();
+        InputMesh::from_buffers(&p, &i).unwrap()
+    }
+
+    #[test]
+    fn touching_closed_parts_stay_separate() {
+        // Sharing an edge (offset along the diagonal) and sharing a whole face.
+        for offset in [[1.0, 1.0, 0.0], [1.0, 0.0, 0.0]] {
+            for seed in 0..50 {
+                let (mesh, components, _) =
+                    repair(&two_cubes(offset, seed), &RepairParams::default(), &Control::default()).unwrap();
+                let he = HalfEdges::build(&mesh.triangles, mesh.positions.len());
+                assert_eq!(components.len(), 2, "offset {offset:?} seed {seed}");
+                assert_eq!(mesh.triangles.len(), 24, "offset {offset:?} seed {seed}");
+                assert_eq!(he.boundary_edge_count(), 0, "offset {offset:?} seed {seed}");
+                assert_eq!(he.non_manifold_edge_count(), 0, "offset {offset:?} seed {seed}");
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_corners_always_removed() {
+        // A sliver whose two corners weld together becomes a repeated-corner
+        // face; Blender can't store those, so they go even with the toggle off.
+        let p = [0., 0., 0., 1., 0., 0., 0., 1., 0., 1., 1e-9, 0., 1., 1., 0.];
+        let input = InputMesh::from_buffers(&p, &[0, 1, 2, 1, 4, 2, 1, 3, 4]).unwrap();
+        let params =
+            RepairParams { remove_degenerate: false, min_component_faces: 1, ..RepairParams::default() };
+        let (mesh, _, report) = repair(&input, &params, &Control::default()).unwrap();
+        assert!(mesh.triangles.iter().all(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2]));
+        assert_eq!(report.removed_repeated, 1);
     }
 
     #[test]
