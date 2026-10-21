@@ -20,7 +20,8 @@ const MAX_ORIENT_ROUNDS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RepairParams {
-    /// Weld distance as a fraction of the bounding-box diagonal.
+    /// Weld distance as a fraction of the bounding-box diagonal. `0` welds exact
+    /// duplicates only; a negative value disables welding.
     pub weld_epsilon_rel: f64,
     pub remove_degenerate: bool,
     pub split_non_manifold: bool,
@@ -84,10 +85,13 @@ pub fn repair(
     control.checkpoint(stage)?;
     let diagonal = bbox_diagonal(input.positions());
 
-    let welded = weld::weld(input.positions(), input.triangles(), params.weld_epsilon_rel * diagonal);
-    report.welded_vertices = welded.merged;
-    let input_to_welded = welded.remap;
-    let (mut positions, mut triangles) = (welded.positions, welded.triangles);
+    let (mut positions, mut triangles, input_to_welded) = if params.weld_epsilon_rel >= 0.0 {
+        let welded = weld::weld(input.positions(), input.triangles(), params.weld_epsilon_rel * diagonal);
+        report.welded_vertices = welded.merged;
+        (welded.positions, welded.triangles, welded.remap)
+    } else {
+        (input.positions().to_vec(), input.triangles().to_vec(), (0..input.vertex_count() as u32).collect())
+    };
     // `ancestor[v]`: the welded vertex each current vertex descends from.
     let mut ancestor: Vec<u32> = (0..positions.len() as u32).collect();
     control.set_progress(stage, 0.2);
@@ -301,20 +305,29 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]
         #[test]
-        fn repair_is_stable((p, i) in soup()) {
+        fn repair_output_is_clean_and_ladder_is_idempotent((p, i) in soup()) {
             let params = RepairParams { min_component_faces: 1, ..RepairParams::default() };
             let Ok(input) = InputMesh::from_buffers(&p, &i) else { return Ok(()) };
             let (first, _, _) = repair(&input, &params, &Control::default()).unwrap();
             let he = HalfEdges::build(&first.triangles, first.positions.len());
             prop_assert_eq!(he.non_manifold_edge_count(), 0);
+            let mut directed: Vec<(u32, u32)> =
+                first.triangles.iter().flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3]))).collect();
+            directed.sort_unstable();
+            prop_assert!(directed.windows(2).all(|w| w[0] != w[1]), "winding must be consistent");
             if first.triangles.is_empty() {
                 return Ok(());
             }
+            // Welding would re-merge the coincident copies that splitting made on
+            // purpose, so idempotence is checked for the topological ladder only.
             let flat: Vec<f32> = first.positions.iter().flat_map(|q| [q.x as f32, q.y as f32, q.z as f32]).collect();
-            let again = InputMesh::from_buffers(&flat, &first.triangles.iter().flatten().copied().collect::<Vec<_>>()).unwrap();
-            let (second, _, _) = repair(&again, &params, &Control::default()).unwrap();
-            prop_assert_eq!(second.triangles.len(), first.triangles.len());
+            let indices: Vec<u32> = first.triangles.iter().flatten().copied().collect();
+            let again = InputMesh::from_buffers(&flat, &indices).unwrap();
+            let no_weld = RepairParams { weld_epsilon_rel: -1.0, ..params };
+            let (second, _, report) = repair(&again, &no_weld, &Control::default()).unwrap();
+            prop_assert_eq!(&second.triangles, &first.triangles);
             prop_assert_eq!(second.positions.len(), first.positions.len());
+            prop_assert_eq!(report.split_non_manifold_edges + report.split_non_manifold_vertices + report.flipped_faces + report.cut_edges, 0);
         }
     }
 }

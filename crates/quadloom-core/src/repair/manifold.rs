@@ -24,13 +24,72 @@ pub struct ManifoldSplit {
     pub parent: Vec<u32>,
 }
 
+/// Rounds of "detach stubborn faces, re-split fans" before giving up.
+const MAX_ROUNDS: usize = 8;
+
 /// Splits non-manifold edges and vertices. Edges listed in `forced_cuts`
-/// (undirected, any order) are separated too, as if they were boundaries.
+/// (undirected, input vertex ids, any order) are separated too, as if they were
+/// boundaries.
+///
+/// Fan splitting alone can't free a detached face that is also fan-connected to
+/// the kept faces around *both* endpoints of its non-manifold edge. Such faces
+/// get their own copies of the two endpoints, and the fan pass repeats.
 pub fn split(positions: &[DVec3], triangles: &[[u32; 3]], forced_cuts: &[(u32, u32)]) -> ManifoldSplit {
     let mut cuts: Vec<(u32, u32)> = forced_cuts.iter().map(|&(a, b)| (a.min(b), a.max(b))).collect();
     cuts.sort_unstable();
+    let identity: Vec<u32> = (0..positions.len() as u32).collect();
+    let mut result = split_once(positions, triangles, &cuts, &identity);
+    for _ in 0..MAX_ROUNDS {
+        let stubborn = non_manifold_groups(&result.triangles);
+        if stubborn.is_empty() {
+            break;
+        }
+        for group in stubborn {
+            let (keep_a, keep_b) = choose_pair(&group);
+            for &(_, _, f, _) in group.iter().filter(|u| u.2 != keep_a && u.2 != keep_b) {
+                for endpoint in [group[0].0, group[0].1] {
+                    let copy = result.positions.len() as u32;
+                    result.positions.push(result.positions[endpoint as usize]);
+                    result.parent.push(result.parent[endpoint as usize]);
+                    result.split_vertices += 1;
+                    for corner in result.triangles[f as usize].iter_mut().filter(|c| **c == endpoint) {
+                        *corner = copy;
+                    }
+                }
+            }
+        }
+        // Detaching may have disconnected fans around the old endpoints.
+        let again = split_once(&result.positions, &result.triangles, &cuts, &result.parent);
+        let parent = again.parent.iter().map(|&p| result.parent[p as usize]).collect();
+        result = ManifoldSplit {
+            positions: again.positions,
+            triangles: again.triangles,
+            split_edges: result.split_edges,
+            split_vertices: result.split_vertices + again.split_vertices,
+            parent,
+        };
+    }
+    result
+}
 
-    // (min, max, face, from) for every face edge, grouped by undirected edge.
+/// Edge uses `(min, max, face, from)` for every edge used by more than two faces.
+fn non_manifold_groups(triangles: &[[u32; 3]]) -> Vec<Vec<(u32, u32, u32, u32)>> {
+    let uses = edge_uses(triangles);
+    uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)).filter(|g| g.len() > 2).map(<[_]>::to_vec).collect()
+}
+
+/// The face pair a non-manifold edge keeps: the first pair with opposite winding
+/// (a consistently oriented pair), else the first two faces.
+fn choose_pair(group: &[(u32, u32, u32, u32)]) -> (u32, u32) {
+    let opposite = group
+        .iter()
+        .enumerate()
+        .flat_map(|(i, x)| group[i + 1..].iter().map(move |y| (x, y)))
+        .find(|(x, y)| x.3 != y.3);
+    opposite.map_or((group[0].2, group[1].2), |(x, y)| (x.2, y.2))
+}
+
+fn edge_uses(triangles: &[[u32; 3]]) -> Vec<(u32, u32, u32, u32)> {
     let mut uses: Vec<(u32, u32, u32, u32)> = triangles
         .iter()
         .enumerate()
@@ -43,12 +102,26 @@ pub fn split(positions: &[DVec3], triangles: &[[u32; 3]], forced_cuts: &[(u32, u
         .filter(|u| u.0 != u.1)
         .collect();
     uses.sort_unstable();
+    uses
+}
+
+/// One pass: link faces across manifold edges (and one chosen pair per
+/// non-manifold edge), then give every extra fan around a vertex its own copy.
+/// `origin` maps current vertex ids to the ids `cuts` is expressed in.
+fn split_once(
+    positions: &[DVec3],
+    triangles: &[[u32; 3]],
+    cuts: &[(u32, u32)],
+    origin: &[u32],
+) -> ManifoldSplit {
+    let uses = edge_uses(triangles);
 
     let mut links: HashMap<(u32, u32, u32), u32> = HashMap::new();
     let mut split_edges = 0;
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
         let key = (group[0].0, group[0].1);
-        if cuts.binary_search(&key).is_ok() {
+        let (oa, ob) = (origin[key.0 as usize], origin[key.1 as usize]);
+        if cuts.binary_search(&(oa.min(ob), oa.max(ob))).is_ok() {
             continue;
         }
         let pair = match group {
@@ -56,12 +129,7 @@ pub fn split(positions: &[DVec3], triangles: &[[u32; 3]], forced_cuts: &[(u32, u
             [_] => None,
             _ => {
                 split_edges += 1;
-                let opposite = group
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(i, x)| group[i + 1..].iter().map(move |y| (x, y)))
-                    .find(|(x, y)| x.3 != y.3);
-                Some(opposite.map_or((group[0].2, group[1].2), |(x, y)| (x.2, y.2)))
+                Some(choose_pair(group))
             }
         };
         if let Some((f, g)) = pair {
@@ -171,6 +239,28 @@ mod tests {
         let s = split(&positions, &triangles, &[]);
         assert_eq!(s.triangles, triangles.to_vec());
         assert_eq!((s.split_edges, s.split_vertices), (0, 0));
+    }
+
+    #[test]
+    fn detached_face_connected_at_both_ends_is_separated() {
+        // Proptest's shrunk case: face 2 hangs on edge 0-1 next to faces 0 and 1,
+        // and is also fan-connected to them around both 0 and 1 through other
+        // edges, so splitting vertices by fan alone can't free it.
+        let positions =
+            [v(0., 0., 0.), v(0., 0., 1.), v(0., 0., 0.5), v(0., 1., 0.), v(1., 0., 0.), v(0., 0., -1.)];
+        let flat: Vec<u32> = vec![
+            0, 2, 1, 1, 4, 3, 0, 2, 1, 3, 5, 4, 5, 1, 0, 4, 1, 5, 3, 4, 0, 2, 2, 5, 0, 3, 1, 0, 1, 1, 5, 3,
+            0, 1, 0, 5, 0, 5, 3, 4, 2, 2, 5, 5, 3, 2, 1, 1, 0, 2, 1, 1, 0, 0, 4, 0, 4,
+        ];
+        let triangles: Vec<[u32; 3]> = flat
+            .chunks_exact(3)
+            .map(|t| [t[0], t[1], t[2]])
+            .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
+            .collect();
+        let s = split(&positions, &triangles, &[]);
+        let he = HalfEdges::build(&s.triangles, s.positions.len());
+        assert_eq!(he.non_manifold_edge_count(), 0);
+        assert!(s.parent.iter().all(|&p| (p as usize) < positions.len()));
     }
 
     #[test]
