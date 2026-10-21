@@ -8,8 +8,38 @@
 //! a refused operation leaves the mesh exactly as it was.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{BuildHasherDefault, Hasher};
 
 pub use glam::DVec3;
+
+/// A fast hasher for small integer keys (edge pairs). SipHash's DoS
+/// resistance buys nothing here and costs most of the remesher's time.
+#[derive(Default, Clone, Copy, Debug)]
+struct EdgeHasher(u64);
+
+impl Hasher for EdgeHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_u64(u64::from(b));
+        }
+    }
+
+    fn write_u32(&mut self, n: u32) {
+        self.write_u64(u64::from(n));
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        // FxHash-style mixing: rotate, xor, multiply by an odd constant.
+        self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+
+type FastMap<K, V> = HashMap<K, V, BuildHasherDefault<EdgeHasher>>;
+type FastSet<K> = HashSet<K, BuildHasherDefault<EdgeHasher>>;
 
 const NONE: u32 = u32::MAX;
 /// A feature vertex whose two feature edges turn by more than this (from
@@ -40,13 +70,17 @@ pub struct EditMesh {
     vertex_alive: Vec<bool>,
     /// One outgoing half-edge per vertex (`NONE` if it has no faces).
     out: Vec<u32>,
+    /// Faces using each vertex, maintained incrementally.
+    face_degree: Vec<u32>,
+    /// Boundary edges at each vertex, maintained incrementally.
+    boundary_degree: Vec<u32>,
     corners: Vec<[u32; 3]>,
     face_alive: Vec<bool>,
     live_faces: usize,
     /// `(from, to)` → half-edge.
-    directed: HashMap<(u32, u32), u32>,
+    directed: FastMap<(u32, u32), u32>,
     /// Feature edges as sorted vertex pairs.
-    features: HashSet<(u32, u32)>,
+    features: FastSet<(u32, u32)>,
 }
 
 fn key(a: u32, b: u32) -> (u32, u32) {
@@ -68,11 +102,13 @@ impl EditMesh {
             kinds: vec![VertexKind::Free; n],
             vertex_alive: vec![true; n],
             out: vec![NONE; n],
+            face_degree: vec![0; n],
+            boundary_degree: vec![0; n],
             corners: Vec::with_capacity(triangles.len()),
             face_alive: Vec::with_capacity(triangles.len()),
             live_faces: 0,
-            directed: HashMap::with_capacity(triangles.len() * 3),
-            features: HashSet::new(),
+            directed: FastMap::with_capacity_and_hasher(triangles.len() * 3, Default::default()),
+            features: FastSet::default(),
         };
         for (f, t) in triangles.iter().enumerate() {
             if t.iter().any(|&v| v as usize >= n) {
@@ -227,12 +263,14 @@ impl EditMesh {
         self.fan(v).iter().map(|&h| self.face(h)).collect()
     }
 
+    /// Number of neighbours. On a manifold mesh that's the face count, plus one
+    /// for boundary vertices (whose fan is open).
     pub fn valence(&self, v: u32) -> usize {
-        self.one_ring(v).len()
+        (self.face_degree[v as usize] + self.boundary_degree[v as usize] / 2) as usize
     }
 
     pub fn is_boundary_vertex(&self, v: u32) -> bool {
-        self.fan(v).first().is_some_and(|&h| self.twin(h).is_none())
+        self.boundary_degree[v as usize] > 0
     }
 
     /// The vertex's feature neighbours.
@@ -261,8 +299,9 @@ impl EditMesh {
     /// changes nothing) if the result would have a repeated corner, a dead
     /// vertex, or a directed edge used twice.
     fn replace_faces(&mut self, remove: &[u32], add: &[[u32; 3]]) -> Option<Vec<u32>> {
-        let removed: HashSet<u32> = remove.iter().copied().collect();
-        let mut seen: HashSet<(u32, u32)> = HashSet::new();
+        // Neighbourhoods are tiny: linear scans beat hashing here.
+        let removed = remove;
+        let mut seen: Vec<(u32, u32)> = Vec::with_capacity(add.len() * 3);
         for t in add {
             if t[0] == t[1]
                 || t[1] == t[2]
@@ -274,15 +313,16 @@ impl EditMesh {
             for i in 0..3 {
                 let e = (t[i], t[(i + 1) % 3]);
                 let taken = self.directed.get(&e).is_some_and(|h| !removed.contains(&(h / 3)));
-                if taken || !seen.insert(e) {
+                if taken || seen.contains(&e) {
                     return None;
                 }
+                seen.push(e);
             }
         }
 
         // Vertices that lose faces and get none back need a surviving face to
         // point at; find it before anything is removed.
-        let in_added: HashSet<u32> = add.iter().flatten().copied().collect();
+        let in_added: Vec<u32> = add.iter().flatten().copied().collect();
         let mut relink: Vec<(u32, u32)> = Vec::new();
         for &f in remove {
             for v in self.corners[f as usize] {
@@ -301,7 +341,11 @@ impl EditMesh {
         for &f in remove {
             let t = self.corners[f as usize];
             for i in 0..3 {
-                self.directed.remove(&(t[i], t[(i + 1) % 3]));
+                let (a, b) = (t[i], t[(i + 1) % 3]);
+                self.directed.remove(&(a, b));
+                self.face_degree[a as usize] -= 1;
+                let alone = !self.directed.contains_key(&(b, a));
+                self.bump_boundary(a, b, alone, false);
             }
             self.face_alive[f as usize] = false;
             self.live_faces -= 1;
@@ -313,8 +357,12 @@ impl EditMesh {
             self.face_alive.push(true);
             self.live_faces += 1;
             for i in 0..3 {
-                self.directed.insert((t[i], t[(i + 1) % 3]), 3 * f + i as u32);
-                self.out[t[i] as usize] = 3 * f + i as u32;
+                let (a, b) = (t[i], t[(i + 1) % 3]);
+                self.directed.insert((a, b), 3 * f + i as u32);
+                self.out[a as usize] = 3 * f + i as u32;
+                self.face_degree[a as usize] += 1;
+                let alone = !self.directed.contains_key(&(b, a));
+                self.bump_boundary(a, b, alone, true);
             }
             ids.push(f);
         }
@@ -322,6 +370,21 @@ impl EditMesh {
             self.out[v as usize] = h;
         }
         Some(ids)
+    }
+
+    /// Keeps `boundary_degree` current when half-edge `a -> b` is added or
+    /// removed; `alone` means the opposite half-edge `b -> a` doesn't exist.
+    fn bump_boundary(&mut self, a: u32, b: u32, alone: bool, adding: bool) {
+        let (a, b) = (a as usize, b as usize);
+        // Adding a lone half-edge, or removing one side of an interior edge,
+        // creates a boundary edge; the other two cases remove one.
+        if adding == alone {
+            self.boundary_degree[a] += 1;
+            self.boundary_degree[b] += 1;
+        } else {
+            self.boundary_degree[a] -= 1;
+            self.boundary_degree[b] -= 1;
+        }
     }
 
     /// Splits the edge of `h` at `at`. Returns the new vertex.
@@ -333,6 +396,8 @@ impl EditMesh {
         self.kinds.push(VertexKind::Free);
         self.vertex_alive.push(true);
         self.out.push(NONE);
+        self.face_degree.push(0);
+        self.boundary_degree.push(0);
 
         let mut remove = vec![self.face(h)];
         let mut add = vec![[a, m, c], [m, b, c]];
@@ -346,6 +411,8 @@ impl EditMesh {
             self.kinds.pop();
             self.vertex_alive.pop();
             self.out.pop();
+            self.face_degree.pop();
+            self.boundary_degree.pop();
             return None;
         }
         if self.features.remove(&key(a, b)) {
@@ -372,9 +439,13 @@ impl EditMesh {
         let c = self.from(self.prev(h));
         let d = twin.map(|t| self.from(self.prev(t)));
         // Link condition: the only shared neighbours are the two opposite vertices.
-        let ring_a: HashSet<u32> = self.one_ring(a).collect();
-        let shared: HashSet<u32> = self.one_ring(b).filter(|v| ring_a.contains(v)).collect();
-        let expected: HashSet<u32> = std::iter::once(c).chain(d).collect();
+        let ring_a: Vec<u32> = self.one_ring(a).collect();
+        let mut shared: Vec<u32> = self.one_ring(b).filter(|v| ring_a.contains(v)).collect();
+        let mut expected: Vec<u32> = std::iter::once(c).chain(d).collect();
+        shared.sort_unstable();
+        shared.dedup();
+        expected.sort_unstable();
+        expected.dedup();
         if shared != expected {
             return false;
         }
@@ -387,9 +458,12 @@ impl EditMesh {
 
     /// Removes `to(h)` into `from(h)`, moving the survivor to `keep_position`.
     pub fn collapse(&mut self, h: HalfEdge, keep_position: DVec3) -> bool {
-        if !self.can_collapse(h) {
-            return false;
-        }
+        self.can_collapse(h) && self.collapse_prechecked(h, keep_position)
+    }
+
+    /// [`collapse`](Self::collapse) for callers that just checked
+    /// [`can_collapse`](Self::can_collapse). Topology is still validated.
+    pub fn collapse_prechecked(&mut self, h: HalfEdge, keep_position: DVec3) -> bool {
         let (a, b) = (self.from(h), self.to(h));
         let around = self.faces_around(b);
         let add: Vec<[u32; 3]> = around
@@ -434,8 +508,33 @@ impl EditMesh {
 
     // --- Output and checks --------------------------------------------------
 
+    /// Dead face slots (left behind by operations) per live face.
+    pub fn waste(&self) -> f64 {
+        (self.corners.len() - self.live_faces) as f64 / self.live_faces.max(1) as f64
+    }
+
+    /// A fresh copy without dead slots. Vertex kinds are carried over as they
+    /// are (not re-derived), so a corner stays a corner. Returns the copy and
+    /// `old vertex id → new vertex id` (`None` for dropped vertices).
+    pub fn rebuilt(&self) -> Result<(EditMesh, Vec<Option<u32>>), String> {
+        let (positions, triangles, features, map) = self.compact_with_map();
+        let mut mesh = EditMesh::from_triangles(&positions, &triangles, &features)?;
+        for (old, new) in map.iter().enumerate() {
+            if let Some(new) = new {
+                mesh.kinds[*new as usize] = self.kinds[old];
+            }
+        }
+        Ok((mesh, map))
+    }
+
     /// Live vertices (renumbered in index order), faces, and feature edges.
     pub fn compact(&self) -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
+        let (positions, triangles, features, _) = self.compact_with_map();
+        (positions, triangles, features)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn compact_with_map(&self) -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>, Vec<Option<u32>>) {
         let mut new_index = vec![NONE; self.positions.len()];
         let mut positions = Vec::new();
         for f in self.faces() {
@@ -461,7 +560,8 @@ impl EditMesh {
             })
             .collect();
         features.sort_unstable();
-        (positions, triangles, features)
+        let map = new_index.iter().map(|&i| (i != NONE).then_some(i)).collect();
+        (positions, triangles, features, map)
     }
 
     /// Verifies the structure; used by tests and debug assertions.
@@ -501,6 +601,16 @@ impl EditMesh {
             let fan = self.faces_around(v).len();
             if fan != count {
                 return Err(format!("vertex {v} has {count} faces but a fan of {fan} (not a single fan)"));
+            }
+            if self.face_degree[v as usize] as usize != count {
+                return Err(format!(
+                    "vertex {v}: face_degree {} but {count} faces",
+                    self.face_degree[v as usize]
+                ));
+            }
+            let ring = self.one_ring(v).len();
+            if self.valence(v) != ring {
+                return Err(format!("vertex {v}: valence {} but one-ring has {ring}", self.valence(v)));
             }
         }
         for &(a, b) in &self.features {

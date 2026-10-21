@@ -16,6 +16,7 @@ pub mod mesh;
 pub mod metrics;
 pub mod params;
 pub mod pipeline;
+pub mod remesh;
 pub mod repair;
 pub mod spatial;
 mod unionfind;
