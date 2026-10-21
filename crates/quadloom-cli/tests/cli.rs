@@ -67,6 +67,35 @@ fn uv_seams_do_not_split_vertices() {
     assert_eq!(json["boundary_edges"], 4);
 }
 
+const QUAD_CUBE_OBJ: &str = "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n\
+f 1 4 3 2\nf 5 6 7 8\nf 1 2 6 5\nf 2 3 7 6\nf 3 4 8 7\nf 4 1 5 8\n";
+
+const TRI_CUBE_OBJ: &str = "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n\
+f 1 4 3\nf 1 3 2\nf 5 6 7\nf 5 7 8\nf 1 2 6\nf 1 6 5\nf 2 3 7\nf 2 7 6\nf 3 4 8\nf 3 8 7\nf 4 1 5\nf 4 5 8\n";
+
+#[test]
+fn metrics_on_quad_cube() {
+    let result = scratch("metrics_quad_cube.obj", QUAD_CUBE_OBJ);
+    let reference = scratch("metrics_tri_cube.obj", TRI_CUBE_OBJ);
+    let out = quadloom(&["metrics", result.to_str().unwrap(), "--reference", reference.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["quality"]["pure_quad"], true);
+    assert_eq!(json["quality"]["quads"], 6);
+    assert_eq!(json["quality"]["irregular_interior"], 8);
+    assert!(json["distance"]["hausdorff"].as_f64().unwrap() < 1e-9, "{}", json["distance"]);
+}
+
+#[test]
+fn metrics_without_reference() {
+    let result = scratch("metrics_quad_cube_noref.obj", QUAD_CUBE_OBJ);
+    let out = quadloom(&["metrics", result.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["quality"]["faces"], 6);
+    assert!(json["distance"].is_null());
+}
+
 #[test]
 fn usage_error_exits_64() {
     let out = quadloom(&["frobnicate"]);

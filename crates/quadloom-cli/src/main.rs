@@ -3,6 +3,8 @@
 //! ```text
 //! quadloom info <mesh.obj|stl>          print the validation report as JSON
 //! quadloom run  <in.obj|stl> <out.obj>  run the pipeline and write the result
+//! quadloom metrics <result.obj> [--reference <input.obj|stl>]
+//!                                       quad quality (+ surface distance) as JSON
 //! ```
 //!
 //! Exit codes: 0 ok, 2 invalid input, 3 internal error or cancelled,
@@ -92,8 +94,25 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             );
             Ok(())
         }
+        ["metrics", result] => metrics(Path::new(result), None),
+        ["metrics", result, "--reference", reference] => metrics(Path::new(result), Some(Path::new(reference))),
         _ => Err(Failure::Usage),
     }
+}
+
+fn metrics(result: &Path, reference: Option<&Path>) -> Result<(), Failure> {
+    let mesh = io::load_poly(result)?;
+    let quality = quadloom_core::metrics::quad_quality(&mesh);
+    let distance = match reference {
+        Some(path) if mesh.face_count() > 0 => {
+            let (positions, indices) = io::load(path)?;
+            let reference = quadloom_core::InputMesh::from_buffers(&positions, &indices)?;
+            Some(quadloom_core::metrics::surface_distance(&mesh, &reference))
+        }
+        _ => None,
+    };
+    println!("{}", json!({ "quality": quality, "distance": distance }));
+    Ok(())
 }
 
 fn run_file(path: &Path) -> Result<RunOutput, Failure> {

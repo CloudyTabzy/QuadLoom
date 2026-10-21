@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use quadloom_core::PolyMesh;
+use quadloom_core::mesh::DVec3;
 
 /// Why a mesh file couldn't be loaded or written.
 #[derive(Debug)]
@@ -56,6 +57,50 @@ fn load_obj(path: &Path) -> Result<Buffers, IoError> {
         indices.extend(model.mesh.indices.iter().map(|i| i + offset));
     }
     Ok((positions, indices))
+}
+
+/// Loads an OBJ keeping its polygons (no triangulation), for measuring results.
+pub fn load_poly(path: &Path) -> Result<PolyMesh, IoError> {
+    let options = tobj::LoadOptions {
+        single_index: false,
+        triangulate: false,
+        ignore_points: true,
+        ignore_lines: true,
+    };
+    let (models, _materials) = tobj::load_obj(path, &options).map_err(|e| match e {
+        tobj::LoadError::OpenFileFailed | tobj::LoadError::ReadError => {
+            IoError::Io(format!("{}: {e}", path.display()))
+        }
+        other => IoError::Invalid(format!("{}: {other}", path.display())),
+    })?;
+
+    let mut mesh = PolyMesh { face_offsets: vec![0], ..PolyMesh::default() };
+    for model in models {
+        let m = &model.mesh;
+        let offset = u32::try_from(mesh.positions.len())
+            .map_err(|_| IoError::Invalid("too many vertices".into()))?;
+        mesh.positions.extend(
+            m.positions.chunks_exact(3).map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]))),
+        );
+        // tobj leaves `face_arities` empty when every face is a triangle.
+        let arities: Vec<u32> =
+            if m.face_arities.is_empty() { vec![3; m.indices.len() / 3] } else { m.face_arities.clone() };
+        let mut cursor = 0usize;
+        for arity in arities {
+            let end = cursor + arity as usize;
+            let face = m.indices.get(cursor..end).ok_or_else(|| IoError::Invalid("truncated face list".into()))?;
+            mesh.face_indices.extend(face.iter().map(|&i| i + offset));
+            let total = u32::try_from(mesh.face_indices.len())
+                .map_err(|_| IoError::Invalid("too many face corners".into()))?;
+            mesh.face_offsets.push(total);
+            cursor = end;
+        }
+    }
+    let vertex_count = mesh.positions.len();
+    if let Some(bad) = mesh.face_indices.iter().find(|&&i| i as usize >= vertex_count) {
+        return Err(IoError::Invalid(format!("{}: face uses missing vertex {bad}", path.display())));
+    }
+    Ok(mesh)
 }
 
 fn load_stl(path: &Path) -> Result<Buffers, IoError> {
