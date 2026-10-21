@@ -76,7 +76,18 @@ fn params(target_rel: f64) -> RemeshParams {
 
 fn run(p: &[DVec3], t: &[[u32; 3]], f: &[[u32; 2]], params: &RemeshParams) -> (RemeshedMesh, RemeshReport) {
     let target = target_length(p, t, params);
-    remesh(p, t, f, target, params, &Control::default()).unwrap()
+    remesh(p, t, f, &[], 0.0, target, params, &Control::default()).unwrap()
+}
+
+/// Like `run`, with every feature edge soft (angle-detected) and released below 35°.
+fn run_soft(
+    p: &[DVec3],
+    t: &[[u32; 3]],
+    f: &[[u32; 2]],
+    params: &RemeshParams,
+) -> (RemeshedMesh, RemeshReport) {
+    let target = target_length(p, t, params);
+    remesh(p, t, f, f, 35.0, target, params, &Control::default()).unwrap()
 }
 
 #[test]
@@ -212,7 +223,7 @@ fn cancel_honoured() {
     control.cancel();
     let prm = params(0.1);
     let target = target_length(&p, &t, &prm);
-    assert!(remesh(&p, &t, &[], target, &prm, &control).is_err());
+    assert!(remesh(&p, &t, &[], &[], 0.0, target, &prm, &control).is_err());
 }
 
 #[test]
@@ -241,4 +252,112 @@ fn perf_dense_scan_remeshes_in_time() {
     let elapsed = started.elapsed();
     eprintln!("1M triangles → {} in {elapsed:?}: {report:?}", mesh.triangles.len());
     assert!(elapsed.as_secs_f64() < 30.0, "{elapsed:?}");
+}
+
+/// A unit square triangulated as a strip of needles between its bottom and top
+/// edges (like a coarsely tessellated developable surface): every triangle is
+/// 1 long and 1/n wide.
+fn sliver_strip(n: u32) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let mut p = Vec::new();
+    for i in 0..=n {
+        p.push(DVec3::new(f64::from(i) / f64::from(n), 0.0, 0.0));
+    }
+    for i in 0..=n {
+        p.push(DVec3::new(f64::from(i) / f64::from(n), 1.0, 0.0));
+    }
+    let top = n + 1;
+    let mut t = Vec::new();
+    for i in 0..n {
+        t.push([i, i + 1, top + i + 1]);
+        t.push([i, top + i + 1, top + i]);
+    }
+    (p, t)
+}
+
+#[test]
+fn sliver_strip_is_repaired_not_exploded() {
+    let (p, t) = sliver_strip(200);
+    let prm = params(0.05);
+    let target = target_length(&p, &t, &prm);
+    let expected = 1.0 / (0.433 * target * target);
+    let (mesh, report) = run(&p, &t, &[], &prm);
+    assert!(
+        (mesh.triangles.len() as f64) < 4.0 * expected,
+        "{} faces for ~{expected:.0} expected: {report:?}",
+        mesh.triangles.len()
+    );
+    assert!(report.mean_radius_ratio > 0.8, "{report:?}");
+    assert!(report.min_angle_deg > 15.0, "{report:?}");
+}
+
+#[test]
+fn noisy_soft_features_are_released() {
+    // Every interior rib of the sliver strip marked as an (angle-detected)
+    // feature, like the noise on a coarsely tessellated developable surface.
+    let (p, t) = sliver_strip(200);
+    let ribs: Vec<[u32; 2]> = (0..=200u32).map(|i| [i, 201 + i]).collect();
+    let prm = params(0.05);
+    let target = target_length(&p, &t, &prm);
+    let expected = 1.0 / (0.433 * target * target);
+    let (mesh, report) = run_soft(&p, &t, &ribs, &prm);
+    assert!(report.released_features > 0, "{report:?}");
+    assert!((mesh.triangles.len() as f64) < 4.0 * expected, "{} faces: {report:?}", mesh.triangles.len());
+    assert!(report.mean_radius_ratio > 0.8, "{report:?}");
+}
+
+#[test]
+fn real_creases_survive_release() {
+    let (p, t) = cube();
+    let (mesh, report) = run_soft(&p, &t, &cube_features(), &params(0.1));
+    assert_eq!(report.released_features, 0, "cube edges are 90° creases");
+    assert!(mesh.feature_edges.len() > 12);
+    for corner in &p {
+        assert!(mesh.positions.iter().any(|q| (*q - *corner).length() < 1e-12), "corner {corner:?} lost");
+    }
+}
+
+#[test]
+fn corrugated_noise_features_released() {
+    // Ribs every 1/2000 alternate ±0.0002 in z: neighbouring slivers meet at
+    // ~77° (so the angle test fires), yet at the target scale the strip is flat
+    // and well within the distance bound. That's tessellation noise, not creases.
+    let (p, t, ribs) = corrugated_strip();
+    let prm = params(0.05);
+    let target = target_length(&p, &t, &prm);
+    let expected = 1.0 / (0.433 * target * target);
+    let (mesh, report) = run_soft(&p, &t, &ribs, &prm);
+    assert!(report.released_features > ribs.len() / 2, "{report:?}");
+    assert!((mesh.triangles.len() as f64) < 4.0 * expected, "{} faces: {report:?}", mesh.triangles.len());
+    assert!(report.mean_radius_ratio > 0.8, "{report:?}");
+}
+
+/// The sliver strip with ribs every 1/2000 alternating ±0.0002 in z, plus its
+/// interior ribs (the edges an angle test flags).
+fn corrugated_strip() -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
+    let n = 2000u32;
+    let (mut p, t) = sliver_strip(n);
+    for (i, q) in p.iter_mut().enumerate() {
+        let rib = (i as u32) % (n + 1);
+        q.z = if rib % 2 == 0 { 0.0002 } else { -0.0002 };
+    }
+    let ribs = (1..n).map(|i| [i, n + 1 + i]).collect();
+    (p, t, ribs)
+}
+
+#[test]
+fn adaptive_remesh_of_corrugated_slivers_neither_folds_nor_explodes() {
+    // Regression: at vertex scale the corrugation looks like strong curvature,
+    // and sliver normals swing with tiny moves, so faces used to fold over
+    // step by step while the sizing refined the folds further (18k faces).
+    let (p, t, ribs) = corrugated_strip();
+    let prm = RemeshParams { adaptive: true, ..params(0.05) };
+    let target = target_length(&p, &t, &prm);
+    let expected = 1.0 / (0.433 * target * target);
+    let (mesh, report) = run_soft(&p, &t, &ribs, &prm);
+    assert!((mesh.triangles.len() as f64) < 2.0 * expected, "{} faces: {report:?}", mesh.triangles.len());
+    for &[a, b, c] in &mesh.triangles {
+        let [pa, pb, pc] = [a, b, c].map(|v| mesh.positions[v as usize]);
+        let n = (pb - pa).cross(pc - pa).normalize_or_zero();
+        assert!(n.z > 0.5, "folded face {:?}: {report:?}", [pa, pb, pc]);
+    }
 }

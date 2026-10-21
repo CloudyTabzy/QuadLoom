@@ -86,8 +86,10 @@ pub fn run(
     control.checkpoint(Stage::PrepRemesh)?;
     fault::inject(params, Stage::PrepRemesh, control)?;
     let feature_edges: Vec<[u32; 2]> = feature_set.edges.iter().map(|e| e.v).collect();
+    let soft_edges: Vec<[u32; 2]> =
+        feature_set.edges.iter().filter(|e| e.sources == features::source::ANGLE).map(|e| e.v).collect();
     let (positions, triangles, feature_edges, remesh_report) = if params.remesh.enabled {
-        remesh_parts(&repaired, &components, &feature_edges, params, control)?
+        remesh_parts(&repaired, &components, &feature_edges, &soft_edges, params, control)?
     } else {
         let faces = repaired.triangles.len();
         let report = RemeshReport { input_faces: faces, output_faces: faces, ..RemeshReport::default() };
@@ -127,9 +129,11 @@ fn remesh_parts(
     repaired: &RepairedMesh,
     components: &[Component],
     feature_edges: &[[u32; 2]],
+    soft_edges: &[[u32; 2]],
     params: &Params,
     control: &Control,
 ) -> Result<Remeshed, Error> {
+    let release_angle = if params.features.use_angle { params.features.angle_deg } else { 0.0 };
     let target = remesh::target_length(&repaired.positions, &repaired.triangles, &params.remesh);
     let results: Vec<Result<(remesh::RemeshedMesh, RemeshReport), Error>> = components
         .par_iter()
@@ -146,9 +150,20 @@ fn remesh_parts(
                 .iter()
                 .map(|&f| repaired.triangles[f as usize].map(|v| local(v).unwrap_or(0)))
                 .collect();
-            let features: Vec<[u32; 2]> =
-                feature_edges.iter().filter_map(|&[a, b]| Some([local(a)?, local(b)?])).collect();
-            remesh::remesh(&positions, &triangles, &features, target, &params.remesh, control)
+            let to_local = |edges: &[[u32; 2]]| -> Vec<[u32; 2]> {
+                edges.iter().filter_map(|&[a, b]| Some([local(a)?, local(b)?])).collect()
+            };
+            let (features, soft) = (to_local(feature_edges), to_local(soft_edges));
+            remesh::remesh(
+                &positions,
+                &triangles,
+                &features,
+                &soft,
+                release_angle,
+                target,
+                &params.remesh,
+                control,
+            )
         })
         .collect();
 
@@ -167,6 +182,7 @@ fn remesh_parts(
         total.splits += report.splits;
         total.collapses += report.collapses;
         total.flips += report.flips;
+        total.released_features += report.released_features;
         total.max_surface_distance = total.max_surface_distance.max(report.max_surface_distance);
         total.min_angle_deg = total.min_angle_deg.min(report.min_angle_deg);
         ratio_weight += report.mean_radius_ratio * report.output_faces as f64;

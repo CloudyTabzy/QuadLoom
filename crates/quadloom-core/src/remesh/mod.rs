@@ -79,13 +79,27 @@ pub struct RemeshReport {
     pub min_angle_deg: f64,
     /// Mean of 2·inradius/circumradius (1 = equilateral).
     pub mean_radius_ratio: f64,
+    /// Angle-detected feature edges released because the cleaned surface turned
+    /// out smooth there (tessellation noise rather than real creases).
+    pub released_features: usize,
 }
 
+/// Early iterations after which soft features are re-checked (like the
+/// oracle's `UpdateCoherentSharp`, which re-checks after the first pass).
+const RELEASE_ITERATIONS: usize = 3;
+
 /// Remeshes one component towards edge length `target`.
+///
+/// `soft_edges` (a subset of `feature_edges`) came from the angle test alone;
+/// after each of the first iterations, those whose faces now meet below
+/// `release_angle_deg` are released (0 disables).
+#[allow(clippy::too_many_arguments)]
 pub fn remesh(
     positions: &[DVec3],
     triangles: &[[u32; 3]],
     feature_edges: &[[u32; 2]],
+    soft_edges: &[[u32; 2]],
+    release_angle_deg: f64,
     target: f64,
     params: &RemeshParams,
     control: &Control,
@@ -94,11 +108,15 @@ pub fn remesh(
     control.checkpoint(stage)?;
     let mut mesh = EditMesh::from_triangles(positions, triangles, feature_edges)
         .map_err(|e| Error::internal(stage, format!("remesh input is not a clean manifold: {e}")))?;
+    mesh.mark_soft(soft_edges);
+    // Judge feature turns at the target scale, not the input's (possibly noisy) one.
+    mesh.reclassify(target);
     let diagonal = bbox_diagonal(positions);
     let projector =
         Projector::new(positions, triangles, &mesh.compact().2, diagonal * params.max_surface_distance_rel);
     let mut report =
         RemeshReport { input_faces: triangles.len(), target_edge_length: target, ..Default::default() };
+    let max_faces = face_ceiling(positions, triangles, target, params);
 
     for iteration in 0..params.iterations {
         control.set_progress(stage, iteration as f32 / params.iterations.max(1) as f32);
@@ -109,7 +127,7 @@ pub fn remesh(
                 mesh.rebuilt().map_err(|e| Error::internal(stage, format!("remesh rebuild failed: {e}")))?.0;
         }
         let sizes = sizing::vertex_sizes(&mesh, target, params);
-        let mut pass = passes::Pass { mesh: &mut mesh, sizes, projector: &projector };
+        let mut pass = passes::Pass { mesh: &mut mesh, sizes, projector: &projector, max_faces };
         report.splits += pass.split_long();
         control.checkpoint(stage)?;
         report.collapses += pass.collapse_short();
@@ -118,6 +136,9 @@ pub fn remesh(
         control.checkpoint(stage)?;
         pass.smooth_tangential();
         control.checkpoint(stage)?;
+        if release_angle_deg > 0.0 && iteration < RELEASE_ITERATIONS {
+            report.released_features += mesh.release_flat_soft_features(release_angle_deg, target);
+        }
     }
 
     let (positions, triangles, feature_edges) = mesh.compact();
@@ -129,6 +150,21 @@ pub fn remesh(
     report.mean_radius_ratio = mean_ratio;
     control.set_progress(stage, 1.0);
     Ok((RemeshedMesh { positions, triangles, feature_edges }, report))
+}
+
+/// Four times the face count of an ideal mesh at the finest allowed size, plus
+/// the input's own faces: far above anything a healthy remesh produces.
+fn face_ceiling(positions: &[DVec3], triangles: &[[u32; 3]], target: f64, params: &RemeshParams) -> usize {
+    let area: f64 = triangles
+        .iter()
+        .map(|&[a, b, c]| {
+            let [pa, pb, pc] = [a, b, c].map(|v| positions[v as usize]);
+            0.5 * (pb - pa).cross(pc - pa).length()
+        })
+        .sum();
+    let finest = target * if params.adaptive { params.min_mult } else { 1.0 };
+    let ideal = area / (0.433 * finest * finest).max(f64::MIN_POSITIVE);
+    (4.0 * ideal).min(1e9) as usize + triangles.len()
 }
 
 pub(crate) fn bbox_diagonal(positions: &[DVec3]) -> f64 {

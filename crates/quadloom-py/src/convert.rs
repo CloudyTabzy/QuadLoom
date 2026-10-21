@@ -153,5 +153,6 @@ fn remesh<'py>(py: Python<'py>, r: &RemeshReport) -> PyResult<Bound<'py, PyDict>
     dict.set_item("max_surface_distance", r.max_surface_distance)?;
     dict.set_item("min_angle_deg", r.min_angle_deg)?;
     dict.set_item("mean_radius_ratio", r.mean_radius_ratio)?;
+    dict.set_item("released_features", r.released_features)?;
     Ok(dict)
 }

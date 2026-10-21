@@ -75,12 +75,22 @@ pub struct EditMesh {
     /// Boundary edges at each vertex, maintained incrementally.
     boundary_degree: Vec<u32>,
     corners: Vec<[u32; 3]>,
+    /// Per face slot, the unit normal of the input surface the face descends
+    /// from: input faces take their own; new faces inherit from the faces they
+    /// replace (see [`replace_faces`](Self::replace_faces)). It never follows
+    /// the current geometry, so guards can catch a fold that builds up over
+    /// many small operations.
+    references: Vec<DVec3>,
     face_alive: Vec<bool>,
     live_faces: usize,
     /// `(from, to)` → half-edge.
     directed: FastMap<(u32, u32), u32>,
     /// Feature edges as sorted vertex pairs.
     features: FastSet<(u32, u32)>,
+    /// The subset of `features` that came from the angle test alone and may be
+    /// released once the surface is clean enough to judge them (see
+    /// [`release_flat_soft_features`](Self::release_flat_soft_features)).
+    soft: FastSet<(u32, u32)>,
 }
 
 fn key(a: u32, b: u32) -> (u32, u32) {
@@ -105,10 +115,12 @@ impl EditMesh {
             face_degree: vec![0; n],
             boundary_degree: vec![0; n],
             corners: Vec::with_capacity(triangles.len()),
+            references: Vec::with_capacity(triangles.len()),
             face_alive: Vec::with_capacity(triangles.len()),
             live_faces: 0,
             directed: FastMap::with_capacity_and_hasher(triangles.len() * 3, Default::default()),
             features: FastSet::default(),
+            soft: FastSet::default(),
         };
         for (f, t) in triangles.iter().enumerate() {
             if t.iter().any(|&v| v as usize >= n) {
@@ -176,6 +188,12 @@ impl EditMesh {
         (b - a).cross(c - a).normalize_or_zero()
     }
 
+    /// The input surface's orientation that face `f` descends from (unit, or
+    /// zero for a degenerate input face).
+    pub fn reference_normal(&self, f: u32) -> DVec3 {
+        self.references[f as usize]
+    }
+
     pub fn from(&self, h: HalfEdge) -> u32 {
         self.corners[(h.0 / 3) as usize][(h.0 % 3) as usize]
     }
@@ -206,6 +224,45 @@ impl EditMesh {
 
     pub fn is_feature(&self, a: u32, b: u32) -> bool {
         self.features.contains(&key(a, b))
+    }
+
+    /// Marks existing feature edges as soft (angle-detected, releasable).
+    pub fn mark_soft(&mut self, edges: &[[u32; 2]]) {
+        for &[a, b] in edges {
+            if self.features.contains(&key(a, b)) {
+                self.soft.insert(key(a, b));
+            }
+        }
+    }
+
+    /// Releases soft feature edges whose two sides, judged at scale `radius`,
+    /// meet at less than `angle_deg` (the surface is smooth there after all),
+    /// then re-derives every vertex's kind at that scale (a corner may move to
+    /// a new peak). Boundary edges are never released. Returns how many edges
+    /// were released.
+    ///
+    /// The sides are judged by the area-weighted normals of all faces within
+    /// `radius` of the edge on either side, not by the edge's two faces alone:
+    /// tessellation noise averages out over that neighbourhood, while a real
+    /// crease (whose sides are each smooth) keeps its angle.
+    pub fn release_flat_soft_features(&mut self, angle_deg: f64, radius: f64) -> usize {
+        let cos_limit = angle_deg.to_radians().cos();
+        let mut candidates: Vec<(u32, u32)> = self.soft.iter().copied().collect();
+        candidates.sort_unstable();
+        let mut released = 0;
+        for (a, b) in candidates {
+            let Some(h) = self.find_half_edge(a, b).or_else(|| self.find_half_edge(b, a)) else { continue };
+            let Some(t) = self.twin(h) else { continue };
+            if self.side_normals_cos(h, t, radius) > cos_limit {
+                self.features.remove(&(a, b));
+                self.soft.remove(&(a, b));
+                released += 1;
+            }
+        }
+        if released > 0 {
+            self.reclassify(radius);
+        }
+        released
     }
 
     /// One half-edge per undirected edge, in index order.
@@ -278,6 +335,131 @@ impl EditMesh {
         self.one_ring(v).filter(|&n| self.is_feature(v, n)).collect()
     }
 
+    /// The point reached by walking from `from` through `next` along its
+    /// feature line for at least `reach` (or until a junction or end).
+    fn walk_feature(&self, from: u32, next: u32, reach: f64) -> DVec3 {
+        let (mut prev, mut at) = (from, next);
+        let mut travelled = (self.positions[at as usize] - self.positions[prev as usize]).length();
+        for _ in 0..MAX_FAN {
+            if travelled >= reach {
+                break;
+            }
+            let ahead: Vec<u32> = self.feature_neighbours(at).into_iter().filter(|&n| n != prev).collect();
+            let [step] = ahead.as_slice() else { break };
+            travelled += (self.positions[*step as usize] - self.positions[at as usize]).length();
+            (prev, at) = (at, *step);
+        }
+        self.positions[at as usize]
+    }
+
+    /// Cosine of the angle between the two sides of edge `h`/`t`, each side's
+    /// normal being the area-weighted mean over faces within `radius` of the
+    /// edge (found by a bounded flood fill from the edge's two faces).
+    fn side_normals_cos(&self, h: HalfEdge, t: HalfEdge, radius: f64) -> f64 {
+        const MAX_FACES: usize = 512;
+        let (pa, pb) = (self.position(self.from(h)), self.position(self.to(h)));
+        let (f0, f1) = (self.face(h), self.face(t));
+        let axis = (pb - pa).cross(self.face_normal(f0) + self.face_normal(f1)).normalize_or_zero();
+        let side_of = |c: DVec3| (c - pa).dot(axis);
+        let near = |c: DVec3| {
+            let e = pb - pa;
+            let s = ((c - pa).dot(e) / e.length_squared().max(f64::MIN_POSITIVE)).clamp(0.0, 1.0);
+            (c - (pa + e * s)).length() <= radius
+        };
+        let reference = side_of(self.centroid(f0)).signum();
+        let mut sides = [DVec3::ZERO; 2];
+        let mut queue = vec![f0, f1];
+        let mut seen: FastSet<u32> = queue.iter().copied().collect();
+        while let Some(f) = queue.pop() {
+            let c = self.centroid(f);
+            let [x, y, z] = self.corners[f as usize].map(|v| self.positions[v as usize]);
+            let weighted = (y - x).cross(z - x);
+            sides[usize::from(side_of(c).signum() != reference)] += weighted;
+            if seen.len() >= MAX_FACES {
+                continue;
+            }
+            for i in 0..3 {
+                let Some(o) = self.twin(HalfEdge(3 * f + i)) else { continue };
+                let g = self.face(o);
+                if !seen.contains(&g) && near(self.centroid(g)) {
+                    seen.insert(g);
+                    queue.push(g);
+                }
+            }
+        }
+        sides[0].normalize_or_zero().dot(sides[1].normalize_or_zero())
+    }
+
+    fn centroid(&self, f: u32) -> DVec3 {
+        self.corners[f as usize].iter().map(|&v| self.positions[v as usize]).sum::<DVec3>() / 3.0
+    }
+
+    /// Re-derives every vertex's kind, judging feature turns at scale `radius`.
+    ///
+    /// A vertex with two feature edges is a corner when its line turns by more
+    /// than [`CORNER_TURN_DEG`] between points about `radius / 2` away in each
+    /// direction (so zigzag tessellation noise along a straight feature doesn't
+    /// count), *and* that turn is the largest among the feature vertices within
+    /// reach along the line (so only the actual corner vertex is fixed, not its
+    /// neighbours whose wide view also wraps around the corner).
+    pub fn reclassify(&mut self, radius: f64) {
+        let reach = 0.5 * radius;
+        let n = self.positions.len();
+        let mut turn = vec![0.0f64; n];
+        for v in 0..n as u32 {
+            if !self.is_vertex_alive(v) {
+                continue;
+            }
+            if let &[a, b] = self.feature_neighbours(v).as_slice() {
+                let p = self.positions[v as usize];
+                let (da, db) = (self.walk_feature(v, a, reach) - p, self.walk_feature(v, b, reach) - p);
+                let cos = da.normalize_or_zero().dot(db.normalize_or_zero()).clamp(-1.0, 1.0);
+                turn[v as usize] = 180.0 - cos.acos().to_degrees();
+            }
+        }
+        for v in 0..n as u32 {
+            if !self.is_vertex_alive(v) {
+                continue;
+            }
+            let ends = self.feature_neighbours(v);
+            self.kinds[v as usize] = match ends.as_slice() {
+                [] => VertexKind::Free,
+                &[a, b] => {
+                    let t = turn[v as usize];
+                    let is_peak = [a, b].into_iter().all(|start| {
+                        self.chain_within(v, start, reach).iter().all(|&u| {
+                            let tu = turn[u as usize];
+                            tu < t || (tu == t && u > v)
+                        })
+                    });
+                    if t > CORNER_TURN_DEG && is_peak { VertexKind::Corner } else { VertexKind::Feature }
+                }
+                _ => VertexKind::Corner,
+            };
+        }
+    }
+
+    /// Feature-valence-2 vertices met walking from `from` through `next` for up
+    /// to `reach` (stopping at junctions and ends).
+    fn chain_within(&self, from: u32, next: u32, reach: f64) -> Vec<u32> {
+        let (mut prev, mut at) = (from, next);
+        let mut travelled = (self.positions[at as usize] - self.positions[prev as usize]).length();
+        let mut chain = Vec::new();
+        for _ in 0..MAX_FAN {
+            if travelled > reach || at == from {
+                break;
+            }
+            let ahead: Vec<u32> = self.feature_neighbours(at).into_iter().filter(|&n| n != prev).collect();
+            let [step] = ahead.as_slice() else { break };
+            chain.push(at);
+            travelled += (self.positions[*step as usize] - self.positions[at as usize]).length();
+            (prev, at) = (at, *step);
+        }
+        chain
+    }
+
+    /// Kind of `v` judged at vertex scale (its immediate feature neighbours);
+    /// [`reclassify`](Self::reclassify) judges at a chosen scale.
     fn classify(&self, v: u32) -> VertexKind {
         let ends = self.feature_neighbours(v);
         match ends.as_slice() {
@@ -298,6 +480,10 @@ impl EditMesh {
     /// Replaces faces atomically. Returns the new face ids, or `None` (and
     /// changes nothing) if the result would have a repeated corner, a dead
     /// vertex, or a directed edge used twice.
+    ///
+    /// Each new face inherits the summed reference normals of the removed
+    /// faces sharing the most corners with it (the face it was cut from, or
+    /// both faces of a flip); with nothing removed it takes its own normal.
     fn replace_faces(&mut self, remove: &[u32], add: &[[u32; 3]]) -> Option<Vec<u32>> {
         // Neighbourhoods are tiny: linear scans beat hashing here.
         let removed = remove;
@@ -352,8 +538,17 @@ impl EditMesh {
         }
         let mut ids = Vec::with_capacity(add.len());
         for t in add {
+            let shared = |g: u32| self.corners[g as usize].iter().filter(|v| t.contains(v)).count();
+            let most = remove.iter().map(|&g| shared(g)).max().unwrap_or(0);
+            let reference = if most == 0 {
+                let [a, b, c] = t.map(|v| self.positions[v as usize]);
+                (b - a).cross(c - a)
+            } else {
+                remove.iter().filter(|&&g| shared(g) == most).map(|&g| self.references[g as usize]).sum()
+            };
             let f = self.corners.len() as u32;
             self.corners.push(*t);
+            self.references.push(reference.normalize_or_zero());
             self.face_alive.push(true);
             self.live_faces += 1;
             for i in 0..3 {
@@ -419,6 +614,10 @@ impl EditMesh {
             self.features.insert(key(a, m));
             self.features.insert(key(m, b));
             self.kinds[m as usize] = VertexKind::Feature;
+            if self.soft.remove(&key(a, b)) {
+                self.soft.insert(key(a, m));
+                self.soft.insert(key(m, b));
+            }
         }
         Some(m)
     }
@@ -477,11 +676,22 @@ impl EditMesh {
             return false;
         }
         for x in feature_ring {
+            let was_soft = self.soft.remove(&key(b, x));
             self.features.remove(&key(b, x));
-            if x != a {
-                self.features.insert(key(a, x));
+            if x == a {
+                continue;
+            }
+            // (a, x) stays soft only if every feature merged into it was soft.
+            let already = self.features.contains(&key(a, x));
+            let already_soft = self.soft.contains(&key(a, x));
+            self.features.insert(key(a, x));
+            if was_soft && (!already || already_soft) {
+                self.soft.insert(key(a, x));
+            } else {
+                self.soft.remove(&key(a, x));
             }
         }
+        self.soft.remove(&key(a, b));
         self.vertex_alive[b as usize] = false;
         self.out[b as usize] = NONE;
         self.positions[a as usize] = keep_position;
@@ -524,6 +734,11 @@ impl EditMesh {
                 mesh.kinds[*new as usize] = self.kinds[old];
             }
         }
+        let soft: Vec<[u32; 2]> =
+            self.soft.iter().filter_map(|&(a, b)| Some([map[a as usize]?, map[b as usize]?])).collect();
+        mesh.mark_soft(&soft);
+        // `compact_with_map` lists faces in index order, as `from_triangles` numbered them.
+        mesh.references = self.faces().map(|f| self.references[f as usize]).collect();
         Ok((mesh, map))
     }
 
@@ -617,6 +832,9 @@ impl EditMesh {
             if !self.directed.contains_key(&(a, b)) && !self.directed.contains_key(&(b, a)) {
                 return Err(format!("feature edge ({a}, {b}) is not a mesh edge"));
             }
+        }
+        if let Some(&(a, b)) = self.soft.iter().find(|e| !self.features.contains(e)) {
+            return Err(format!("soft edge ({a}, {b}) is not a feature"));
         }
         Ok(())
     }
@@ -781,6 +999,81 @@ mod tests {
         let mut mesh = EditMesh::from_triangles(&p, &t, &[[0, 3]]).unwrap();
         assert!(!mesh.flip(half_edge_between(&mesh, 0, 3)));
         assert!(!mesh.flip(half_edge_between(&mesh, 0, 1)));
+    }
+
+    #[test]
+    fn soft_features_follow_splits_and_release_when_flat() {
+        let (p, t) = grid(2);
+        let mut mesh = EditMesh::from_triangles(&p, &t, &[[0, 4], [4, 8]]).unwrap();
+        mesh.mark_soft(&[[0, 4]]);
+        let m = mesh.split(half_edge_between(&mesh, 0, 4), DVec3::new(0.5, 0.5, 0.0)).unwrap();
+        assert!(mesh.is_feature(0, m) && mesh.is_feature(m, 4));
+        assert_eq!(mesh.kind(m), VertexKind::Feature);
+        // The grid is flat: both soft halves go; the hard edge 4-8 stays.
+        assert_eq!(mesh.release_flat_soft_features(35.0, 1.0), 2);
+        assert!(!mesh.is_feature(0, m) && !mesh.is_feature(m, 4));
+        assert!(mesh.is_feature(4, 8));
+        assert_eq!(mesh.kind(m), VertexKind::Free);
+        assert_eq!(mesh.kind(4), VertexKind::Corner, "4 is now the tip of the remaining line");
+        mesh.check_invariants().unwrap();
+    }
+
+    #[test]
+    fn zigzag_feature_is_not_a_corner_at_scale() {
+        // A boundary that zigzags by ±0.01 every 0.1 turns ~22° per vertex up and
+        // down; at scale 1.0 the line is straight, while the strip's 4 real
+        // corners still turn 90°.
+        let n = 10u32;
+        let mut p = Vec::new();
+        for y in 0..2 {
+            for i in 0..=n {
+                let z = if i % 2 == 0 { 0.0 } else { 0.05 };
+                p.push(DVec3::new(f64::from(i) / f64::from(n), f64::from(y), z));
+            }
+        }
+        let top = n + 1;
+        let mut t = Vec::new();
+        for i in 0..n {
+            t.push([i, i + 1, top + i + 1]);
+            t.push([i, top + i + 1, top + i]);
+        }
+        let mut mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
+        assert_eq!(mesh.kind(5), VertexKind::Corner, "at vertex scale the zigzag turns sharply");
+        mesh.reclassify(1.0);
+        assert_eq!(mesh.kind(5), VertexKind::Feature);
+        for corner in [0, n, top, top + n] {
+            assert_eq!(mesh.kind(corner), VertexKind::Corner);
+        }
+    }
+
+    #[test]
+    fn faces_inherit_reference_normals() {
+        let (p, t) = grid(2);
+        let mut mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
+        let up = DVec3::Z;
+        assert!(mesh.faces().all(|f| mesh.reference_normal(f).dot(up) > 0.999));
+        // Tilt the centre vertex: face normals change, references don't.
+        mesh.set_position(4, DVec3::new(0.5, 0.5, 0.4));
+        let m = mesh.split(half_edge_between(&mesh, 0, 4), DVec3::new(0.25, 0.25, 0.2)).unwrap();
+        let fan = mesh.faces_around(m);
+        assert!(fan.iter().all(|&f| mesh.reference_normal(f).dot(up) > 0.999));
+        assert!(fan.iter().any(|&f| mesh.face_normal(f).dot(up) < 0.99));
+        let flippable = mesh.half_edges().into_iter().find(|&h| mesh.twin(h).is_some()).unwrap();
+        assert!(mesh.flip(flippable));
+        let (rebuilt, _) = mesh.rebuilt().unwrap();
+        assert!(rebuilt.faces().all(|f| rebuilt.reference_normal(f).dot(up) > 0.999));
+        assert!(rebuilt.faces().any(|f| rebuilt.face_normal(f).dot(up) < 0.99));
+    }
+
+    #[test]
+    fn soft_marks_survive_rebuild() {
+        let (p, t) = grid(2);
+        let mut mesh = EditMesh::from_triangles(&p, &t, &[[0, 4]]).unwrap();
+        mesh.mark_soft(&[[0, 4]]);
+        let (mut rebuilt, map) = mesh.rebuilt().unwrap();
+        let (a, b) = (map[0].unwrap(), map[4].unwrap());
+        assert!(rebuilt.is_feature(a, b));
+        assert_eq!(rebuilt.release_flat_soft_features(35.0, 1.0), 1);
     }
 
     proptest! {

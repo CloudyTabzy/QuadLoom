@@ -13,21 +13,39 @@ const COLLAPSE_BELOW: f64 = 4.0 / 5.0;
 const SPLIT_ROUNDS: usize = 1;
 /// A move or collapse may not turn any face normal by more than ~78°.
 const MIN_NORMAL_DOT: f64 = 0.2;
+/// No face may turn away from the input orientation it descends from (see
+/// [`EditMesh::reference_normal`]). Each operation turns faces by less than
+/// `MIN_NORMAL_DOT` allows, but on slivers, whose normals swing with tiny
+/// moves, such turns can add up to a fold over several operations.
+const MIN_REFERENCE_DOT: f64 = 0.0;
 /// A flip's new faces must stay within ~25° of the faces they replace.
 const FLIP_MIN_NORMAL_DOT: f64 = 0.9;
 /// Tangential smoothing step (fraction of the way to the neighbour centroid).
 const SMOOTH_STEP: f64 = 0.5;
-/// No operation may create a face smaller than (collapse length)² / 1000, the
-/// same floor vcglib uses; below it faces are numerically slivers.
-const MIN_AREA_FACTOR: f64 = COLLAPSE_BELOW * COLLAPSE_BELOW / 1000.0;
-/// Flips may not create triangles with a radius ratio below this.
-const FLIP_MIN_RADIUS_RATIO: f64 = 0.1;
+/// Quality guard: an operation may not leave a face with a radius ratio below
+/// `min(QUALITY_FLOOR, worst ratio among the faces it replaces)`. So it can
+/// never make a neighbourhood's worst face worse, but it *can* clean up a
+/// neighbourhood that's already bad (inputs made entirely of slivers).
+const QUALITY_FLOOR: f64 = 0.1;
+/// Relative slack on the quality guard. A collapse that leaves a neighbouring
+/// sliver as it was still changes its ratio in the last digits; without slack
+/// such rounding blocks every collapse on a sliver-only input.
+const QUALITY_TOLERANCE: f64 = 1e-3;
+/// A flip made for quality alone must improve the worse of its two faces by
+/// at least this factor (strict improvement, so flips can't cycle).
+const FLIP_QUALITY_GAIN: f64 = 1.25;
+/// A collapse may lengthen an edge that's already over the split limit by up
+/// to this factor (removing a sliver always stretches its long sides a bit).
+const LONG_EDGE_SLACK: f64 = 1.1;
 
 pub(super) struct Pass<'a> {
     pub mesh: &'a mut EditMesh,
     /// Desired edge length per vertex slot; grows with the mesh.
     pub sizes: Vec<f64>,
     pub projector: &'a Projector,
+    /// Splitting stops above this many faces: a hard ceiling so no input can
+    /// make the remesh explode.
+    pub max_faces: usize,
 }
 
 impl Pass<'_> {
@@ -52,6 +70,9 @@ impl Pass<'_> {
         for _ in 0..SPLIT_ROUNDS {
             let mut splits = 0;
             for h in self.mesh.half_edges() {
+                if self.mesh.face_count() >= self.max_faces {
+                    return total + splits;
+                }
                 if !self.half_edge_alive(h) {
                     continue;
                 }
@@ -125,56 +146,65 @@ impl Pass<'_> {
         if !self.projector.within_bound(target) {
             return false;
         }
+        // No new edge over the split limit, unless the edge it replaces was
+        // already about that long (slivers' long sides): the splitter deals
+        // with those next pass.
         let limit = SPLIT_ABOVE * size;
-        let ring_ok = self
-            .mesh
-            .one_ring(keep)
-            .chain(self.mesh.one_ring(gone))
-            .filter(|&n| n != keep && n != gone)
-            .all(|n| (self.mesh.position(n) - target).length() <= limit);
-        if !ring_ok || !self.faces_survive(&[keep, gone], target, Some((keep, gone)), size) {
+        let (pk, pg) = (self.mesh.position(keep), self.mesh.position(gone));
+        let fits = |n: u32, old_end: DVec3| {
+            let q = self.mesh.position(n);
+            n == keep
+                || n == gone
+                || (q - target).length() <= limit.max(LONG_EDGE_SLACK * (q - old_end).length())
+        };
+        let ring_ok =
+            self.mesh.one_ring(keep).all(|n| fits(n, pk)) && self.mesh.one_ring(gone).all(|n| fits(n, pg));
+        if !ring_ok || !self.faces_survive(&[keep, gone], target, Some((keep, gone))) {
             return false;
         }
         self.mesh.collapse_prechecked(h, target)
     }
 
-    /// Whether moving each of `movers` to `target` keeps every face around them
-    /// facing the same way and above the minimum area for local size `size`.
-    /// With `collapsing = Some((a, b))`, faces holding both are about to
-    /// disappear and are ignored.
-    fn faces_survive(
-        &self,
-        movers: &[u32],
-        target: DVec3,
-        collapsing: Option<(u32, u32)>,
-        size: f64,
-    ) -> bool {
-        let min_double_area = 2.0 * MIN_AREA_FACTOR * size * size;
+    /// Whether moving each of `movers` to `target` keeps every remaining face
+    /// around them facing the same way and passes the quality guard. With
+    /// `collapsing = Some((a, b))`, faces holding both disappear: they count
+    /// towards the "before" quality but not the "after".
+    fn faces_survive(&self, movers: &[u32], target: DVec3, collapsing: Option<(u32, u32)>) -> bool {
+        let mut worst_before = 1.0f64;
+        let mut worst_after = 1.0f64;
+        let mut seen: Vec<u32> = Vec::with_capacity(16);
         for &v in movers {
             for f in self.mesh.faces_around(v) {
+                if seen.contains(&f) {
+                    continue;
+                }
+                seen.push(f);
                 let corners = self.mesh.face_corners(f);
+                let old = corners.map(|c| self.mesh.position(c));
+                worst_before = worst_before.min(radius_ratio(old));
                 if let Some((a, b)) = collapsing
                     && corners.contains(&a)
                     && corners.contains(&b)
                 {
                     continue;
                 }
-                let before = self.mesh.face_normal(f);
-                let [p0, p1, p2] =
-                    corners.map(|c| if movers.contains(&c) { target } else { self.mesh.position(c) });
-                let after = (p1 - p0).cross(p2 - p0);
-                if after.length() < min_double_area || after.normalize_or_zero().dot(before) < MIN_NORMAL_DOT
+                let new = corners.map(|c| if movers.contains(&c) { target } else { self.mesh.position(c) });
+                let normal = (new[1] - new[0]).cross(new[2] - new[0]).normalize_or_zero();
+                if normal.dot(self.mesh.face_normal(f)) < MIN_NORMAL_DOT
+                    || normal.dot(self.mesh.reference_normal(f)) <= MIN_REFERENCE_DOT
                 {
                     return false;
                 }
+                worst_after = worst_after.min(radius_ratio(new));
             }
         }
-        true
+        worst_after > 0.0 && worst_after >= (1.0 - QUALITY_TOLERANCE) * QUALITY_FLOOR.min(worst_before)
     }
 
     /// Flips interior, non-feature edges when that brings the four vertices
-    /// closer to the ideal valence (6 inside, 4 on the boundary) without
-    /// bending the surface.
+    /// closer to the ideal valence (6 inside, 4 on the boundary), or when it
+    /// clearly improves the worse of the two triangles, without bending the
+    /// surface.
     pub fn equalize_valence(&mut self) -> usize {
         let mut flips = 0;
         for h in self.mesh.half_edges() {
@@ -194,21 +224,23 @@ impl Pass<'_> {
                 + (val(b) - 1 - ideal(b)).abs()
                 + (val(c) + 1 - ideal(c)).abs()
                 + (val(d) + 1 - ideal(d)).abs();
-            if after >= before {
+            let [pa, pb, pc, pd] = [a, b, c, d].map(|v| self.mesh.position(v));
+            let quality_before = radius_ratio([pa, pb, pc]).min(radius_ratio([pb, pa, pd]));
+            let quality_after = radius_ratio([pc, pa, pd]).min(radius_ratio([pc, pd, pb]));
+            let better_valence = after < before && quality_after >= QUALITY_FLOOR.min(quality_before);
+            let better_shape = quality_after > FLIP_QUALITY_GAIN * quality_before;
+            if !better_valence && !better_shape {
                 continue;
             }
-            let [pa, pb, pc, pd] = [a, b, c, d].map(|v| self.mesh.position(v));
-            let old = (self.mesh.face_normal(self.mesh.face(h)) + self.mesh.face_normal(self.mesh.face(t)))
-                .normalize_or_zero();
+            let (f, g) = (self.mesh.face(h), self.mesh.face(t));
+            let old = (self.mesh.face_normal(f) + self.mesh.face_normal(g)).normalize_or_zero();
+            let reference = self.mesh.reference_normal(f) + self.mesh.reference_normal(g);
             let n1 = (pa - pc).cross(pd - pc).normalize_or_zero();
             let n2 = (pd - pc).cross(pb - pc).normalize_or_zero();
-            if n1.dot(old) < FLIP_MIN_NORMAL_DOT || n2.dot(old) < FLIP_MIN_NORMAL_DOT {
-                continue;
-            }
-            let min_area = MIN_AREA_FACTOR * self.size(c, d).powi(2);
-            let healthy =
-                |p: [DVec3; 3]| triangle_area(p) >= min_area && radius_ratio(p) >= FLIP_MIN_RADIUS_RATIO;
-            if !healthy([pc, pa, pd]) || !healthy([pc, pd, pb]) {
+            if [n1, n2]
+                .iter()
+                .any(|n| n.dot(old) < FLIP_MIN_NORMAL_DOT || n.dot(reference) <= MIN_REFERENCE_DOT)
+            {
                 continue;
             }
             if self.mesh.flip(h) {
@@ -255,8 +287,7 @@ impl Pass<'_> {
                     self.projector.onto_features(p + SMOOTH_STEP * tangent * delta.dot(tangent))
                 }
             };
-            let size = self.sizes.get(v as usize).copied().unwrap_or(f64::INFINITY);
-            if self.faces_survive(&[v], target, None, size) {
+            if self.faces_survive(&[v], target, None) {
                 self.mesh.set_position(v, target);
             }
         }
