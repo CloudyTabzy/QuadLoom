@@ -10,6 +10,6 @@ pub mod control;
 pub mod error;
 pub mod mesh;
 
-pub use control::Stage;
+pub use control::{Control, Stage, Ticker};
 pub use error::{Error, ErrorKind};
 pub use mesh::{InputMesh, PolyMesh};
