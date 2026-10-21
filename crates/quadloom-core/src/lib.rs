@@ -10,6 +10,7 @@ pub mod control;
 pub mod error;
 pub mod fault;
 pub mod mesh;
+pub mod metrics;
 pub mod params;
 pub mod pipeline;
 pub mod validate;
