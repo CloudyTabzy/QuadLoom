@@ -11,10 +11,16 @@ fn tetrahedron() -> (Vec<f32>, Vec<u32>) {
     (p, i)
 }
 
+fn no_remesh() -> Params {
+    let mut params = Params::default();
+    params.remesh.enabled = false;
+    params
+}
+
 #[test]
 fn run_passthrough_preserves_tetrahedron() {
     let (p, i) = tetrahedron();
-    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
+    let out = run(&p, &i, &FeatureInput::default(), &no_remesh(), &Control::default()).unwrap();
     assert_eq!(out.mesh.face_count(), 4);
     assert_eq!(out.mesh.positions.len(), 4);
     assert_eq!(out.validation.faces, 4);
@@ -153,7 +159,7 @@ fn run_with_features_on_cube() {
         }
         i.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
-    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
+    let out = run(&p, &i, &FeatureInput::default(), &no_remesh(), &Control::default()).unwrap();
     assert_eq!(out.repair.welded_vertices, 16);
     assert_eq!(out.components, 1);
     assert_eq!(out.mesh.positions.len(), 8);
@@ -189,4 +195,73 @@ fn out_of_range_params_rejected() {
     let mut params = Params::default();
     params.repair.weld_epsilon_rel = -1.0; // negative disables welding: allowed
     assert!(run(&p, &i, &FeatureInput::default(), &params, &Control::default()).is_ok());
+}
+
+#[test]
+fn pipeline_remeshes_cube() {
+    let corners = [
+        [0., 0., 0.],
+        [1., 0., 0.],
+        [1., 1., 0.],
+        [0., 1., 0.],
+        [0., 0., 1.],
+        [1., 0., 1.],
+        [1., 1., 1.],
+        [0., 1., 1.],
+    ];
+    let p: Vec<f32> = corners.iter().flat_map(|c: &[f64; 3]| c.map(|x| x as f32)).collect();
+    let i = [
+        0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1,
+        6, 5,
+    ];
+    // Uniform sizing so the face count is predictable; adaptivity would make
+    // the flat cube faces up to 3× coarser.
+    let mut params = Params::default();
+    params.remesh.target_edge_rel = 0.1;
+    params.remesh.adaptive = false;
+    let out = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    assert!(out.mesh.face_count() >= 300, "{} faces", out.mesh.face_count());
+    assert_eq!(out.remesh.input_faces, 12);
+    assert_eq!(out.remesh.output_faces, out.mesh.face_count());
+    assert!(out.feature_edges.len() > 12);
+    for c in corners {
+        let c = glam::DVec3::from_array(c);
+        assert!(out.mesh.positions.iter().any(|q| (*q - c).length() < 1e-9), "corner {c:?} lost");
+    }
+    assert!(out.timings_ms.iter().any(|(s, _)| *s == Stage::PrepRemesh));
+}
+
+#[test]
+fn remesh_runs_per_component() {
+    // Two cubes: each remeshed on its own, merged in order.
+    let mut p: Vec<f32> = Vec::new();
+    let mut i: Vec<u32> = Vec::new();
+    let tris = [
+        0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1,
+        6, 5,
+    ];
+    for shift in [0.0f32, 3.0] {
+        let base = (p.len() / 3) as u32;
+        for c in [
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 0., 1.],
+            [1., 1., 1.],
+            [0., 1., 1.],
+        ] {
+            p.extend([c[0] + shift, c[1], c[2]]);
+        }
+        i.extend(tris.iter().map(|&v| v + base));
+    }
+    let mut params = Params::default();
+    params.remesh.target_edge_rel = 0.05;
+    let a = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    let b = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    assert_eq!(a.components, 2);
+    assert_eq!(a.mesh, b.mesh, "parallel per-component remeshing must be deterministic");
+    let left = a.mesh.positions.iter().filter(|q| q.x < 2.0).count();
+    assert!(left > 0 && left < a.mesh.positions.len());
 }

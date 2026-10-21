@@ -30,5 +30,6 @@ pub use fault::Fault;
 pub use mesh::{InputMesh, PolyMesh};
 pub use params::Params;
 pub use pipeline::{RunOutput, check_limits, run};
+pub use remesh::{RemeshParams, RemeshReport};
 pub use repair::{RepairParams, RepairReport, RepairedMesh, repair};
 pub use validate::ValidationReport;

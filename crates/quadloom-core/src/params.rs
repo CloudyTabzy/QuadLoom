@@ -5,6 +5,7 @@ use crate::error::Error;
 #[cfg(feature = "fault-injection")]
 use crate::fault::Fault;
 use crate::features::FeatureParams;
+use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
 
 /// Largest allowed weld distance, as a fraction of the bbox diagonal. Above
@@ -25,6 +26,8 @@ pub struct Params {
     pub repair: RepairParams,
     /// Stage 1: feature lines.
     pub features: FeatureParams,
+    /// Stage 2: isotropic prep remesh.
+    pub remesh: RemeshParams,
     /// Test-only fault to inject (see [`crate::fault`]).
     #[cfg(feature = "fault-injection")]
     pub fault: Option<Fault>,
@@ -36,6 +39,7 @@ impl Default for Params {
             max_faces: DEFAULT_MAX_FACES,
             repair: RepairParams::default(),
             features: FeatureParams::default(),
+            remesh: RemeshParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
         }
@@ -55,6 +59,28 @@ impl Params {
         let angle = self.features.angle_deg;
         if !(0.0..=180.0).contains(&angle) {
             return bad(format!("features.angle_deg must be between 0 and 180 (got {angle})"));
+        }
+        let r = &self.remesh;
+        if !(0.0..=0.5).contains(&r.target_edge_rel) {
+            return bad(format!(
+                "remesh.target_edge_rel must be between 0 (auto) and 0.5 (got {})",
+                r.target_edge_rel
+            ));
+        }
+        if r.iterations > 100 {
+            return bad(format!("remesh.iterations must be at most 100 (got {})", r.iterations));
+        }
+        if !(r.min_mult > 0.0 && r.min_mult <= 1.0 && r.max_mult >= 1.0 && r.max_mult <= 10.0) {
+            return bad(format!(
+                "remesh.min_mult must be in (0, 1] and remesh.max_mult in [1, 10] (got {} and {})",
+                r.min_mult, r.max_mult
+            ));
+        }
+        if !(r.max_surface_distance_rel > 0.0 && r.max_surface_distance_rel <= 0.1) {
+            return bad(format!(
+                "remesh.max_surface_distance_rel must be in (0, 0.1] (got {})",
+                r.max_surface_distance_rel
+            ));
         }
         Ok(())
     }

@@ -7,7 +7,7 @@ use pyo3::buffer::{Element, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
-use quadloom_core::{RepairReport, RunOutput, ValidationReport};
+use quadloom_core::{RemeshReport, RepairReport, RunOutput, ValidationReport};
 
 use crate::errors::invalid_argument;
 
@@ -94,6 +94,7 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
     dict.set_item("features", features(py, &output.features)?)?;
     dict.set_item("feature_edges", PyBytes::new(py, &le_u32(output.feature_edges.as_flattened())))?;
     dict.set_item("components", output.components)?;
+    dict.set_item("remesh", remesh(py, &output.remesh)?)?;
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
     Ok(dict)
@@ -138,5 +139,19 @@ fn features<'py>(py: Python<'py>, f: &FeatureReport) -> PyResult<Bound<'py, PyDi
     dict.set_item("pruned_edges", f.pruned_edges)?;
     dict.set_item("corners", f.corners)?;
     dict.set_item("length_ratio", f.length_ratio)?;
+    Ok(dict)
+}
+
+fn remesh<'py>(py: Python<'py>, r: &RemeshReport) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("input_faces", r.input_faces)?;
+    dict.set_item("output_faces", r.output_faces)?;
+    dict.set_item("target_edge_length", r.target_edge_length)?;
+    dict.set_item("splits", r.splits)?;
+    dict.set_item("collapses", r.collapses)?;
+    dict.set_item("flips", r.flips)?;
+    dict.set_item("max_surface_distance", r.max_surface_distance)?;
+    dict.set_item("min_angle_deg", r.min_angle_deg)?;
+    dict.set_item("mean_radius_ratio", r.mean_radius_ratio)?;
     Ok(dict)
 }

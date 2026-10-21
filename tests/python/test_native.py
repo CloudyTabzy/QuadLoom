@@ -11,6 +11,7 @@ import quadloom_native as ql
 
 TET_POSITIONS = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 TET_INDICES = [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3]
+NO_REMESH = {"remesh": {"enabled": False}}
 
 
 def tet():
@@ -25,7 +26,7 @@ def test_build_has_fault_injection():
 
 def test_tetrahedron_roundtrip():
     p, i = tet()
-    result = ql.run(p, i, ql.Control())
+    result = ql.run(p, i, ql.Control(), params=NO_REMESH)
     assert len(result["face_offsets"]) == 5 * 4
     assert result["validation"]["faces"] == 4
     assert result["validation"]["components"] == 1
@@ -108,7 +109,7 @@ def cube():
 
 def test_repair_and_feature_reports_present():
     p, i = cube()
-    result = ql.run(p, i, ql.Control())
+    result = ql.run(p, i, ql.Control(), params=NO_REMESH)
     assert result["components"] == 1
     assert result["repair"]["welded_vertices"] == 0
     assert result["features"]["edges"] == 12
@@ -140,6 +141,24 @@ def test_params_wrong_type_rejected():
     assert "repair.orient" in str(e.value)
 
 
+def test_remesh_section():
+    p, i = cube()
+    result = ql.run(p, i, ql.Control(), params={"remesh": {"target_edge_rel": 0.1, "adaptive": False}})
+    faces = len(result["face_offsets"]) // 4 - 1
+    assert result["remesh"]["input_faces"] == 12
+    assert result["remesh"]["output_faces"] == faces >= 300
+    assert result["remesh"]["mean_radius_ratio"] > 0.8
+    off = ql.run(p, i, ql.Control(), params=NO_REMESH)
+    assert len(off["face_offsets"]) // 4 - 1 == 12
+
+
+def test_remesh_range_checked():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"remesh": {"max_mult": 50.0}})
+    assert "remesh.max_mult" in str(e.value)
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_non_finite_param_rejected(value):
     p, i = cube()
@@ -157,7 +176,7 @@ def test_weld_distance_capped():
 
 def test_marked_sharp_edges_used():
     p, i = cube()
-    params = {"features": {"use_angle": False, "use_open_boundaries": False}}
+    params = {"features": {"use_angle": False, "use_open_boundaries": False}, **NO_REMESH}
     result = ql.run(p, i, ql.Control(), sharp_edges=array("I", [0, 1, 1, 2]), params=params)
     assert result["features"]["edges"] == 2
     assert result["features"]["by_source"][1] == 2

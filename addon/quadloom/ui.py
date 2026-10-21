@@ -52,7 +52,11 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     col.label(text=line, icon="LIGHT" if line.startswith("Hint") else "BLANK1")
             if last.status == "OK":
                 col.label(text=f"Faces: {last.faces_in} → {last.faces_out}")
-                for summary, icon in ((last.repair_summary, "TOOL_SETTINGS"), (last.feature_summary, "EDGESEL")):
+                for summary, icon in (
+                    (last.repair_summary, "TOOL_SETTINGS"),
+                    (last.feature_summary, "EDGESEL"),
+                    (last.remesh_summary, "MOD_REMESH"),
+                ):
                     for n, line in enumerate(_wrap(summary)):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
             if last.status != "RUNNING":
@@ -84,6 +88,27 @@ class QUADLOOM_PT_cleanup(_SubPanel, bpy.types.Panel):
         layout.prop(settings, "split_non_manifold")
         layout.prop(settings, "orient")
         layout.prop(settings, "min_component_faces")
+
+
+class QUADLOOM_PT_remesh(_SubPanel, bpy.types.Panel):
+    bl_label = "Prep Remesh"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "remesh_enabled", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = settings.remesh_enabled
+        layout.prop(settings, "remesh_target_rel")
+        layout.prop(settings, "remesh_iterations")
+        layout.prop(settings, "remesh_adaptive")
+        col = layout.column(align=True)
+        col.active = settings.remesh_adaptive
+        col.prop(settings, "remesh_min_mult")
+        col.prop(settings, "remesh_max_mult")
+        layout.prop(settings, "remesh_max_deviation_rel")
 
 
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
@@ -143,4 +168,4 @@ def _wrap(text, width=38):
     return lines or [""]
 
 
-classes = (QUADLOOM_PT_main, QUADLOOM_PT_cleanup, QUADLOOM_PT_features, QUADLOOM_PT_advanced)
+classes = (QUADLOOM_PT_main, QUADLOOM_PT_cleanup, QUADLOOM_PT_features, QUADLOOM_PT_remesh, QUADLOOM_PT_advanced)

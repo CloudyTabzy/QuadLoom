@@ -42,6 +42,57 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         min=1,
     )
 
+    # --- Prep remesh (stage 2) ---------------------------------------------------
+    remesh_enabled: BoolProperty(
+        name="Remesh First",
+        description="Rebuild the surface as clean, even triangles (keeping every feature line) before "
+        "quad remeshing. Recommended; turn off only for meshes that are already clean and even",
+        default=True,
+    )
+    remesh_target_rel: FloatProperty(
+        name="Triangle Size",
+        description="Target edge length as a fraction of the object's size. 0 picks a size automatically "
+        "(about 10,000 triangles, more for complex shapes)",
+        default=0.0,
+        min=0.0,
+        max=0.5,
+        precision=4,
+    )
+    remesh_iterations: IntProperty(
+        name="Iterations",
+        description="Refinement passes. More passes give more even triangles but take longer",
+        default=15,
+        min=1,
+        max=100,
+    )
+    remesh_adaptive: BoolProperty(
+        name="Adaptive Density",
+        description="Use smaller triangles where the surface curves and larger ones where it's flat",
+        default=True,
+    )
+    remesh_min_mult: FloatProperty(
+        name="Finest",
+        description="Smallest triangle size allowed by adaptive density, relative to Triangle Size",
+        default=0.3,
+        min=0.05,
+        max=1.0,
+    )
+    remesh_max_mult: FloatProperty(
+        name="Coarsest",
+        description="Largest triangle size allowed by adaptive density, relative to Triangle Size",
+        default=3.0,
+        min=1.0,
+        max=10.0,
+    )
+    remesh_max_deviation_rel: FloatProperty(
+        name="Max Deviation",
+        description="Furthest the rebuilt surface may move from the original, as a fraction of the object's size",
+        default=1.0 / 2500.0,
+        min=1e-6,
+        max=0.1,
+        precision=5,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -126,6 +177,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     elapsed_ms: FloatProperty(name="Time (ms)")
     report_json: StringProperty(name="Report")
     repair_summary: StringProperty(name="Cleanup")
+    remesh_summary: StringProperty(name="Remesh")
     feature_summary: StringProperty(name="Features")
 
 
@@ -162,5 +214,14 @@ def run_params(settings):
             "use_face_set_boundaries": settings.use_face_set_boundaries,
             "use_open_boundaries": settings.use_open_boundaries,
             "prune_steps": settings.prune_steps,
+        },
+        "remesh": {
+            "enabled": settings.remesh_enabled,
+            "target_edge_rel": settings.remesh_target_rel,
+            "iterations": settings.remesh_iterations,
+            "adaptive": settings.remesh_adaptive,
+            "min_mult": settings.remesh_min_mult,
+            "max_mult": settings.remesh_max_mult,
+            "max_surface_distance_rel": settings.remesh_max_deviation_rel,
         },
     }

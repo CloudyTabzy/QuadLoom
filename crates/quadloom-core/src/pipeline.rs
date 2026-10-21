@@ -2,12 +2,17 @@
 
 use std::time::Instant;
 
+use rayon::prelude::*;
+
+use crate::components::Component;
 use crate::control::{Control, Stage};
 use crate::error::Error;
 use crate::fault;
 use crate::features::{self, FeatureInput, FeatureReport};
 use crate::mesh::{InputMesh, PolyMesh};
 use crate::params::Params;
+use crate::remesh::{self, RemeshReport};
+use crate::repair::RepairedMesh;
 use crate::repair::{RepairReport, repair};
 use crate::validate::{ValidationReport, validate};
 
@@ -22,6 +27,8 @@ pub struct RunOutput {
     pub feature_edges: Vec<[u32; 2]>,
     /// Connected parts that will be remeshed independently.
     pub components: usize,
+    /// Prep remesh totals over all parts (only face counts when disabled).
+    pub remesh: RemeshReport,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -29,8 +36,9 @@ pub struct RunOutput {
 /// Runs the pipeline on flat `xyz` positions and flat triangle indices, with
 /// feature hints in the same (input) vertex and triangle ids.
 ///
-/// Currently: validate → repair → features, then the repaired mesh is
-/// re-emitted; the remeshing stages slot in before the output.
+/// Currently: validate → repair → features → prep remesh (per part, in
+/// parallel), then the remeshed triangles are re-emitted; the quad stages slot
+/// in before the output.
 pub fn run(
     positions: &[f32],
     indices: &[u32],
@@ -75,13 +83,26 @@ pub fn run(
     timings_ms.push((Stage::Features, elapsed_ms(started)));
 
     let started = Instant::now();
+    control.checkpoint(Stage::PrepRemesh)?;
+    fault::inject(params, Stage::PrepRemesh, control)?;
+    let feature_edges: Vec<[u32; 2]> = feature_set.edges.iter().map(|e| e.v).collect();
+    let (positions, triangles, feature_edges, remesh_report) = if params.remesh.enabled {
+        remesh_parts(&repaired, &components, &feature_edges, params, control)?
+    } else {
+        let faces = repaired.triangles.len();
+        let report = RemeshReport { input_faces: faces, output_faces: faces, ..RemeshReport::default() };
+        (repaired.positions, repaired.triangles, feature_edges, report)
+    };
+    timings_ms.push((Stage::PrepRemesh, elapsed_ms(started)));
+
+    let started = Instant::now();
     control.checkpoint(Stage::Output)?;
     fault::inject(params, Stage::Output, control)?;
-    let face_count = repaired.triangles.len() as u32;
+    let face_count = triangles.len() as u32;
     let mesh = PolyMesh {
-        face_indices: repaired.triangles.iter().flatten().copied().collect(),
+        face_indices: triangles.iter().flatten().copied().collect(),
         face_offsets: (0..=face_count).map(|f| f * 3).collect(),
-        positions: repaired.positions,
+        positions,
     };
     control.set_progress(Stage::Output, 1.0);
     timings_ms.push((Stage::Output, elapsed_ms(started)));
@@ -91,10 +112,68 @@ pub fn run(
         validation,
         repair: repair_report,
         features: feature_report,
-        feature_edges: feature_set.edges.iter().map(|e| e.v).collect(),
+        feature_edges,
         components: components.len(),
+        remesh: remesh_report,
         timings_ms,
     })
+}
+
+type Remeshed = (Vec<glam::DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>, RemeshReport);
+
+/// Remeshes every part independently (in parallel) at one shared target
+/// length, then concatenates the results in part order.
+fn remesh_parts(
+    repaired: &RepairedMesh,
+    components: &[Component],
+    feature_edges: &[[u32; 2]],
+    params: &Params,
+    control: &Control,
+) -> Result<Remeshed, Error> {
+    let target = remesh::target_length(&repaired.positions, &repaired.triangles, &params.remesh);
+    let results: Vec<Result<(remesh::RemeshedMesh, RemeshReport), Error>> = components
+        .par_iter()
+        .map(|component| {
+            let mut vertices: Vec<u32> =
+                component.faces.iter().flat_map(|&f| repaired.triangles[f as usize]).collect();
+            vertices.sort_unstable();
+            vertices.dedup();
+            let local = |v: u32| vertices.binary_search(&v).ok().map(|i| i as u32);
+            let positions: Vec<glam::DVec3> =
+                vertices.iter().map(|&v| repaired.positions[v as usize]).collect();
+            let triangles: Vec<[u32; 3]> = component
+                .faces
+                .iter()
+                .map(|&f| repaired.triangles[f as usize].map(|v| local(v).unwrap_or(0)))
+                .collect();
+            let features: Vec<[u32; 2]> =
+                feature_edges.iter().filter_map(|&[a, b]| Some([local(a)?, local(b)?])).collect();
+            remesh::remesh(&positions, &triangles, &features, target, &params.remesh, control)
+        })
+        .collect();
+
+    let (mut positions, mut triangles, mut features) = (Vec::new(), Vec::new(), Vec::new());
+    let mut total =
+        RemeshReport { target_edge_length: target, min_angle_deg: 180.0, ..RemeshReport::default() };
+    let mut ratio_weight = 0.0;
+    for result in results {
+        let (part, report) = result?;
+        let offset = positions.len() as u32;
+        positions.extend(part.positions);
+        triangles.extend(part.triangles.iter().map(|t| t.map(|v| v + offset)));
+        features.extend(part.feature_edges.iter().map(|e| e.map(|v| v + offset)));
+        total.input_faces += report.input_faces;
+        total.output_faces += report.output_faces;
+        total.splits += report.splits;
+        total.collapses += report.collapses;
+        total.flips += report.flips;
+        total.max_surface_distance = total.max_surface_distance.max(report.max_surface_distance);
+        total.min_angle_deg = total.min_angle_deg.min(report.min_angle_deg);
+        ratio_weight += report.mean_radius_ratio * report.output_faces as f64;
+    }
+    total.mean_radius_ratio =
+        if total.output_faces > 0 { ratio_weight / total.output_faces as f64 } else { 0.0 };
+    Ok((positions, triangles, features, total))
 }
 
 /// Per-triangle group arrays must match the triangle count exactly.

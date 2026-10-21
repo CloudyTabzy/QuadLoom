@@ -63,7 +63,7 @@ def start_job(context):
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
-    last.repair_summary, last.feature_summary = "", ""
+    last.repair_summary, last.feature_summary, last.remesh_summary = "", "", ""
     _active_job = job
     job.thread.start()
     return job
@@ -88,6 +88,7 @@ def finish_job(context, job):
             last.report_json = obj["quadloom_report"]
             last.repair_summary = repair_summary(job.result["repair"])
             last.feature_summary = feature_summary(job.result["features"])
+            last.remesh_summary = remesh_summary(job.result.get("remesh"), job.kwargs["params"]["remesh"]["enabled"])
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -118,6 +119,12 @@ def repair_summary(repair):
     components = repair["components"]
     parts.append(f"{components} part" + ("" if components == 1 else "s"))
     return ", ".join(parts) if len(parts) > 1 else f"no cleanup needed, {parts[0]}"
+
+
+def remesh_summary(remesh, enabled):
+    if not enabled or not remesh:
+        return "prep remesh off"
+    return f"remeshed {remesh['input_faces']:,} → {remesh['output_faces']:,} triangles"
 
 
 def feature_summary(features):

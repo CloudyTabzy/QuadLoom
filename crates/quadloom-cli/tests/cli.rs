@@ -39,15 +39,17 @@ fn info_reports_repair_and_features() {
 }
 
 #[test]
-fn run_writes_obj_with_same_face_count() {
+fn run_writes_obj_matching_reported_faces() {
     let input = scratch("run_tet.obj", TETRAHEDRON_OBJ);
     let output = input.with_file_name("run_tet_out.obj");
     let out = quadloom(&["run", input.to_str().unwrap(), output.to_str().unwrap()]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let written = std::fs::read_to_string(&output).unwrap();
-    assert_eq!(written.lines().filter(|l| l.starts_with("f ")).count(), 4);
     let stats: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(stats["output_faces"], 4);
+    let faces = written.lines().filter(|l| l.starts_with("f ")).count();
+    assert_eq!(stats["output_faces"], faces);
+    assert_eq!(stats["remesh"]["output_faces"], faces);
+    assert!(faces > 4, "the tetrahedron is refined by the prep remesh");
 }
 
 #[test]

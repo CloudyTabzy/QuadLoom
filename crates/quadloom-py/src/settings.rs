@@ -51,6 +51,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
             .map_err(|_| invalid_argument(py, format!("params.{section} must be a dict")))?;
         let r = &mut params.repair;
         let f = &mut params.features;
+        let m = &mut params.remesh;
         let mut fields: Vec<(&str, Field<'_>)> = match section.as_str() {
             "repair" => vec![
                 ("weld_epsilon_rel", Field::F64(&mut r.weld_epsilon_rel)),
@@ -69,10 +70,19 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("use_open_boundaries", Field::Bool(&mut f.use_open_boundaries)),
                 ("prune_steps", Field::Usize(&mut f.prune_steps)),
             ],
+            "remesh" => vec![
+                ("enabled", Field::Bool(&mut m.enabled)),
+                ("target_edge_rel", Field::F64(&mut m.target_edge_rel)),
+                ("iterations", Field::Usize(&mut m.iterations)),
+                ("adaptive", Field::Bool(&mut m.adaptive)),
+                ("min_mult", Field::F64(&mut m.min_mult)),
+                ("max_mult", Field::F64(&mut m.max_mult)),
+                ("max_surface_distance_rel", Field::F64(&mut m.max_surface_distance_rel)),
+            ],
             other => {
                 return Err(invalid_argument(
                     py,
-                    format!("params.{other} is not a known section (known: repair, features)"),
+                    format!("params.{other} is not a known section (known: repair, features, remesh)"),
                 ));
             }
         };

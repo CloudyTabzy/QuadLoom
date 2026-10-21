@@ -98,6 +98,7 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "repair": output.repair,
                     "features": output.features,
                     "components": output.components,
+                    "remesh": output.remesh,
                     "timings_ms": timings,
                 })
             );
