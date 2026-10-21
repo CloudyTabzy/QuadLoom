@@ -15,6 +15,9 @@ pub struct SurfaceDistance {
     pub mean: f64,
     pub result_to_reference_max: f64,
     pub reference_to_result_max: f64,
+    /// Where each maximum was found (the sample point, in mesh coordinates).
+    pub result_to_reference_max_at: [f64; 3],
+    pub reference_to_result_max_at: [f64; 3],
 }
 
 /// Samples each mesh at its vertices and face centroids and measures the
@@ -36,8 +39,12 @@ pub fn surface_distance(result: &PolyMesh, reference: &InputMesh) -> SurfaceDist
     let backward = distances(&result_bvh, &reference_samples);
 
     let scale = reference_bvh.bounds().map(|(lo, hi)| (hi - lo).length()).filter(|d| *d > 0.0).unwrap_or(1.0);
-    let max = |d: &[f64]| d.iter().copied().fold(if d.is_empty() { f64::INFINITY } else { 0.0 }, f64::max);
-    let (fwd_max, bwd_max) = (max(&forward), max(&backward));
+    let max = |d: &[f64], at: &[DVec3]| {
+        let worst = d.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1));
+        worst.map_or((f64::INFINITY, [f64::NAN; 3]), |(i, &v)| (v, at[i].to_array()))
+    };
+    let ((fwd_max, fwd_at), (bwd_max, bwd_at)) =
+        (max(&forward, &result_samples), max(&backward, &reference_samples));
     let count = forward.len() + backward.len();
     let mean = if count == 0 || forward.is_empty() || backward.is_empty() {
         f64::INFINITY
@@ -49,6 +56,8 @@ pub fn surface_distance(result: &PolyMesh, reference: &InputMesh) -> SurfaceDist
         mean: mean / scale,
         result_to_reference_max: fwd_max / scale,
         reference_to_result_max: bwd_max / scale,
+        result_to_reference_max_at: fwd_at,
+        reference_to_result_max_at: bwd_at,
     }
 }
 
