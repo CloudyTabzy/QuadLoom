@@ -1,0 +1,101 @@
+{
+  "_comment": "Curated QuadLoom benchmark set. fetch_meshes.py downloads these into benchmark/meshes/ (gitignored). Licenses are recorded per model; check the source before redistributing anything.",
+  "khronos": {
+    "base_url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models",
+    "api_url": "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/Models",
+    "license": "per model, read from each model's metadata.json",
+    "binary": [
+      {"name": "ABeautifulGame", "tags": ["hard-surface", "revolved", "multi-part"]},
+      {"name": "AntiqueCamera", "tags": ["hard-surface", "multi-part"]},
+      {"name": "Avocado", "tags": ["organic", "low-poly"]},
+      {"name": "BarramundiFish", "tags": ["organic", "thin-parts"]},
+      {"name": "BoomBox", "tags": ["hard-surface", "low-poly"]},
+      {"name": "BrainStem", "tags": ["character", "multi-part"]},
+      {"name": "CesiumMan", "tags": ["character", "low-poly"]},
+      {"name": "CesiumMilkTruck", "tags": ["hard-surface", "multi-part"]},
+      {"name": "ChronographWatch", "tags": ["hard-surface", "dense", "multi-part"]},
+      {"name": "CommercialRefrigerator", "tags": ["hard-surface", "multi-part"]},
+      {"name": "Corset", "tags": ["garment", "open-boundary"]},
+      {"name": "DamagedHelmet", "tags": ["hard-surface", "uv-seams"]},
+      {"name": "DragonAttenuation", "tags": ["organic", "scan", "dense"]},
+      {"name": "Duck", "tags": ["organic", "low-poly"]},
+      {"name": "Fox", "tags": ["character", "low-poly"]},
+      {"name": "GlamVelvetSofa", "tags": ["soft-goods", "folds"]},
+      {"name": "Lantern", "tags": ["hard-surface", "multi-part"]},
+      {"name": "MaterialsVariantsShoe", "tags": ["soft-goods", "open-boundary"]},
+      {"name": "SheenChair", "tags": ["soft-goods", "hard-surface"]},
+      {"name": "SpecularSilkPouf", "tags": ["soft-goods", "folds"]},
+      {"name": "SunglassesKhronos", "tags": ["hard-surface", "thin-parts"]},
+      {"name": "ToyCar", "tags": ["hard-surface", "multi-part"]},
+      {"name": "TrafficCone", "tags": ["hard-surface", "simple"]},
+      {"name": "WaterBottle", "tags": ["hard-surface", "revolved"]}
+    ],
+    "gltf_folder": [
+      {"name": "SheenCloth", "tags": ["garment", "open-boundary", "folds"]},
+      {"name": "SciFiHelmet", "tags": ["hard-surface", "dense"]}
+    ]
+  },
+  "crane": {
+    "base_url": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository",
+    "license": "CC0-1.0 for most models per the repository page; verify per model",
+    "models": [
+      {"name": "spot", "tags": ["organic", "clean", "genus-0"]},
+      {"name": "bob", "tags": ["organic", "clean", "genus-1"]},
+      {"name": "blub", "tags": ["organic", "clean"]},
+      {"name": "pig", "tags": ["organic", "clean"]},
+      {"name": "ogre", "tags": ["character", "sculpt"]},
+      {"name": "oloid", "tags": ["smooth", "developable"]},
+      {"name": "crumpleddevelopable", "tags": ["garment-like", "open-boundary", "folds"]}
+    ]
+  },
+  "common3d": {
+    "base_url": "https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data",
+    "license": "per original source (see the repository README); Stanford models are for research use with credit",
+    "models": [
+      {"name": "fandisk", "tags": ["mechanical", "sharp-features"]},
+      {"name": "rocker-arm", "tags": ["mechanical", "genus-1"]},
+      {"name": "stanford-bunny", "tags": ["scan", "organic"]},
+      {"name": "armadillo", "tags": ["scan", "organic", "dense"]},
+      {"name": "cow", "tags": ["organic"]},
+      {"name": "homer", "tags": ["character"]},
+      {"name": "beetle", "tags": ["hard-surface", "open-boundary"]},
+      {"name": "suzanne", "tags": ["low-poly", "open-boundary", "multi-part"]},
+      {"name": "teapot", "tags": ["classic", "non-manifold", "open-boundary"]},
+      {"name": "igea", "tags": ["scan", "dense"]},
+      {"name": "max-planck", "tags": ["scan", "organic"]},
+      {"name": "cheburashka", "tags": ["character"]},
+      {"name": "alligator", "tags": ["organic"]},
+      {"name": "woody", "tags": ["simple", "organic"]}
+    ]
+  },
+  "thingi10k": {
+    "base_url": "https://huggingface.co/datasets/Thingi10K/Thingi10K/resolve/main/raw_meshes",
+    "license": "per thing, recorded below",
+    "selection": "closed, manifold, single component, no self-intersections, 3k-60k faces, permissive license, spread across categories (seed 7)",
+    "models": [
+      {"file_id": "1706457", "thing_id": "1085472", "name": "Smartphone Photo Studio", "author": "CreativeTools", "license": "CC-BY-SA", "category": "3d-printing"},
+      {"file_id": "906891", "thing_id": "508896", "name": "Filament spool holder", "author": "CreativeTools", "license": "CC-BY", "category": "3d-printing"},
+      {"file_id": "40994", "thing_id": "12652", "name": "Creatures of Thingiverse", "author": "hlbrosnihan", "license": "CC-BY-SA", "category": "none"},
+      {"file_id": "37883", "thing_id": "11836", "name": "Functional Differential Gear System", "author": "Thing-O-Fun", "license": "CC-BY-SA", "category": "none"},
+      {"file_id": "62287", "thing_id": "19518", "name": "60s Sofa", "author": "PrettySmallThings", "license": "CC-BY", "category": "none"},
+      {"file_id": "49382", "thing_id": "14974", "name": "Sesame Street Sign", "author": "cptnAWESOME", "license": "CC-BY-SA", "category": "none"},
+      {"file_id": "87355", "thing_id": "29731", "name": "Tureen 1752/56", "author": "lili_czarina", "license": "CC-BY-SA", "category": "art"},
+      {"file_id": "650187", "thing_id": "367262", "name": "3d Printable Typeface sheet", "author": "9999NYC", "license": "CC-BY-SA", "category": "art"},
+      {"file_id": "94990", "thing_id": "32884", "name": "Alien Antennae", "author": "MakerBot", "license": "CC-BY", "category": "fashion"},
+      {"file_id": "71712", "thing_id": "23589", "name": "Cat gears key chain", "author": "Daid", "license": "CC-BY", "category": "fashion"},
+      {"file_id": "1492345", "thing_id": "939266", "name": "Longboard clamp for GoPro", "author": "daGHIZmo", "license": "CC-BY-SA", "category": "gadgets"},
+      {"file_id": "271869", "thing_id": "136235", "name": "PHIL", "author": "Mr_MegaTronic", "license": "CC-BY", "category": "gadgets"},
+      {"file_id": "1458674", "thing_id": "83024", "name": "OpenRC Touring Car part", "author": "barspin", "license": "CC-BY", "category": "hobby"},
+      {"file_id": "250397", "thing_id": "121702", "name": "Printable trumpet", "author": "Robo", "license": "CC-BY", "category": "hobby"},
+      {"file_id": "105762", "thing_id": "37117", "name": "Twisting Kochflake Vase", "author": "BenitoSanduchi", "license": "CC-BY-SA", "category": "household"},
+      {"file_id": "1514900", "thing_id": "935144", "name": "WAVE desktop tidy", "author": "tone001", "license": "CC-BY-SA", "category": "household"},
+      {"file_id": "1505036", "thing_id": "952564", "name": "Wind Energy Stored In Gravity", "author": "hyperplanemike", "license": "CC-BY-SA", "category": "learning"},
+      {"file_id": "756803", "thing_id": "452651", "name": "Math Spinner Enhanced", "author": "pauloblank", "license": "CC-BY-SA", "category": "learning"},
+      {"file_id": "472206", "thing_id": "259005", "name": "Big Boy Locomotive part", "author": "MakerBot", "license": "CC-BY", "category": "models"},
+      {"file_id": "97730", "thing_id": "33940", "name": "Universal bottle cap tripod", "author": "Camos", "license": "CC-BY-SA", "category": "tools"},
+      {"file_id": "99836", "thing_id": "34404", "name": "THWACK", "author": "Mr_MegaTronic", "license": "CC-BY", "category": "tools"},
+      {"file_id": "75117", "thing_id": "24908", "name": "Robots", "author": "Oblomobka", "license": "CC-BY-SA", "category": "toys-and-games"},
+      {"file_id": "124040", "thing_id": "42877", "name": "Sweetheart Flowers", "author": "MakerBot", "license": "CC-BY", "category": "toys-and-games"}
+    ]
+  }
+}

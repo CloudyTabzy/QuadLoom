@@ -1,0 +1,24 @@
+# Build output
+/target/
+/dist/
+/addon/quadloom/wheels/
+*.pyd
+*.dll
+*.exe
+*.whl
+*.zip
+
+# Python
+/.venv/
+__pycache__/
+.pytest_cache/
+
+# Downloaded / generated data
+/benchmark/meshes/
+/benchmark/reports/**/renders/
+
+# Agent and editor state
+/.superpowers/
+.vscode/
+.idea/
+*.code-workspace
