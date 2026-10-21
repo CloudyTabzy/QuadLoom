@@ -61,6 +61,32 @@ Benchmark run `20261023-m3b5` against the oracle baseline `20261021-oracle-basel
 - **Remaining worst ratio:** `common3d/suzanne`, Hausdorff 1.48% vs 0.95%. It's an open-surface model; the oracle is also far off on it.
 - **How we got here:** before this work (run `20261022-m3b4`, uniform-ish sizing without deviation-gated smoothing), the medians were Hausdorff 0.238% and mean 0.0144%.
 
+
+### After the M3b review fixes (run `20261023-m3b6`, `benchmark/reports/20261023-m3b6/`)
+
+The review fixes changed several things:
+- Projection became oriented, so thin shells keep their sheets apart.
+- Small feature loops keep their corners.
+- Output size has a limit.
+- The deviation bound is measured per object.
+
+With the bound per object, small parts of multi-part models are held to the object's bound instead of their own tighter one, so they get fewer triangles.
+
+Final numbers:
+
+| Median, 60 cases | QuadLoom | QRemeshify |
+|---|---|---|
+| Triangles | 18,207 (1.10× per case) | 14,163 |
+| Hausdorff | 0.104% | 0.142% |
+| Mean distance | 0.0091% | 0.0100% |
+| p5 min angle | 35.3° | 21.1° |
+| Radius ratio | 0.940 | 0.855 |
+
+- **Robustness:** 70/70. Two cases first aborted under machine-wide memory pressure (four Blender jobs) and passed on re-run; see Consequences.
+- **Per case:** Hausdorff ≤ oracle on 51/60, mean distance on 43/60.
+- **Time:** median 2.3 s.
+- **Design note from the review:** an orientation threshold of 60° misplaced vertices on wrinkled cloth (`khronos/SpecularSilkPouf`, Hausdorff 0.18% → 0.41%). Rejecting only back-facing triangles within half a target of the nearest point keeps thin shells apart without that cost.
+
 ## Consequences
 
 The prep mesh follows the input at least as closely as QRemeshify's on most of the benchmark, with clearly better triangles. It is somewhat denser by default. Users who want a lighter prep mesh can raise *Coarsest* or *Max Deviation*.
@@ -68,3 +94,5 @@ The prep mesh follows the input at least as closely as QRemeshify's on most of t
 Open items:
 - `EditMesh` is memory-bound on its directed-edge hash map; the 1M-triangle check takes about 22 s (budget 40 s).
 - `crane/oloid`, whose faces are all needles, still gives low-quality triangles.
+- Allocation failure aborts the process (Rust's default), which takes Blender down. Large buffers should use `try_reserve` and fail as errors. Planned for the hardening milestone.
+- Flips and smoothing aren't bounded by the deviation bound, so it can be exceeded locally (about 3× on `khronos/WaterBottle`'s small bevel).
