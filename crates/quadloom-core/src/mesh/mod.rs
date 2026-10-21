@@ -46,8 +46,7 @@ impl InputMesh {
         }
 
         let vertex_count = positions.len();
-        let triangles: Vec<[u32; 3]> =
-            indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect();
+        let triangles: Vec<[u32; 3]> = indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect();
         for (face, tri) in triangles.iter().enumerate() {
             if let Some(&bad) = tri.iter().find(|&&i| i as usize >= vertex_count) {
                 return Err(Error::invalid_input(

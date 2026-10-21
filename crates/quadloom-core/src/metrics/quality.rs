@@ -102,8 +102,8 @@ pub fn quad_quality(mesh: &PolyMesh) -> QuadQuality {
             q.irregular_interior += usize::from(valence != 4);
         }
     }
-    q.singularities_per_1k_quads = (q.quads > 0)
-        .then(|| (q.irregular_interior + q.irregular_boundary) as f64 * 1000.0 / q.quads as f64);
+    q.singularities_per_1k_quads =
+        (q.quads > 0).then(|| (q.irregular_interior + q.irregular_boundary) as f64 * 1000.0 / q.quads as f64);
     q
 }
 
@@ -122,7 +122,8 @@ struct QuadShape {
 fn quad_shape(p: [DVec3; 4]) -> QuadShape {
     let edges = [0, 1, 2, 3].map(|i| p[(i + 1) % 4] - p[i]);
     let lengths = edges.map(DVec3::length);
-    let (shortest, longest) = lengths.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &l| (lo.min(l), hi.max(l)));
+    let (shortest, longest) =
+        lengths.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &l| (lo.min(l), hi.max(l)));
     let aspect = if shortest > 0.0 { (longest / shortest).min(MAX_ASPECT) } else { MAX_ASPECT };
 
     let normal = (p[2] - p[0]).cross(p[3] - p[1]).normalize_or_zero();
@@ -212,7 +213,8 @@ mod tests {
 
     #[test]
     fn unit_square_is_perfect() {
-        let q = quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]]));
+        let q =
+            quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]]));
         assert!(q.pure_quad);
         assert!(close(q.scaled_jacobian.min.unwrap(), 1.0));
         assert!(close(q.angle_deviation_deg.max.unwrap(), 0.0));
@@ -222,20 +224,25 @@ mod tests {
     #[test]
     fn rhombus_60deg_jacobian() {
         let (c, s) = (60f64.to_radians().cos(), 60f64.to_radians().sin());
-        let q = quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1. + c, s, 0.], [c, s, 0.]], &[&[0, 1, 2, 3]]));
+        let q =
+            quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1. + c, s, 0.], [c, s, 0.]], &[&[0, 1, 2, 3]]));
         assert!((q.scaled_jacobian.min.unwrap() - s).abs() < 1e-9, "{:?}", q.scaled_jacobian);
         assert!(close(q.angle_deviation_deg.mean.unwrap(), 30.0));
     }
 
     #[test]
     fn concave_quad_negative_jacobian() {
-        let q = quad_quality(&poly(&[[0., 0., 0.], [2., 0., 0.], [0.5, 0.5, 0.], [0., 2., 0.]], &[&[0, 1, 2, 3]]));
+        let q = quad_quality(&poly(
+            &[[0., 0., 0.], [2., 0., 0.], [0.5, 0.5, 0.], [0., 2., 0.]],
+            &[&[0, 1, 2, 3]],
+        ));
         assert!(q.scaled_jacobian.min.unwrap() < 0.0, "{:?}", q.scaled_jacobian);
     }
 
     #[test]
     fn zero_length_edge_counts_as_worst() {
-        let q = quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1., 0., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]]));
+        let q =
+            quad_quality(&poly(&[[0., 0., 0.], [1., 0., 0.], [1., 0., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]]));
         assert_eq!(q.scaled_jacobian.min, Some(-1.0));
         assert_eq!(q.aspect_ratio.max, Some(MAX_ASPECT));
         for stats in [&q.scaled_jacobian, &q.angle_deviation_deg, &q.aspect_ratio] {
@@ -254,7 +261,9 @@ mod tests {
             }
         }
         let faces: Vec<Vec<u32>> = (0..3u32)
-            .flat_map(|y| (0..3u32).map(move |x| vec![y * 4 + x, y * 4 + x + 1, (y + 1) * 4 + x + 1, (y + 1) * 4 + x]))
+            .flat_map(|y| {
+                (0..3u32).map(move |x| vec![y * 4 + x, y * 4 + x + 1, (y + 1) * 4 + x + 1, (y + 1) * 4 + x])
+            })
             .collect();
         let refs: Vec<&[u32]> = faces.iter().map(Vec::as_slice).collect();
         let q = quad_quality(&poly(&positions, &refs));
@@ -268,8 +277,14 @@ mod tests {
     #[test]
     fn cube_quads_have_8_valence3_singularities() {
         let p = [
-            [0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.],
-            [0., 0., 1.], [1., 0., 1.], [1., 1., 1.], [0., 1., 1.],
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 0., 1.],
+            [1., 1., 1.],
+            [0., 1., 1.],
         ];
         let faces: [&[u32]; 6] =
             [&[0, 3, 2, 1], &[4, 5, 6, 7], &[0, 1, 5, 4], &[1, 2, 6, 5], &[2, 3, 7, 6], &[3, 0, 4, 7]];
@@ -282,7 +297,15 @@ mod tests {
 
     #[test]
     fn mixed_faces_counted() {
-        let p = [[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.], [2., 0., 0.], [2., 1., 0.], [3., 0.5, 0.]];
+        let p = [
+            [0., 0., 0.],
+            [1., 0., 0.],
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [2., 0., 0.],
+            [2., 1., 0.],
+            [3., 0.5, 0.],
+        ];
         let q = quad_quality(&poly(&p, &[&[0, 1, 2], &[0, 2, 3, 3], &[1, 4, 6, 5, 2]]));
         assert_eq!((q.faces, q.quads, q.triangles, q.ngons), (3, 1, 1, 1));
         assert!(!q.pure_quad);

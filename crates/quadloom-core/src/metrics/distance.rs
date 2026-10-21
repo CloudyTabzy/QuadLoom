@@ -77,9 +77,7 @@ fn polygon_centroids(mesh: &PolyMesh) -> Vec<DVec3> {
 }
 
 fn fan_triangles(mesh: &PolyMesh) -> Vec<[u32; 3]> {
-    polygons(mesh)
-        .flat_map(|f| (1..f.len().saturating_sub(1)).map(move |i| [f[0], f[i], f[i + 1]]))
-        .collect()
+    polygons(mesh).flat_map(|f| (1..f.len().saturating_sub(1)).map(move |i| [f[0], f[i], f[i + 1]])).collect()
 }
 
 #[cfg(test)]

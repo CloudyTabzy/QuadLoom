@@ -4,6 +4,7 @@ use crate::control::{Control, Stage};
 use crate::error::Error;
 use crate::mesh::InputMesh;
 use crate::mesh::halfedge::HalfEdges;
+use crate::unionfind::UnionFind;
 
 /// Relative area below which a triangle counts as degenerate, as a fraction of
 /// the squared bounding-box diagonal.
@@ -49,9 +50,8 @@ pub fn validate(mesh: &InputMesh, control: &Control) -> Result<ValidationReport,
     for &v in mesh.triangles().iter().flatten() {
         used[v as usize] = true;
     }
-    let component_count = (0..mesh.vertex_count() as u32)
-        .filter(|&v| used[v as usize] && components.find(v) == v)
-        .count();
+    let component_count =
+        (0..mesh.vertex_count() as u32).filter(|&v| used[v as usize] && components.find(v) == v).count();
 
     control.set_progress(stage, 1.0);
     Ok(ValidationReport {
@@ -69,34 +69,4 @@ fn bbox_diagonal_squared(mesh: &InputMesh) -> f64 {
     let Some(first) = points.next() else { return 0.0 };
     let (min, max) = points.fold((first, first), |(lo, hi), p| (lo.min(p), hi.max(p)));
     (max - min).length_squared()
-}
-
-/// Disjoint sets over vertex ids, iterative with path halving.
-#[derive(Debug)]
-struct UnionFind {
-    parent: Vec<u32>,
-}
-
-impl UnionFind {
-    fn new(n: usize) -> Self {
-        Self { parent: (0..n as u32).collect() }
-    }
-
-    fn find(&mut self, mut x: u32) -> u32 {
-        while self.parent[x as usize] != x {
-            let grandparent = self.parent[self.parent[x as usize] as usize];
-            self.parent[x as usize] = grandparent;
-            x = grandparent;
-        }
-        x
-    }
-
-    fn union(&mut self, a: u32, b: u32) {
-        let (ra, rb) = (self.find(a), self.find(b));
-        if ra != rb {
-            // Attach the larger root id under the smaller one: deterministic roots.
-            let (lo, hi) = (ra.min(rb), ra.max(rb));
-            self.parent[hi as usize] = lo;
-        }
-    }
 }

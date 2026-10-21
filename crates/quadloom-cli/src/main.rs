@@ -50,11 +50,17 @@ fn main() -> ExitCode {
             ExitCode::from(64)
         }
         Err(Failure::Io(io::IoError::Io(message))) => {
-            eprintln!("{}", json!({ "error": { "kind": "io", "stage": null, "message": message, "hint": null } }));
+            eprintln!(
+                "{}",
+                json!({ "error": { "kind": "io", "stage": null, "message": message, "hint": null } })
+            );
             ExitCode::from(4)
         }
         Err(Failure::Io(io::IoError::Invalid(message))) => {
-            eprintln!("{}", json!({ "error": { "kind": "invalid_input", "stage": "validate", "message": message, "hint": null } }));
+            eprintln!(
+                "{}",
+                json!({ "error": { "kind": "invalid_input", "stage": "validate", "message": message, "hint": null } })
+            );
             ExitCode::from(2)
         }
         Err(Failure::Core(error)) => {
@@ -77,11 +83,8 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
         ["run", input, output_path] => {
             let output = run_file(Path::new(input))?;
             io::write_obj(Path::new(output_path), &output.mesh)?;
-            let timings: serde_json::Map<String, serde_json::Value> = output
-                .timings_ms
-                .iter()
-                .map(|(stage, ms)| (stage.name().to_owned(), json!(ms)))
-                .collect();
+            let timings: serde_json::Map<String, serde_json::Value> =
+                output.timings_ms.iter().map(|(stage, ms)| (stage.name().to_owned(), json!(ms))).collect();
             println!(
                 "{}",
                 json!({
@@ -95,7 +98,9 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             Ok(())
         }
         ["metrics", result] => metrics(Path::new(result), None),
-        ["metrics", result, "--reference", reference] => metrics(Path::new(result), Some(Path::new(reference))),
+        ["metrics", result, "--reference", reference] => {
+            metrics(Path::new(result), Some(Path::new(reference)))
+        }
         _ => Err(Failure::Usage),
     }
 }

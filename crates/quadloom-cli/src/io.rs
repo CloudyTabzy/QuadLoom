@@ -35,12 +35,8 @@ fn load_obj(path: &Path) -> Result<Buffers, IoError> {
     // `single_index: false` keeps `indices` as pure position indices. With
     // `true`, tobj splits vertices at every UV/normal seam, which turns seams
     // into holes in the topology.
-    let options = tobj::LoadOptions {
-        single_index: false,
-        triangulate: true,
-        ignore_points: true,
-        ignore_lines: true,
-    };
+    let options =
+        tobj::LoadOptions { single_index: false, triangulate: true, ignore_points: true, ignore_lines: true };
     let (models, _materials) = tobj::load_obj(path, &options).map_err(|e| match e {
         tobj::LoadError::OpenFileFailed | tobj::LoadError::ReadError => {
             IoError::Io(format!("{}: {e}", path.display()))
@@ -51,8 +47,8 @@ fn load_obj(path: &Path) -> Result<Buffers, IoError> {
     let mut positions = Vec::new();
     let mut indices = Vec::new();
     for model in models {
-        let offset = u32::try_from(positions.len() / 3)
-            .map_err(|_| IoError::Invalid("too many vertices".into()))?;
+        let offset =
+            u32::try_from(positions.len() / 3).map_err(|_| IoError::Invalid("too many vertices".into()))?;
         positions.extend_from_slice(&model.mesh.positions);
         indices.extend(model.mesh.indices.iter().map(|i| i + offset));
     }
@@ -77,10 +73,12 @@ pub fn load_poly(path: &Path) -> Result<PolyMesh, IoError> {
     let mut mesh = PolyMesh { face_offsets: vec![0], ..PolyMesh::default() };
     for model in models {
         let m = &model.mesh;
-        let offset = u32::try_from(mesh.positions.len())
-            .map_err(|_| IoError::Invalid("too many vertices".into()))?;
+        let offset =
+            u32::try_from(mesh.positions.len()).map_err(|_| IoError::Invalid("too many vertices".into()))?;
         mesh.positions.extend(
-            m.positions.chunks_exact(3).map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]))),
+            m.positions
+                .chunks_exact(3)
+                .map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]))),
         );
         // tobj leaves `face_arities` empty when every face is a triangle.
         let arities: Vec<u32> =
@@ -88,7 +86,8 @@ pub fn load_poly(path: &Path) -> Result<PolyMesh, IoError> {
         let mut cursor = 0usize;
         for arity in arities {
             let end = cursor + arity as usize;
-            let face = m.indices.get(cursor..end).ok_or_else(|| IoError::Invalid("truncated face list".into()))?;
+            let face =
+                m.indices.get(cursor..end).ok_or_else(|| IoError::Invalid("truncated face list".into()))?;
             mesh.face_indices.extend(face.iter().map(|&i| i + offset));
             let total = u32::try_from(mesh.face_indices.len())
                 .map_err(|_| IoError::Invalid("too many face corners".into()))?;
@@ -104,10 +103,9 @@ pub fn load_poly(path: &Path) -> Result<PolyMesh, IoError> {
 }
 
 fn load_stl(path: &Path) -> Result<Buffers, IoError> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| IoError::Io(format!("{}: {e}", path.display())))?;
-    let mesh = stl_io::read_stl(&mut file)
-        .map_err(|e| IoError::Invalid(format!("{}: {e}", path.display())))?;
+    let mut file = std::fs::File::open(path).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))?;
+    let mesh =
+        stl_io::read_stl(&mut file).map_err(|e| IoError::Invalid(format!("{}: {e}", path.display())))?;
     let positions = mesh.vertices.iter().flat_map(|v| v.0).collect();
     let indices = mesh
         .faces

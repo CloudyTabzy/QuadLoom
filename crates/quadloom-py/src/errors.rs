@@ -51,7 +51,12 @@ pub fn from_panic(py: Python<'_>, payload: &(dyn std::any::Any + Send), stage: S
         .or_else(|| payload.downcast_ref::<String>().cloned())
         .unwrap_or_else(|| "unknown panic payload".to_owned());
     let message = format!("{stage}: internal error (please report): {detail}");
-    annotate(py, InternalError::new_err(message), stage, Some("this is a QuadLoom bug, not a problem with your mesh"))
+    annotate(
+        py,
+        InternalError::new_err(message),
+        stage,
+        Some("this is a QuadLoom bug, not a problem with your mesh"),
+    )
 }
 
 fn annotate(py: Python<'_>, err: PyErr, stage: Stage, hint: Option<&str>) -> PyErr {

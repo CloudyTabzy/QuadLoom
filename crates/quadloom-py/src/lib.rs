@@ -93,10 +93,8 @@ mod quadloom_native {
         let control = Arc::clone(&control.get().inner);
 
         let outcome = py.detach(move || {
-            catch_unwind(AssertUnwindSafe(|| {
-                quadloom_core::run(&positions, &indices, &params, &control)
-            }))
-            .map_err(|payload| (payload, control.progress().0))
+            catch_unwind(AssertUnwindSafe(|| quadloom_core::run(&positions, &indices, &params, &control)))
+                .map_err(|payload| (payload, control.progress().0))
         });
 
         match outcome {
@@ -109,9 +107,14 @@ mod quadloom_native {
 
 #[cfg(feature = "fault-injection")]
 fn params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<quadloom_core::Params> {
-    let fault = fault.map(|spec| parse_fault(spec).ok_or_else(|| {
-        errors::invalid_argument(py, format!("unknown fault {spec:?} (expected panic:<stage>, error:<stage> or slow:<ms>)"))
-    }));
+    let fault = fault.map(|spec| {
+        parse_fault(spec).ok_or_else(|| {
+            errors::invalid_argument(
+                py,
+                format!("unknown fault {spec:?} (expected panic:<stage>, error:<stage> or slow:<ms>)"),
+            )
+        })
+    });
     Ok(quadloom_core::Params { max_faces, fault: fault.transpose()? })
 }
 

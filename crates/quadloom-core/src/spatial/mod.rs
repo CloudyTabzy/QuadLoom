@@ -29,8 +29,14 @@ impl Aabb {
 #[derive(Clone, Copy, Debug)]
 enum NodeKind {
     /// Triangles `order[start..start + count]`.
-    Leaf { start: u32, count: u32 },
-    Inner { left: u32, right: u32 },
+    Leaf {
+        start: u32,
+        count: u32,
+    },
+    Inner {
+        left: u32,
+        right: u32,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -60,16 +66,23 @@ impl TriangleBvh {
         let mut work = vec![(0usize, 0usize, order.len())];
         while let Some((node, start, end)) = work.pop() {
             let slice = &mut order[start..end];
-            let bounds = slice.iter().fold(Aabb::EMPTY, |acc, &t| {
-                corners[t as usize].iter().fold(acc, |acc, &p| acc.grow(p))
-            });
+            let bounds = slice
+                .iter()
+                .fold(Aabb::EMPTY, |acc, &t| corners[t as usize].iter().fold(acc, |acc, &p| acc.grow(p)));
             if slice.len() <= LEAF_SIZE {
-                nodes[node] = Node { bounds, kind: NodeKind::Leaf { start: start as u32, count: slice.len() as u32 } };
+                nodes[node] =
+                    Node { bounds, kind: NodeKind::Leaf { start: start as u32, count: slice.len() as u32 } };
                 continue;
             }
             let spread = slice.iter().fold(Aabb::EMPTY, |acc, &t| acc.grow(centroids[t as usize]));
             let extent = spread.max - spread.min;
-            let axis = if extent.x >= extent.y && extent.x >= extent.z { 0 } else if extent.y >= extent.z { 1 } else { 2 };
+            let axis = if extent.x >= extent.y && extent.x >= extent.z {
+                0
+            } else if extent.y >= extent.z {
+                1
+            } else {
+                2
+            };
             let mid = slice.len() / 2;
             slice.select_nth_unstable_by(mid, |&a, &b| {
                 centroids[a as usize][axis].total_cmp(&centroids[b as usize][axis]).then(a.cmp(&b))
@@ -179,13 +192,13 @@ mod tests {
     fn closest_point_regions() {
         let (a, b, c) = (v(0., 0., 0.), v(1., 0., 0.), v(0., 1., 0.));
         let cases = [
-            (v(0.2, 0.2, 1.0), v(0.2, 0.2, 0.0)),   // face
-            (v(-1.0, -1.0, 0.0), a),                // vertex a
-            (v(2.0, -0.5, 0.0), b),                 // vertex b
-            (v(-0.5, 2.0, 0.0), c),                 // vertex c
-            (v(0.5, -1.0, 0.0), v(0.5, 0.0, 0.0)),  // edge ab
-            (v(-1.0, 0.5, 0.0), v(0.0, 0.5, 0.0)),  // edge ac
-            (v(1.0, 1.0, 0.0), v(0.5, 0.5, 0.0)),   // edge bc
+            (v(0.2, 0.2, 1.0), v(0.2, 0.2, 0.0)),  // face
+            (v(-1.0, -1.0, 0.0), a),               // vertex a
+            (v(2.0, -0.5, 0.0), b),                // vertex b
+            (v(-0.5, 2.0, 0.0), c),                // vertex c
+            (v(0.5, -1.0, 0.0), v(0.5, 0.0, 0.0)), // edge ab
+            (v(-1.0, 0.5, 0.0), v(0.0, 0.5, 0.0)), // edge ac
+            (v(1.0, 1.0, 0.0), v(0.5, 0.5, 0.0)),  // edge bc
         ];
         for (p, expected) in cases {
             let got = closest_point_on_triangle(p, a, b, c);

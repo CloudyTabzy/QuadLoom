@@ -13,7 +13,9 @@ pub mod mesh;
 pub mod metrics;
 pub mod params;
 pub mod pipeline;
+pub mod repair;
 pub mod spatial;
+mod unionfind;
 pub mod validate;
 
 pub use control::{Control, Stage, Ticker};
