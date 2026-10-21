@@ -312,3 +312,35 @@ fn remesh_runs_per_component() {
     let left = a.mesh.positions.iter().filter(|q| q.x < 2.0).count();
     assert!(left > 0 && left < a.mesh.positions.len());
 }
+
+#[test]
+fn cube_has_eight_quarter_singularities() {
+    let (p, i) = cube();
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
+    let field = out.field.expect("the field runs by default");
+    assert_eq!(field.directions.len(), out.mesh.face_count());
+    assert!(field.directions.iter().all(|d| d.is_finite() && (d.length() - 1.0).abs() < 1e-6));
+    assert_eq!(field.singularities.len(), 8, "{:?}", field.singularities);
+    for &(v, k) in &field.singularities {
+        assert_eq!(k, 1, "corner singularities are +1/4");
+        let q = out.mesh.positions[v as usize];
+        assert!(
+            q.to_array().iter().all(|&c| c.abs() < 1e-9 || (c - 1.0).abs() < 1e-9),
+            "{q:?} is not a corner"
+        );
+    }
+    // The oracle's rule: 12 / √6 ≈ 4.9 < 6, so a cube also aligns to curvature
+    // (zero on its flat sides, so the corners still decide).
+    assert!(field.report.curvature_aligned);
+    assert_eq!(field.report.fallback_parts, 0);
+    assert!(out.timings_ms.iter().any(|(s, _)| *s == Stage::Field));
+}
+
+#[test]
+fn field_can_be_turned_off() {
+    let (p, i) = cube();
+    let mut params = Params::default();
+    params.field.enabled = false;
+    let out = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    assert!(out.field.is_none());
+}

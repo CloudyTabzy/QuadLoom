@@ -7,7 +7,7 @@ use pyo3::buffer::{Element, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
-use quadloom_core::{RemeshReport, RepairReport, RunOutput, ValidationReport};
+use quadloom_core::{FieldOutput, RemeshReport, RepairReport, RunOutput, ValidationReport};
 
 use crate::errors::invalid_argument;
 
@@ -95,8 +95,39 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
     dict.set_item("feature_edges", PyBytes::new(py, &le_u32(output.feature_edges.as_flattened())))?;
     dict.set_item("components", output.components)?;
     dict.set_item("remesh", remesh(py, &output.remesh)?)?;
+    match &output.field {
+        Some(f) => dict.set_item("field", field(py, f)?)?,
+        None => dict.set_item("field", py.None())?,
+    }
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
+    Ok(dict)
+}
+
+/// `directions`: float32 × 3 per triangle; `singular_vertices` (uint32) and
+/// `singular_quarters` (int32): each singular vertex and its index × 4.
+fn field<'py>(py: Python<'py>, f: &FieldOutput) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    let directions: Vec<u8> = f
+        .directions
+        .iter()
+        .flat_map(|d| [d.x as f32, d.y as f32, d.z as f32])
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    dict.set_item("directions", PyBytes::new(py, &directions))?;
+    let vertices: Vec<u8> = f.singularities.iter().flat_map(|&(v, _)| v.to_le_bytes()).collect();
+    let quarters: Vec<u8> = f.singularities.iter().flat_map(|&(_, k)| k.to_le_bytes()).collect();
+    dict.set_item("singular_vertices", PyBytes::new(py, &vertices))?;
+    dict.set_item("singular_quarters", PyBytes::new(py, &quarters))?;
+    let report = PyDict::new(py);
+    let r = &f.report;
+    report.set_item("singularities", r.singularities)?;
+    report.set_item("positive_quarters", r.positive_quarters)?;
+    report.set_item("negative_quarters", r.negative_quarters)?;
+    report.set_item("hard_faces", r.hard_faces)?;
+    report.set_item("curvature_aligned", r.curvature_aligned)?;
+    report.set_item("fallback_parts", r.fallback_parts)?;
+    dict.set_item("report", report)?;
     Ok(dict)
 }
 

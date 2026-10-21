@@ -9,6 +9,7 @@ use crate::control::{Control, Stage};
 use crate::error::Error;
 use crate::fault;
 use crate::features::{self, FeatureInput, FeatureReport};
+use crate::field::{self, FieldOutput};
 use crate::mesh::{InputMesh, PolyMesh};
 use crate::params::Params;
 use crate::remesh::{self, RemeshReport};
@@ -29,6 +30,8 @@ pub struct RunOutput {
     pub components: usize,
     /// Prep remesh totals over all parts (only face counts when disabled).
     pub remesh: RemeshReport,
+    /// The cross field on `mesh` (one direction per triangle), if enabled.
+    pub field: Option<FieldOutput>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -97,6 +100,17 @@ pub fn run(
     };
     timings_ms.push((Stage::PrepRemesh, elapsed_ms(started)));
 
+    let field = if params.field.enabled {
+        let started = Instant::now();
+        control.checkpoint(Stage::Field)?;
+        fault::inject(params, Stage::Field, control)?;
+        let field = field::compute(&positions, &triangles, &feature_edges, &params.field, control)?;
+        timings_ms.push((Stage::Field, elapsed_ms(started)));
+        Some(field)
+    } else {
+        None
+    };
+
     let started = Instant::now();
     control.checkpoint(Stage::Output)?;
     fault::inject(params, Stage::Output, control)?;
@@ -117,6 +131,7 @@ pub fn run(
         feature_edges,
         components: components.len(),
         remesh: remesh_report,
+        field,
         timings_ms,
     })
 }

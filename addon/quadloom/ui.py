@@ -56,6 +56,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     (last.repair_summary, "TOOL_SETTINGS"),
                     (last.feature_summary, "EDGESEL"),
                     (last.remesh_summary, "MOD_REMESH"),
+                    (last.field_summary, "ORIENTATION_GIMBAL"),
                 ):
                     for n, line in enumerate(_wrap(summary)):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
@@ -109,6 +110,26 @@ class QUADLOOM_PT_remesh(_SubPanel, bpy.types.Panel):
         col.prop(settings, "remesh_min_mult")
         col.prop(settings, "remesh_max_mult")
         layout.prop(settings, "remesh_max_deviation_rel")
+
+
+class QUADLOOM_PT_field(_SubPanel, bpy.types.Panel):
+    bl_label = "Cross Field"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "field_enabled", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = settings.field_enabled
+        layout.prop(settings, "field_curvature")
+        col = layout.column(align=True)
+        col.active = settings.field_curvature != "OFF"
+        col.prop(settings, "field_alignment_weight")
+        sub = col.column(align=True)
+        sub.active = settings.field_curvature == "AUTO"
+        sub.prop(settings, "field_sharp_factor")
 
 
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
@@ -168,4 +189,11 @@ def _wrap(text, width=38):
     return lines or [""]
 
 
-classes = (QUADLOOM_PT_main, QUADLOOM_PT_cleanup, QUADLOOM_PT_features, QUADLOOM_PT_remesh, QUADLOOM_PT_advanced)
+classes = (
+    QUADLOOM_PT_main,
+    QUADLOOM_PT_cleanup,
+    QUADLOOM_PT_features,
+    QUADLOOM_PT_remesh,
+    QUADLOOM_PT_field,
+    QUADLOOM_PT_advanced,
+)

@@ -5,6 +5,7 @@ use crate::error::Error;
 #[cfg(feature = "fault-injection")]
 use crate::fault::Fault;
 use crate::features::FeatureParams;
+use crate::field::FieldParams;
 use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
 
@@ -28,6 +29,8 @@ pub struct Params {
     pub features: FeatureParams,
     /// Stage 2: isotropic prep remesh.
     pub remesh: RemeshParams,
+    /// Stage 3: cross field.
+    pub field: FieldParams,
     /// Test-only fault to inject (see [`crate::fault`]).
     #[cfg(feature = "fault-injection")]
     pub fault: Option<Fault>,
@@ -40,6 +43,7 @@ impl Default for Params {
             repair: RepairParams::default(),
             features: FeatureParams::default(),
             remesh: RemeshParams::default(),
+            field: FieldParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
         }
@@ -81,6 +85,16 @@ impl Params {
                 "remesh.max_surface_distance_rel must be in (0, 0.1] (got {})",
                 r.max_surface_distance_rel
             ));
+        }
+        let f = &self.field;
+        if !(0.0..=100.0).contains(&f.alignment_weight) {
+            return bad(format!(
+                "field.alignment_weight must be between 0 and 100 (got {})",
+                f.alignment_weight
+            ));
+        }
+        if !(0.0..=1000.0).contains(&f.sharp_factor) {
+            return bad(format!("field.sharp_factor must be between 0 and 1000 (got {})", f.sharp_factor));
         }
         Ok(())
     }

@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyString};
-use quadloom_core::Params;
+use quadloom_core::{CurvatureAlignment, Params};
 
 use crate::errors::invalid_argument;
 
@@ -14,6 +14,7 @@ enum Field<'a> {
     F64(&'a mut f64),
     Bool(&'a mut bool),
     Usize(&'a mut usize),
+    Alignment(&'a mut CurvatureAlignment),
 }
 
 impl Field<'_> {
@@ -22,6 +23,7 @@ impl Field<'_> {
             Self::F64(_) => "finite number",
             Self::Bool(_) => "bool",
             Self::Usize(_) => "non-negative integer",
+            Self::Alignment(_) => "one of \"auto\", \"on\", \"off\"",
         }
     }
 
@@ -36,6 +38,12 @@ impl Field<'_> {
             Self::Usize(slot) if !value.is_instance_of::<PyBool>() => {
                 value.extract().map(|v| **slot = v).is_ok()
             }
+            Self::Alignment(slot) => value
+                .extract::<String>()
+                .ok()
+                .and_then(|name| CurvatureAlignment::from_name(&name))
+                .map(|mode| **slot = mode)
+                .is_some(),
             _ => false,
         }
     }
@@ -52,6 +60,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
         let r = &mut params.repair;
         let f = &mut params.features;
         let m = &mut params.remesh;
+        let c = &mut params.field;
         let mut fields: Vec<(&str, Field<'_>)> = match section.as_str() {
             "repair" => vec![
                 ("weld_epsilon_rel", Field::F64(&mut r.weld_epsilon_rel)),
@@ -79,10 +88,16 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("max_mult", Field::F64(&mut m.max_mult)),
                 ("max_surface_distance_rel", Field::F64(&mut m.max_surface_distance_rel)),
             ],
+            "field" => vec![
+                ("enabled", Field::Bool(&mut c.enabled)),
+                ("curvature_alignment", Field::Alignment(&mut c.curvature_alignment)),
+                ("alignment_weight", Field::F64(&mut c.alignment_weight)),
+                ("sharp_factor", Field::F64(&mut c.sharp_factor)),
+            ],
             other => {
                 return Err(invalid_argument(
                     py,
-                    format!("params.{other} is not a known section (known: repair, features, remesh)"),
+                    format!("params.{other} is not a known section (known: repair, features, remesh, field)"),
                 ));
             }
         };

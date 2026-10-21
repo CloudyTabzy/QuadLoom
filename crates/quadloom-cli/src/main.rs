@@ -2,7 +2,11 @@
 //!
 //! ```text
 //! quadloom info <mesh.obj|stl>          print validation, repair and feature reports as JSON
-//! quadloom run  <in.obj|stl> <out.obj>  run the pipeline and write the result
+//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>]
+//!                                       run the pipeline and write the result
+//!                                       (and its cross field, in QuadWild's format)
+//! quadloom field-index <mesh.obj> <field.rosy>
+//!                                       singularities of a per-face cross field as JSON
 //! quadloom metrics <result.obj> [--reference <input.obj|stl>]
 //!                                       quad quality (+ surface distance) as JSON
 //! ```
@@ -20,7 +24,7 @@ use std::process::ExitCode;
 use quadloom_core::{Control, Error, ErrorKind, Params, RunOutput};
 use serde_json::json;
 
-const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj>";
+const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>]\n       quadloom field-index <mesh.obj> <field.rosy>";
 
 enum Failure {
     Usage,
@@ -83,9 +87,17 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             );
             Ok(())
         }
-        ["run", input, output_path] => {
+        ["run", input, output_path, rest @ ..] => {
+            let rosy = match rest {
+                [] => None,
+                ["--rosy", path] => Some(Path::new(*path)),
+                _ => return Err(Failure::Usage),
+            };
             let output = run_file(Path::new(input))?;
             io::write_obj(Path::new(output_path), &output.mesh)?;
+            if let (Some(path), Some(field)) = (rosy, &output.field) {
+                io::write_rosy(path, &field.directions)?;
+            }
             let timings: serde_json::Map<String, serde_json::Value> =
                 output.timings_ms.iter().map(|(stage, ms)| (stage.name().to_owned(), json!(ms))).collect();
             println!(
@@ -99,17 +111,47 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "features": output.features,
                     "components": output.components,
                     "remesh": output.remesh,
+                    "field": output.field.as_ref().map(|f| &f.report),
                     "timings_ms": timings,
                 })
             );
             Ok(())
         }
+        ["field-index", mesh, rosy] => field_index(Path::new(mesh), Path::new(rosy)),
         ["metrics", result] => metrics(Path::new(result), None),
         ["metrics", result, "--reference", reference] => {
             metrics(Path::new(result), Some(Path::new(reference)))
         }
         _ => Err(Failure::Usage),
     }
+}
+
+/// Singularities of a QuadWild-format field on a triangle mesh, computed with
+/// QuadLoom's own index routine (so two fields are compared the same way).
+fn field_index(mesh: &Path, rosy: &Path) -> Result<(), Failure> {
+    let (positions, indices) = io::load(mesh)?;
+    let positions: Vec<quadloom_core::mesh::DVec3> = positions
+        .chunks_exact(3)
+        .map(|c| quadloom_core::mesh::DVec3::new(f64::from(c[0]), f64::from(c[1]), f64::from(c[2])))
+        .collect();
+    let triangles: Vec<[u32; 3]> = indices.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let directions = io::read_rosy(rosy, triangles.len())?;
+    let frames = quadloom_core::field::FaceFrames::new(&positions, &triangles);
+    let powers: Vec<_> = (0..triangles.len() as u32)
+        .map(|f| frames.power(f, directions[f as usize], quadloom_core::field::ROSY))
+        .collect();
+    let indices = quadloom_core::field::vertex_indices(&positions, &triangles, &powers);
+    let singular: Vec<i32> = indices.into_iter().filter(|&k| k != 0).collect();
+    println!(
+        "{}",
+        json!({
+            "faces": triangles.len(),
+            "singularities": singular.len(),
+            "positive_quarters": singular.iter().filter(|&&k| k > 0).sum::<i32>(),
+            "negative_quarters": singular.iter().filter(|&&k| k < 0).sum::<i32>(),
+        })
+    );
+    Ok(())
 }
 
 fn metrics(result: &Path, reference: Option<&Path>) -> Result<(), Failure> {

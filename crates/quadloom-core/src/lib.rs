@@ -28,6 +28,7 @@ pub use control::{Control, Stage, Ticker};
 pub use error::{Error, ErrorKind};
 #[cfg(feature = "fault-injection")]
 pub use fault::Fault;
+pub use field::{CurvatureAlignment, FieldOutput, FieldParams, FieldReport};
 pub use mesh::{InputMesh, PolyMesh};
 pub use params::Params;
 pub use pipeline::{RunOutput, check_limits, run};

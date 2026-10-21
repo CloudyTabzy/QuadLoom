@@ -259,3 +259,32 @@ def test_gil_released():
         counter += 1
     thread.join()
     assert counter > 1000
+
+
+def test_field_bytes_are_one_finite_direction_per_face():
+    p, i = tet()
+    result = ql.run(p, i, ql.Control())
+    field = result["field"]
+    faces = len(result["face_offsets"]) // 4 - 1
+    directions = struct.unpack(f"<{faces * 3}f", field["directions"])
+    assert all(abs(x) <= 1.0 + 1e-6 for x in directions)
+    assert len(field["singular_vertices"]) == len(field["singular_quarters"])
+    report = field["report"]
+    quarters = struct.unpack(f"<{len(field['singular_quarters']) // 4}i", field["singular_quarters"])
+    # A closed genus-0 surface: indices sum to χ = 2, i.e. 8 quarters.
+    assert sum(quarters) == 8
+    assert report["positive_quarters"] + report["negative_quarters"] == 8
+    assert report["fallback_parts"] == 0
+
+
+def test_field_section_parsed_and_checked():
+    p, i = tet()
+    off = ql.run(p, i, ql.Control(), params={"field": {"enabled": False}})
+    assert off["field"] is None
+    on = ql.run(p, i, ql.Control(), params={"field": {"curvature_alignment": "on", "alignment_weight": 1.0}})
+    assert on["field"]["report"]["curvature_aligned"] is True
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"field": {"curvature_alignment": "sometimes"}})
+    assert "field.curvature_alignment" in str(e.value)
+    with pytest.raises(ql.InvalidInputError):
+        ql.run(p, i, ql.Control(), params={"field": {"alignment_weight": -1.0}})

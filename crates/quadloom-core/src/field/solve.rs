@@ -324,3 +324,20 @@ mod tests {
         assert!(field.directions.iter().all(|d| d.is_finite() && (d.length() - 1.0).abs() < 1e-9));
     }
 }
+
+#[cfg(test)]
+mod perf {
+    use super::*;
+
+    #[test]
+    #[ignore = "performance check; run with --release -- --ignored"]
+    fn perf_field_200k_faces() {
+        // A featureless sphere: the slowest path (inverse iteration, no constraints).
+        let (p, t) = crate::remesh::tests::sphere_mesh(220, 460);
+        let started = std::time::Instant::now();
+        let field = smooth_field(&p, &t, &[], &[], 0.0).unwrap();
+        let elapsed = started.elapsed();
+        eprintln!("{} faces in {elapsed:?}", field.directions.len());
+        assert!(elapsed.as_secs_f64() < 5.0, "{elapsed:?}");
+    }
+}

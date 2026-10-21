@@ -93,6 +93,40 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=5,
     )
 
+    # --- Cross field (stage 3) ---------------------------------------------------
+    field_enabled: BoolProperty(
+        name="Cross Field",
+        description="Compute the cross field that will orient the quads' edge flow",
+        default=True,
+    )
+    field_curvature: EnumProperty(
+        name="Follow Curvature",
+        description="When the edge flow follows the surface's principal curvature",
+        items=[
+            ("AUTO", "Auto", "Where sharp features are too sparse to guide the flow (QuadWild's rule)"),
+            ("ON", "Always", "Follow principal curvature everywhere it's clear"),
+            ("OFF", "Never", "Follow only sharp features and borders"),
+        ],
+        default="AUTO",
+    )
+    field_alignment_weight: FloatProperty(
+        name="Curvature Strength",
+        description="How strongly the flow follows curvature instead of staying smooth",
+        default=0.3,
+        min=0.0,
+        max=100.0,
+        soft_max=2.0,
+    )
+    field_sharp_factor: FloatProperty(
+        name="Feature Sufficiency",
+        description="Auto follows curvature unless the sharp features are at least this many times "
+        "longer than the square root of the surface area",
+        default=6.0,
+        min=0.0,
+        max=1000.0,
+        soft_max=20.0,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -179,6 +213,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     repair_summary: StringProperty(name="Cleanup")
     remesh_summary: StringProperty(name="Remesh")
     feature_summary: StringProperty(name="Features")
+    field_summary: StringProperty(name="Field")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
@@ -223,5 +258,11 @@ def run_params(settings):
             "min_mult": settings.remesh_min_mult,
             "max_mult": settings.remesh_max_mult,
             "max_surface_distance_rel": settings.remesh_max_deviation_rel,
+        },
+        "field": {
+            "enabled": settings.field_enabled,
+            "curvature_alignment": settings.field_curvature.lower(),
+            "alignment_weight": settings.field_alignment_weight,
+            "sharp_factor": settings.field_sharp_factor,
         },
     }

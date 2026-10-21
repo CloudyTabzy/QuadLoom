@@ -17,6 +17,10 @@ use super::solve::ROSY;
 /// angle defect K_v is a multiple of 2π: that multiple is the index in
 /// quarters (the dual form of Knöppel et al. 2013, eq. 19). Summed over a
 /// closed mesh the ω cancel pairwise, leaving 4·ΣK/2π = 4χ (Poincaré–Hopf).
+/// Each edge's ω is computed once, from its lower face to its higher one, and
+/// negated when a loop crosses it the other way: evaluated twice, a turn of
+/// exactly π (the cross turning 45°, common between faces constrained to
+/// edges 45° apart) would come out +π both times and break the cancellation.
 pub fn vertex_indices(positions: &[DVec3], triangles: &[[u32; 3]], powers: &[Cx]) -> Vec<i32> {
     let frames = FaceFrames::new(positions, triangles);
     let mut by_edge: HashMap<(u32, u32), u32> = HashMap::new();
@@ -28,6 +32,14 @@ pub fn vertex_indices(positions: &[DVec3], triangles: &[[u32; 3]], powers: &[Cx]
         }
     }
     let unit = |z: Cx| if z.norm() > 0.0 { z.scale(1.0 / z.norm()) } else { Cx::ONE };
+    let mut omega: HashMap<(u32, u32), f64> = HashMap::new();
+    for e in super::frames::dual_edges(triangles) {
+        let (lo, hi) = (e.f.min(e.g), e.f.max(e.g));
+        let d = positions[e.b as usize] - positions[e.a as usize];
+        let r = Cx::from_angle(ROSY * (frames.angle(hi, d) - frames.angle(lo, d)));
+        let (zl, zh) = (unit(powers[lo as usize]), unit(powers[hi as usize]));
+        omega.insert((lo, hi), (zh * (r * zl).conj()).arg());
+    }
     (0..positions.len() as u32)
         .map(|v| {
             let Some(start) = corner_of[v as usize] else { return 0 };
@@ -41,9 +53,8 @@ pub fn vertex_indices(positions: &[DVec3], triangles: &[[u32; 3]], powers: &[Cx]
                 angles += da.angle_between(db);
                 // The next face around v shares edge v–b, traversed v → b there.
                 let Some(&g) = by_edge.get(&(v, b)) else { return 0 }; // boundary
-                let r = Cx::from_angle(ROSY * (frames.angle(g, db) - frames.angle(f, db)));
-                let (zf, zg) = (unit(powers[f as usize]), unit(powers[g as usize]));
-                turn += (zg * (r * zf).conj()).arg();
+                let Some(&w) = omega.get(&(f.min(g), f.max(g))) else { return 0 };
+                turn += if f < g { w } else { -w };
                 f = g;
                 if f == start {
                     let defect = TAU - angles;

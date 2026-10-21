@@ -132,3 +132,31 @@ pub fn write_obj(path: &Path, mesh: &PolyMesh) -> Result<(), IoError> {
     }
     std::fs::write(path, text).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
 }
+
+/// Writes per-face cross directions in QuadWild's `.rosy` format: the face
+/// count, the symmetry (4), then one direction per line.
+pub fn write_rosy(path: &Path, directions: &[DVec3]) -> Result<(), IoError> {
+    let mut text = format!("{}\n4\n", directions.len());
+    for d in directions {
+        let _ = writeln!(text, "{} {} {}", d.x, d.y, d.z);
+    }
+    std::fs::write(path, text).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
+}
+
+/// Reads a `.rosy` file for a mesh with `faces` triangles.
+pub fn read_rosy(path: &Path, faces: usize) -> Result<Vec<DVec3>, IoError> {
+    let text = std::fs::read_to_string(path).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))?;
+    let mut numbers = text.split_whitespace().map(str::parse::<f64>);
+    let mut next = |what: &str| -> Result<f64, IoError> {
+        numbers
+            .next()
+            .and_then(Result::ok)
+            .ok_or_else(|| IoError::Invalid(format!("{}: expected {what}", path.display())))
+    };
+    let count = next("the face count")? as usize;
+    let _symmetry = next("the symmetry")?;
+    if count != faces {
+        return Err(IoError::Invalid(format!("{}: {count} directions for {faces} faces", path.display())));
+    }
+    (0..count).map(|_| Ok(DVec3::new(next("x")?, next("y")?, next("z")?))).collect()
+}

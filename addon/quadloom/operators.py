@@ -63,7 +63,7 @@ def start_job(context):
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
-    last.repair_summary, last.feature_summary, last.remesh_summary = "", "", ""
+    last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     _active_job = job
     job.thread.start()
     return job
@@ -89,6 +89,7 @@ def finish_job(context, job):
             last.repair_summary = repair_summary(job.result["repair"])
             last.feature_summary = feature_summary(job.result["features"])
             last.remesh_summary = remesh_summary(job.result.get("remesh"), job.kwargs["params"]["remesh"]["enabled"])
+            last.field_summary = field_summary(job.result.get("field"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -125,6 +126,19 @@ def remesh_summary(remesh, enabled):
     if not enabled or not remesh:
         return "prep remesh off"
     return f"remeshed {remesh['input_faces']:,} → {remesh['output_faces']:,} triangles"
+
+
+def field_summary(field):
+    """One line about the cross field, e.g. "cross field: 32 singularities, follows curvature"."""
+    if not field:
+        return "cross field off"
+    report = field["report"]
+    text = f"cross field: {report['singularities']:,} singularities"
+    if report["curvature_aligned"]:
+        text += ", follows curvature"
+    if report["fallback_parts"]:
+        text += f", {report['fallback_parts']} parts used the fallback field"
+    return text
 
 
 def feature_summary(features):
