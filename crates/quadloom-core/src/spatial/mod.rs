@@ -51,13 +51,15 @@ pub struct TriangleBvh {
     nodes: Vec<Node>,
     /// Triangle corners, in leaf order.
     corners: Vec<[DVec3; 3]>,
+    /// The input index of each triangle, in leaf order.
+    ids: Vec<u32>,
 }
 
 impl TriangleBvh {
     pub fn new(positions: &[DVec3], triangles: &[[u32; 3]]) -> Self {
         let corners: Vec<[DVec3; 3]> = triangles.iter().map(|t| t.map(|i| positions[i as usize])).collect();
         if corners.is_empty() {
-            return Self { nodes: Vec::new(), corners };
+            return Self { nodes: Vec::new(), corners, ids: Vec::new() };
         }
         let centroids: Vec<DVec3> = corners.iter().map(|[a, b, c]| (*a + *b + *c) / 3.0).collect();
         let mut order: Vec<u32> = (0..corners.len() as u32).collect();
@@ -95,13 +97,29 @@ impl TriangleBvh {
             work.push((right, start + mid, end));
         }
         let corners = order.iter().map(|&t| corners[t as usize]).collect();
-        Self { nodes, corners }
+        Self { nodes, corners, ids: order }
     }
 
     /// The closest point on any triangle to `p`, and its distance. `None` if empty.
     pub fn closest_point(&self, p: DVec3) -> Option<(DVec3, f64)> {
+        self.closest_point_where(p, |_| true)
+    }
+
+    /// The closest point to `p` on the triangles (by input index) that
+    /// `accept` lets through, and its distance. `None` if none does.
+    pub fn closest_point_where(&self, p: DVec3, accept: impl Fn(u32) -> bool) -> Option<(DVec3, f64)> {
+        self.closest_triangle_where(p, accept).map(|(q, d, _)| (q, d))
+    }
+
+    /// [`closest_point_where`](Self::closest_point_where) that also returns
+    /// the input index of the triangle the point lies on.
+    pub fn closest_triangle_where(
+        &self,
+        p: DVec3,
+        accept: impl Fn(u32) -> bool,
+    ) -> Option<(DVec3, f64, u32)> {
         let root = self.nodes.first()?;
-        let mut best = (DVec3::ZERO, f64::INFINITY); // (point, squared distance)
+        let mut best = (DVec3::ZERO, f64::INFINITY, 0u32); // (point, squared distance, triangle)
         let mut stack = vec![(0u32, root.bounds.distance_squared(p))];
         while let Some((node, box_d2)) = stack.pop() {
             if box_d2 >= best.1 {
@@ -109,11 +127,15 @@ impl TriangleBvh {
             }
             match self.nodes[node as usize].kind {
                 NodeKind::Leaf { start, count } => {
-                    for [a, b, c] in &self.corners[start as usize..(start + count) as usize] {
+                    let range = start as usize..(start + count) as usize;
+                    for ([a, b, c], &id) in self.corners[range.clone()].iter().zip(&self.ids[range]) {
+                        if !accept(id) {
+                            continue;
+                        }
                         let q = closest_point_on_triangle(p, *a, *b, *c);
                         let d2 = (q - p).length_squared();
                         if d2 < best.1 {
-                            best = (q, d2);
+                            best = (q, d2, id);
                         }
                     }
                 }
@@ -129,7 +151,7 @@ impl TriangleBvh {
                 }
             }
         }
-        best.1.is_finite().then(|| (best.0, best.1.sqrt()))
+        best.1.is_finite().then(|| (best.0, best.1.sqrt(), best.2))
     }
 
     pub fn bounds(&self) -> Option<(DVec3, DVec3)> {
@@ -182,6 +204,25 @@ pub fn closest_point_on_triangle(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> DVec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn closest_point_where_skips_rejected_triangles() {
+        // Two parallel unit triangles 0.01 apart; rejecting the near one finds the far one.
+        let p = [
+            DVec3::ZERO,
+            DVec3::X,
+            DVec3::Y,
+            DVec3::new(0.0, 0.0, 0.01),
+            DVec3::new(1.0, 0.0, 0.01),
+            DVec3::new(0.0, 1.0, 0.01),
+        ];
+        let bvh = TriangleBvh::new(&p, &[[0, 1, 2], [3, 4, 5]]);
+        let q = DVec3::new(0.2, 0.2, -0.001);
+        assert!(bvh.closest_point(q).unwrap().0.z.abs() < 1e-12);
+        let (far, _) = bvh.closest_point_where(q, |t| t == 1).unwrap();
+        assert!((far.z - 0.01).abs() < 1e-12);
+        assert!(bvh.closest_point_where(q, |_| false).is_none());
+    }
     use proptest::prelude::*;
 
     fn v(x: f64, y: f64, z: f64) -> DVec3 {

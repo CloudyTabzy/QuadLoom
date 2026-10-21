@@ -4,6 +4,7 @@ use glam::DVec3;
 use rayon::prelude::*;
 
 use super::Projector;
+use crate::control::Control;
 use crate::edit::{EditMesh, HalfEdge, VertexKind};
 use crate::spatial::closest_point_on_triangle;
 
@@ -54,7 +55,13 @@ pub(super) struct Pass<'a> {
     /// Splitting stops above this many faces: a hard ceiling so no input can
     /// make the remesh explode.
     pub max_faces: usize,
+    /// Sweeps stop early once this is cancelled; the caller's checkpoint after
+    /// the pass then reports it.
+    pub control: &'a Control,
 }
+
+/// How often (in edges or vertices) a sweep looks at the cancel flag.
+const CANCEL_STRIDE: usize = 4096;
 
 impl Pass<'_> {
     fn size(&self, a: u32, b: u32) -> f64 {
@@ -83,7 +90,10 @@ impl Pass<'_> {
         let mut total = 0;
         for _ in 0..SPLIT_ROUNDS {
             let mut splits = 0;
-            for h in self.mesh.half_edges() {
+            for (i, h) in self.mesh.half_edges().into_iter().enumerate() {
+                if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
+                    return total + splits;
+                }
                 if self.mesh.face_count() >= self.max_faces {
                     return total + splits;
                 }
@@ -92,14 +102,7 @@ impl Pass<'_> {
                 if self.length(h) <= SPLIT_ABOVE * self.size(a, b) {
                     continue;
                 }
-                // On the input (a feature edge's midpoint on its feature line),
-                // not on the chord: smoothing may not get to move it there.
-                let chord = 0.5 * (self.mesh.position(a) + self.mesh.position(b));
-                let mid = if self.mesh.is_feature(a, b) {
-                    self.projector.onto_features(chord)
-                } else {
-                    self.projector.onto_surface(chord)
-                };
+                let mid = self.split_point(h);
                 if let Some(m) = self.mesh.split(h, mid) {
                     let s = 0.5 * (self.sizes[a as usize] + self.sizes[b as usize]);
                     if self.sizes.len() <= m as usize {
@@ -117,6 +120,34 @@ impl Pass<'_> {
         total
     }
 
+    /// Where to split `h`: its midpoint projected onto the input (a feature
+    /// edge's onto its feature line), on the sheet its faces belong to. If
+    /// that would bend a new face too far, the chord midpoint instead, which
+    /// lies in the old faces' planes.
+    fn split_point(&self, h: HalfEdge) -> DVec3 {
+        let (a, b) = (self.mesh.from(h), self.mesh.to(h));
+        let chord = 0.5 * (self.mesh.position(a) + self.mesh.position(b));
+        let faces: Vec<u32> =
+            std::iter::once(self.mesh.face(h)).chain(self.mesh.twin(h).map(|t| self.mesh.face(t))).collect();
+        let facing: DVec3 = faces.iter().map(|&f| self.mesh.reference_normal(f)).sum();
+        let mid = if self.mesh.is_feature(a, b) {
+            self.projector.onto_features_facing(chord, facing)
+        } else {
+            self.projector.onto_surface_facing(chord, facing)
+        };
+        let bends = faces.iter().any(|&f| {
+            let corners = self.mesh.face_corners(f);
+            let c = corners.into_iter().find(|&v| v != a && v != b).unwrap_or(a);
+            [[a, c], [b, c]].iter().any(|&[x, y]| {
+                // Each new face has corners {x, y, mid}; its normal's sign depends
+                // on the corner order, so compare the plane only.
+                let n = (self.mesh.position(x) - mid).cross(self.mesh.position(y) - mid).normalize_or_zero();
+                n.dot(self.mesh.face_normal(f)).abs() < MIN_NORMAL_DOT
+            })
+        });
+        if bends { chord } else { mid }
+    }
+
     /// Collapses edges shorter than 4/5 of their local target, when doing so
     /// keeps edges below the split threshold, faces unflipped, and the surface
     /// within the distance bound.
@@ -127,7 +158,10 @@ impl Pass<'_> {
         let mut edges: Vec<(f64, HalfEdge)> =
             self.mesh.half_edges().into_iter().map(|h| (self.length(h), h)).collect();
         edges.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
-        for (_, h) in edges {
+        for (i, (_, h)) in edges.into_iter().enumerate() {
+            if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
+                break;
+            }
             let Some(h) = self.current(h) else { continue };
             let (a, b) = (self.mesh.from(h), self.mesh.to(h));
             let size = self.size(a, b);
@@ -155,9 +189,10 @@ impl Pass<'_> {
         }
         let (keep, gone) = (self.mesh.from(h), self.mesh.to(h));
         let target = match (self.mesh.kind(keep), self.mesh.kind(gone)) {
-            (VertexKind::Free, VertexKind::Free) => {
-                self.projector.onto_surface(0.5 * (self.mesh.position(keep) + self.mesh.position(gone)))
-            }
+            (VertexKind::Free, VertexKind::Free) => self.projector.onto_surface_facing(
+                0.5 * (self.mesh.position(keep) + self.mesh.position(gone)),
+                self.mesh.vertex_reference(keep) + self.mesh.vertex_reference(gone),
+            ),
             _ => self.mesh.position(keep),
         };
         // No new edge over the split limit, unless the edge it replaces was
@@ -180,12 +215,29 @@ impl Pass<'_> {
             })
         });
         if !ring_ok
+            || !self.line_stays_close(keep, gone, target)
             || !self.stays_close(&faces, keep, gone, target)
             || !self.faces_survive_among(&faces, &[keep, gone], target, Some((keep, gone)))
         {
             return false;
         }
         self.mesh.collapse_prechecked(h, target)
+    }
+
+    /// For a collapse along a feature line: the line keeps its shape (the
+    /// removed vertex stays within the bound of the new segment from the
+    /// survivor to its other neighbour) and a loop keeps at least 3 edges.
+    fn line_stays_close(&self, keep: u32, gone: u32, target: DVec3) -> bool {
+        if self.mesh.kind(gone) != VertexKind::Feature {
+            return true;
+        }
+        let ends = self.mesh.feature_neighbours(gone);
+        let Some(&other) = ends.iter().find(|&&x| x != keep) else { return true };
+        if self.mesh.is_feature(keep, other) {
+            return false; // a 3-edge loop would close to 2
+        }
+        let (pg, po) = (self.mesh.position(gone), self.mesh.position(other));
+        (closest_point_on_triangle(pg, target, po, po) - pg).length() <= self.projector.max_distance
     }
 
     /// The faces around any of `vertices`, each once.
@@ -208,21 +260,27 @@ impl Pass<'_> {
     /// but only this keeps the faces near where the removed vertex was.
     fn stays_close(&self, faces: &[u32], keep: u32, gone: u32, target: DVec3) -> bool {
         let moved = |v: u32| if v == keep || v == gone { target } else { self.mesh.position(v) };
-        let remaining: Vec<[DVec3; 3]> = faces
+        let remaining: Vec<([DVec3; 3], DVec3)> = faces
             .iter()
-            .map(|&f| self.mesh.face_corners(f))
-            .filter(|c| !(c.contains(&keep) && c.contains(&gone)))
-            .map(|c| c.map(moved))
+            .filter(|&&f| {
+                let c = self.mesh.face_corners(f);
+                !(c.contains(&keep) && c.contains(&gone))
+            })
+            .map(|&f| (self.mesh.face_corners(f).map(moved), self.mesh.reference_normal(f)))
             .collect();
         let limit = self.projector.max_distance;
         // Old points → new faces: the surface stays near where the vertices were.
         let covered = [self.mesh.position(keep), self.mesh.position(gone)].into_iter().all(|q| {
-            remaining.iter().any(|&[a, b, c]| (closest_point_on_triangle(q, a, b, c) - q).length() <= limit)
+            remaining
+                .iter()
+                .any(|&([a, b, c], _)| (closest_point_on_triangle(q, a, b, c) - q).length() <= limit)
         });
         // New faces → input (as the oracle's VCG remesher checks): each new
-        // face's centroid lies near the input surface.
+        // face's centroid lies near the input, on its own sheet.
         covered
-            && remaining.iter().all(|&[a, b, c]| self.projector.surface_distance((a + b + c) / 3.0) <= limit)
+            && remaining.iter().all(|&([a, b, c], facing)| {
+                self.projector.surface_distance_facing((a + b + c) / 3.0, facing) <= limit
+            })
     }
 
     /// Whether moving each of `movers` to `target` keeps every remaining face
@@ -272,7 +330,10 @@ impl Pass<'_> {
     /// surface.
     pub fn equalize_valence(&mut self) -> usize {
         let mut flips = 0;
-        for h in self.mesh.half_edges() {
+        for (i, h) in self.mesh.half_edges().into_iter().enumerate() {
+            if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
+                break;
+            }
             let Some(h) = self.current(h) else { continue };
             let Some(t) = self.mesh.twin(h) else { continue };
             let (a, b) = (self.mesh.from(h), self.mesh.to(h));
@@ -309,9 +370,9 @@ impl Pass<'_> {
             // The new edge may not stray further from the input than the
             // deviation bound, or than the edge it replaces (so flips on an
             // already-coarse curved mesh keep improving its shape).
-            let new_gap = self.projector.surface_distance(0.5 * (pc + pd));
+            let new_gap = self.projector.surface_distance_facing(0.5 * (pc + pd), reference);
             if new_gap > self.projector.max_distance
-                && new_gap > self.projector.surface_distance(0.5 * (pa + pb))
+                && new_gap > self.projector.surface_distance_facing(0.5 * (pa + pb), reference)
             {
                 continue;
             }
@@ -355,6 +416,8 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
     let settled = |raw: DVec3, projected: DVec3| {
         ((projected - raw).length() <= SMOOTH_DEVIATION * projector.max_distance).then_some(projected)
     };
+    // Project onto the sheet `v`'s faces came from (thin shells).
+    let facing = mesh.vertex_reference(v);
     match mesh.kind(v) {
         VertexKind::Corner => None,
         VertexKind::Free => {
@@ -367,7 +430,7 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
                 mesh.faces_around(v).iter().map(|&f| mesh.face_normal(f)).sum::<DVec3>().normalize_or_zero();
             let delta = centroid - p;
             let raw = p + SMOOTH_STEP * (delta - normal * delta.dot(normal));
-            settled(raw, projector.onto_surface(raw))
+            settled(raw, projector.onto_surface_facing(raw, facing))
         }
         VertexKind::Feature => {
             let ends = mesh.feature_neighbours(v);
@@ -376,7 +439,7 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
             let tangent = (q1 - q0).normalize_or_zero();
             let delta = 0.5 * (q0 + q1) - p;
             let raw = p + SMOOTH_STEP * tangent * delta.dot(tangent);
-            settled(raw, projector.onto_features(raw))
+            settled(raw, projector.onto_features_facing(raw, facing))
         }
     }
 }

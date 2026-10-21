@@ -75,8 +75,7 @@ fn params(target_rel: f64) -> RemeshParams {
 }
 
 fn run(p: &[DVec3], t: &[[u32; 3]], f: &[[u32; 2]], params: &RemeshParams) -> (RemeshedMesh, RemeshReport) {
-    let target = target_length(p, t, params);
-    remesh(p, t, f, &[], 0.0, target, params, &Control::default()).unwrap()
+    remesh(p, t, f, &[], 0.0, Scale::of(p, t, params, usize::MAX), params, &Control::default()).unwrap()
 }
 
 /// Like `run`, with every feature edge soft (angle-detected) and released below 35°.
@@ -86,8 +85,7 @@ fn run_soft(
     f: &[[u32; 2]],
     params: &RemeshParams,
 ) -> (RemeshedMesh, RemeshReport) {
-    let target = target_length(p, t, params);
-    remesh(p, t, f, f, 35.0, target, params, &Control::default()).unwrap()
+    remesh(p, t, f, f, 35.0, Scale::of(p, t, params, usize::MAX), params, &Control::default()).unwrap()
 }
 
 #[test]
@@ -227,7 +225,8 @@ fn cancel_honoured() {
     control.cancel();
     let prm = params(0.1);
     let target = target_length(&p, &t, &prm);
-    assert!(remesh(&p, &t, &[], &[], 0.0, target, &prm, &control).is_err());
+    let scale = Scale { target, ..Scale::of(&p, &t, &prm, usize::MAX) };
+    assert!(remesh(&p, &t, &[], &[], 0.0, scale, &prm, &control).is_err());
 }
 
 #[test]
@@ -393,8 +392,155 @@ fn split_sweep_reaches_edges_whose_faces_were_replaced() {
     let p = vec![DVec3::ZERO, DVec3::X, DVec3::new(0.5, 0.8, 0.0)];
     let t = vec![[0, 1, 2]];
     let mut mesh = crate::edit::EditMesh::from_triangles(&p, &t, &[]).unwrap();
-    let projector = Projector::new(&p, &t, &[], 1.0);
-    let mut pass =
-        passes::Pass { mesh: &mut mesh, sizes: vec![0.1; 3], projector: &projector, max_faces: 1000 };
+    let projector = Projector::new(&p, &t, &[], 1.0, 1.0);
+    let control = Control::default();
+    let mut pass = passes::Pass {
+        mesh: &mut mesh,
+        sizes: vec![0.1; 3],
+        projector: &projector,
+        max_faces: 1000,
+        control: &control,
+    };
     assert_eq!(pass.split_long(), 3);
+}
+
+/// A closed cylindrical shell: outer radius 1, inner 1 − `t`, height 0.5,
+/// with annular caps. Returns the mesh and its four rim circles as features.
+fn cylinder_shell(t: f64, rings: u32, segments: u32) -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
+    let mut p = Vec::new();
+    let ring = |r: f64, z: f64, p: &mut Vec<DVec3>| -> u32 {
+        let start = p.len() as u32;
+        for j in 0..segments {
+            let a = std::f64::consts::TAU * f64::from(j) / f64::from(segments);
+            p.push(DVec3::new(r * a.cos(), r * a.sin(), z));
+        }
+        start
+    };
+    let outer: Vec<u32> =
+        (0..=rings).map(|i| ring(1.0, 0.5 * f64::from(i) / f64::from(rings), &mut p)).collect();
+    let inner: Vec<u32> =
+        (0..=rings).map(|i| ring(1.0 - t, 0.5 * f64::from(i) / f64::from(rings), &mut p)).collect();
+    let mut tris = Vec::new();
+    // Quad strip between rings `a` and `b`, oriented by `flip`.
+    let mut strip = |a: u32, b: u32, flip: bool| {
+        for j in 0..segments {
+            let k = (j + 1) % segments;
+            let (q0, q1, q2, q3) = (a + j, a + k, b + k, b + j);
+            if flip {
+                tris.extend([[q0, q2, q1], [q0, q3, q2]]);
+            } else {
+                tris.extend([[q0, q1, q2], [q0, q2, q3]]);
+            }
+        }
+    };
+    for i in 0..rings as usize {
+        strip(outer[i], outer[i + 1], false); // outward
+        strip(inner[i], inner[i + 1], true); // inward
+    }
+    strip(inner[0], outer[0], false); // bottom cap, facing down
+    strip(outer[rings as usize], inner[rings as usize], false); // top cap, facing up
+    let circle = |start: u32| (0..segments).map(move |j| [start + j, start + (j + 1) % segments]);
+    let features = circle(outer[0])
+        .chain(circle(outer[rings as usize]))
+        .chain(circle(inner[0]))
+        .chain(circle(inner[rings as usize]))
+        .collect();
+    (p, tris, features)
+}
+
+#[test]
+fn thin_shell_sheets_stay_apart() {
+    // Regression (review of M3b): the wall is 0.002 thick, about twice the
+    // deviation bound. Projection used to snap to whichever sheet was nearer,
+    // so faces bridged the outer and inner sheets mid-wall and some flipped.
+    let t = 0.002;
+    let (p, tris, features) = cylinder_shell(t, 20, 160);
+    let prm = RemeshParams { target_edge_rel: 0.03, ..RemeshParams::default() };
+    let (mesh, report) = run(&p, &tris, &features, &prm);
+    let radius = |q: DVec3| q.truncate().length();
+    let (mut bridging, mut flipped) = (0, 0);
+    for &[a, b, c] in &mesh.triangles {
+        let [pa, pb, pc] = [a, b, c].map(|v| mesh.positions[v as usize]);
+        let centroid = (pa + pb + pc) / 3.0;
+        if centroid.z < 0.01 || centroid.z > 0.49 {
+            continue; // the caps join the sheets legitimately
+        }
+        let rs = [pa, pb, pc].map(radius);
+        let on_outer = rs.iter().any(|&r| r > 1.0 - 0.25 * t);
+        let on_inner = rs.iter().any(|&r| r < 1.0 - 0.75 * t);
+        bridging += usize::from(on_outer && on_inner);
+        let outward = DVec3::new(centroid.x, centroid.y, 0.0).normalize_or_zero();
+        let normal = (pb - pa).cross(pc - pa).normalize_or_zero();
+        // Which sheet by its vertices (a coarse chord's centroid sinks inside).
+        let expected = if on_outer { 1.0 } else { -1.0 };
+        flipped += usize::from(normal.dot(outward) * expected < 0.0);
+    }
+    assert_eq!((bridging, flipped), (0, 0), "{} faces: {report:?}", mesh.triangles.len());
+}
+
+/// A flat grid with a square feature loop (see [`grid_with_loop`]).
+struct LoopGrid {
+    p: Vec<DVec3>,
+    t: Vec<[u32; 3]>,
+    ring: Vec<[u32; 2]>,
+    corners: [DVec3; 4],
+}
+
+/// A flat 1×1 grid of `n`×`n` cells and a square feature loop `cells` cells
+/// wide with its lower-left corner at grid point (`n`/2, `n`/2): the mesh, the
+/// loop's edges and its four corner positions.
+fn grid_with_loop(n: u32, cells: u32) -> LoopGrid {
+    let w = n + 1;
+    let mut p = Vec::new();
+    for y in 0..=n {
+        for x in 0..=n {
+            p.push(DVec3::new(f64::from(x) / f64::from(n), f64::from(y) / f64::from(n), 0.0));
+        }
+    }
+    let mut t = Vec::new();
+    for y in 0..n {
+        for x in 0..n {
+            let a = y * w + x;
+            t.extend([[a, a + 1, a + w + 1], [a, a + w + 1, a + w]]);
+        }
+    }
+    let (x0, y0) = (n / 2, n / 2);
+    let id = |x: u32, y: u32| y * w + x;
+    let mut ring = Vec::new();
+    for i in 0..cells {
+        ring.push([id(x0 + i, y0), id(x0 + i + 1, y0)]);
+        ring.push([id(x0 + cells, y0 + i), id(x0 + cells, y0 + i + 1)]);
+        ring.push([id(x0 + i, y0 + cells), id(x0 + i + 1, y0 + cells)]);
+        ring.push([id(x0, y0 + i), id(x0, y0 + i + 1)]);
+    }
+    let corners = [id(x0, y0), id(x0 + cells, y0), id(x0 + cells, y0 + cells), id(x0, y0 + cells)]
+        .map(|v| p[v as usize]);
+    LoopGrid { p, t, ring, corners }
+}
+
+#[test]
+fn small_feature_loops_keep_their_corners() {
+    // Regression (review of M3b): loops 0.28× and 0.42× the target lost their
+    // corners or vanished. Corner suppression judged them at a reach longer
+    // than the loop, and feature collapses weren't bounded along the line.
+    for cells in [2, 3] {
+        let LoopGrid { p, t, ring, corners } = grid_with_loop(100, cells);
+        let prm = params(0.05);
+        let (mesh, report) = run(&p, &t, &ring, &prm);
+        for corner in corners {
+            assert!(
+                mesh.positions.iter().any(|q| (*q - corner).length() < 1e-9),
+                "loop of {cells} cells lost corner {corner:?}: {report:?}"
+            );
+        }
+        let interior: Vec<&[u32; 2]> = mesh
+            .feature_edges
+            .iter()
+            .filter(|&&[a, b]| {
+                let inside = |q: DVec3| q.x > 0.01 && q.x < 0.99 && q.y > 0.01 && q.y < 0.99;
+                inside(mesh.positions[a as usize]) && inside(mesh.positions[b as usize])
+            })
+            .collect();
+        assert!(interior.len() >= 4, "loop of {cells} cells kept {} edges: {report:?}", interior.len());
+    }
 }

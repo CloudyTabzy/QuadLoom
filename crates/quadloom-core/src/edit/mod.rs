@@ -142,6 +142,13 @@ impl EditMesh {
                 mesh.features.insert(key(a, b));
             }
         }
+        // A vertex whose faces form more than one fan (a "bowtie") would be
+        // seen from only one of them by every fan walk.
+        if let Some(v) =
+            (0..n as u32).find(|&v| mesh.faces_around(v).len() != mesh.face_degree[v as usize] as usize)
+        {
+            return Err(format!("vertex {v} joins separate fans of faces (non-manifold vertex)"));
+        }
         for v in 0..n as u32 {
             mesh.kinds[v as usize] = mesh.classify(v);
         }
@@ -194,6 +201,12 @@ impl EditMesh {
         self.references[f as usize]
     }
 
+    /// The summed reference normals of the faces around `v`: the side of the
+    /// input that `v` belongs to.
+    pub fn vertex_reference(&self, v: u32) -> DVec3 {
+        self.faces_around(v).iter().map(|&f| self.references[f as usize]).sum()
+    }
+
     pub fn from(&self, h: HalfEdge) -> u32 {
         self.corners[(h.0 / 3) as usize][(h.0 % 3) as usize]
     }
@@ -224,6 +237,14 @@ impl EditMesh {
 
     pub fn is_feature(&self, a: u32, b: u32) -> bool {
         self.features.contains(&key(a, b))
+    }
+
+    /// Feature edges (including open boundaries) as sorted vertex pairs, in
+    /// this mesh's vertex ids, sorted.
+    pub fn feature_edges(&self) -> Vec<[u32; 2]> {
+        let mut edges: Vec<[u32; 2]> = self.features.iter().map(|&(a, b)| [a, b]).collect();
+        edges.sort_unstable();
+        edges
     }
 
     /// Marks existing feature edges as soft (angle-detected, releasable).
@@ -440,17 +461,20 @@ impl EditMesh {
     /// direction (so zigzag tessellation noise along a straight feature doesn't
     /// count), *and* that turn is the largest among the feature vertices within
     /// reach along the line (so only the actual corner vertex is fixed, not its
-    /// neighbours whose wide view also wraps around the corner).
+    /// neighbours whose wide view also wraps around the corner). The reach is
+    /// at most a quarter of the vertex's feature line, so a loop or chain
+    /// shorter than the radius is judged at its own scale.
     pub fn reclassify(&mut self, radius: f64) {
-        let reach = 0.5 * radius;
         let n = self.positions.len();
+        let line_length = self.feature_line_lengths();
+        let reach_of = |v: u32| (0.5 * radius).min(0.25 * line_length[v as usize]);
         let mut turn = vec![0.0f64; n];
         for v in 0..n as u32 {
             if !self.is_vertex_alive(v) {
                 continue;
             }
             if let &[a, b] = self.feature_neighbours(v).as_slice() {
-                let p = self.positions[v as usize];
+                let (p, reach) = (self.positions[v as usize], reach_of(v));
                 let (da, db) = (self.walk_feature(v, a, reach) - p, self.walk_feature(v, b, reach) - p);
                 let cos = da.normalize_or_zero().dot(db.normalize_or_zero()).clamp(-1.0, 1.0);
                 turn[v as usize] = 180.0 - cos.acos().to_degrees();
@@ -466,7 +490,7 @@ impl EditMesh {
                 &[a, b] => {
                     let t = turn[v as usize];
                     let is_peak = [a, b].into_iter().all(|start| {
-                        self.chain_within(v, start, reach).iter().all(|&u| {
+                        self.chain_within(v, start, reach_of(v)).iter().all(|&u| {
                             let tu = turn[u as usize];
                             tu < t || (tu == t && u > v)
                         })
@@ -476,6 +500,45 @@ impl EditMesh {
                 _ => VertexKind::Corner,
             };
         }
+    }
+
+    /// For each vertex inside a feature line (feature valence 2), the length of
+    /// that line between its junctions or ends, or around it if it's a loop;
+    /// infinite elsewhere. Each line is walked once.
+    fn feature_line_lengths(&self) -> Vec<f64> {
+        let n = self.positions.len();
+        let mut length = vec![f64::INFINITY; n];
+        let mut done = vec![false; n];
+        for v in 0..n as u32 {
+            if done[v as usize] || !self.is_vertex_alive(v) {
+                continue;
+            }
+            let &[a, b] = self.feature_neighbours(v).as_slice() else { continue };
+            let mut members = vec![v];
+            let mut total = 0.0;
+            for start in [a, b] {
+                let (mut prev, mut at) = (v, start);
+                for _ in 0..MAX_FAN {
+                    total += (self.positions[at as usize] - self.positions[prev as usize]).length();
+                    if at == v {
+                        break; // around a loop
+                    }
+                    let ahead: Vec<u32> =
+                        self.feature_neighbours(at).into_iter().filter(|&x| x != prev).collect();
+                    let [step] = ahead.as_slice() else { break };
+                    members.push(at);
+                    (prev, at) = (at, *step);
+                }
+                if at == v {
+                    total *= 0.5; // both walks went all the way round
+                }
+            }
+            for u in members {
+                length[u as usize] = total;
+                done[u as usize] = true;
+            }
+        }
+        length
     }
 
     /// Feature-valence-2 vertices met walking from `from` through `next` for up
@@ -734,6 +797,18 @@ impl EditMesh {
         self.vertex_alive[b as usize] = false;
         self.out[b as usize] = NONE;
         self.positions[a as usize] = keep_position;
+        // The survivor's line may have changed shape: a line end or junction
+        // is a corner, a vertex off every line is free. Other kinds (decided at
+        // scale by `reclassify`) stay.
+        for v in std::iter::once(a).chain(self.feature_neighbours(a)) {
+            let (valence, kind) = (self.feature_neighbours(v).len(), self.kinds[v as usize]);
+            self.kinds[v as usize] = match valence {
+                0 => VertexKind::Free,
+                2 if kind == VertexKind::Free => VertexKind::Feature,
+                2 => kind,
+                _ => VertexKind::Corner,
+            };
+        }
         true
     }
 
@@ -1142,6 +1217,14 @@ mod tests {
         let mut mesh = EditMesh::from_triangles(&p, &t, &crease).unwrap();
         mesh.mark_soft(&crease);
         assert_eq!(mesh.release_flat_soft_features(35.0, 1.0), 0);
+    }
+
+    #[test]
+    fn bowtie_vertex_is_rejected() {
+        // Two triangles sharing only vertex 0: two fans around one vertex.
+        let p = [DVec3::ZERO, DVec3::X, DVec3::Y, -DVec3::X, -DVec3::Y];
+        let err = EditMesh::from_triangles(&p, &[[0, 1, 2], [0, 3, 4]], &[]).unwrap_err();
+        assert!(err.contains("non-manifold vertex"), "{err}");
     }
 
     #[test]

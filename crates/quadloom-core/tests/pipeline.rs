@@ -197,6 +197,53 @@ fn out_of_range_params_rejected() {
     assert!(run(&p, &i, &FeatureInput::default(), &params, &Control::default()).is_ok());
 }
 
+fn cube() -> (Vec<f32>, Vec<u32>) {
+    let corners: [[f32; 3]; 8] = [
+        [0., 0., 0.],
+        [1., 0., 0.],
+        [1., 1., 0.],
+        [0., 1., 0.],
+        [0., 0., 1.],
+        [1., 0., 1.],
+        [1., 1., 1.],
+        [0., 1., 1.],
+    ];
+    let i = vec![
+        0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1,
+        6, 5,
+    ];
+    (corners.iter().flatten().copied().collect(), i)
+}
+
+#[test]
+fn remesh_refuses_a_target_that_would_exceed_the_face_limit() {
+    // Regression (review of M3b): a 12-triangle cube at Triangle Size 1e-4
+    // asked for ~4e8 faces, enough to run the host out of memory. It's refused
+    // up front, as invalid input with a hint.
+    let (p, i) = cube();
+    let mut params = Params::default();
+    params.remesh.target_edge_rel = 1e-4;
+    let started = std::time::Instant::now();
+    let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput, "{err:?}");
+    assert_eq!(err.stage, Stage::PrepRemesh);
+    assert!(err.hint.is_some());
+    assert!(started.elapsed().as_secs_f64() < 1.0, "refused only after {:?}", started.elapsed());
+}
+
+#[test]
+fn remesh_of_a_non_manifold_part_is_invalid_input() {
+    // Regression (review of M3b): with Fix Orientation off, a flipped face
+    // reached the remesher and came back as an internal error.
+    let (p, mut i) = cube();
+    i.swap(0, 1);
+    let mut params = Params::default();
+    params.repair.orient = false;
+    let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput, "{err:?}");
+    assert!(err.hint.as_deref().is_some_and(|h| h.contains("Fix Orientation")), "{err:?}");
+}
+
 #[test]
 fn pipeline_remeshes_cube() {
     let corners = [

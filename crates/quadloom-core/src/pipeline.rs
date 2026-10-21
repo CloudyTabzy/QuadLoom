@@ -133,8 +133,35 @@ fn remesh_parts(
     params: &Params,
     control: &Control,
 ) -> Result<Remeshed, Error> {
+    let stage = Stage::PrepRemesh;
     let release_angle = if params.features.use_angle { params.features.angle_deg } else { 0.0 };
     let target = remesh::target_length(&repaired.positions, &repaired.triangles, &params.remesh);
+    let scale = remesh::Scale {
+        target,
+        tolerance: remesh::bbox_diagonal(&repaired.positions) * params.remesh.max_surface_distance_rel,
+        face_limit: params.max_faces,
+    };
+    // Refuse before allocating anything if the target alone (adaptivity only
+    // refines) would exceed the face limit: too much memory would crash the host.
+    let area: f64 = repaired
+        .triangles
+        .iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|v| repaired.positions[v as usize]);
+            0.5 * (b - a).cross(c - a).length()
+        })
+        .sum();
+    let expected = area / (0.433 * target * target).max(f64::MIN_POSITIVE);
+    if expected > params.max_faces as f64 {
+        return Err(Error::invalid_input(
+            stage,
+            format!(
+                "the remesh would make about {expected:.0} triangles, above the limit {}",
+                params.max_faces
+            ),
+        )
+        .with_hint("raise Triangle Size, or set it to 0 for an automatic size"));
+    }
     let results: Vec<Result<(remesh::RemeshedMesh, RemeshReport), Error>> = components
         .par_iter()
         .map(|component| {
@@ -160,7 +187,7 @@ fn remesh_parts(
                 &features,
                 &soft,
                 release_angle,
-                target,
+                scale,
                 &params.remesh,
                 control,
             )
@@ -189,6 +216,13 @@ fn remesh_parts(
     }
     total.mean_radius_ratio =
         if total.output_faces > 0 { ratio_weight / total.output_faces as f64 } else { 0.0 };
+    if total.output_faces > params.max_faces {
+        return Err(Error::invalid_input(
+            stage,
+            format!("the remesh made {} triangles, above the limit {}", total.output_faces, params.max_faces),
+        )
+        .with_hint("raise Triangle Size or Max Deviation, or Finest"));
+    }
     Ok((positions, triangles, features, total))
 }
 

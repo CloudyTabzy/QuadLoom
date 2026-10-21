@@ -75,7 +75,8 @@ pub struct RemeshReport {
     pub splits: usize,
     pub collapses: usize,
     pub flips: usize,
-    /// Largest distance from an output vertex to the input surface (absolute).
+    /// Largest distance from an output vertex or face centroid to the input
+    /// surface (absolute; centroids measured to their own sheet).
     pub max_surface_distance: f64,
     pub min_angle_deg: f64,
     /// Mean of 2·inradius/circumradius (1 = equilateral).
@@ -85,11 +86,34 @@ pub struct RemeshReport {
     pub released_features: usize,
 }
 
+/// The scale a part is remeshed at, shared by all parts of one object.
+#[derive(Clone, Copy, Debug)]
+pub struct Scale {
+    /// Target edge length.
+    pub target: f64,
+    /// Largest allowed deviation from the input (absolute), from the whole
+    /// object's diagonal so every part is held to the same bound.
+    pub tolerance: f64,
+    /// Splitting stops above this many faces.
+    pub face_limit: usize,
+}
+
+impl Scale {
+    /// The scale for a mesh remeshed on its own (`tolerance` from its diagonal).
+    pub fn of(positions: &[DVec3], triangles: &[[u32; 3]], params: &RemeshParams, face_limit: usize) -> Self {
+        Self {
+            target: target_length(positions, triangles, params),
+            tolerance: bbox_diagonal(positions) * params.max_surface_distance_rel,
+            face_limit,
+        }
+    }
+}
+
 /// Early iterations after which soft features are re-checked (like the
 /// oracle's `UpdateCoherentSharp`, which re-checks after the first pass).
 const RELEASE_ITERATIONS: usize = 3;
 
-/// Remeshes one component towards edge length `target`.
+/// Remeshes one component at `scale`.
 ///
 /// `soft_edges` (a subset of `feature_edges`) came from the angle test alone;
 /// after each of the first iterations, those whose faces now meet below
@@ -101,23 +125,25 @@ pub fn remesh(
     feature_edges: &[[u32; 2]],
     soft_edges: &[[u32; 2]],
     release_angle_deg: f64,
-    target: f64,
+    scale: Scale,
     params: &RemeshParams,
     control: &Control,
 ) -> Result<(RemeshedMesh, RemeshReport), Error> {
     let stage = Stage::PrepRemesh;
+    let target = scale.target;
     control.checkpoint(stage)?;
-    let mut mesh = EditMesh::from_triangles(positions, triangles, feature_edges)
-        .map_err(|e| Error::internal(stage, format!("remesh input is not a clean manifold: {e}")))?;
+    let mut mesh = EditMesh::from_triangles(positions, triangles, feature_edges).map_err(|e| {
+        Error::invalid_input(stage, format!("the remesh needs a clean manifold surface: {e}"))
+            .with_hint("enable Split Non-Manifold and Fix Orientation, or turn the remesh off")
+    })?;
     mesh.mark_soft(soft_edges);
     // Judge feature turns at the target scale, not the input's (possibly noisy) one.
     mesh.reclassify(target);
-    let diagonal = bbox_diagonal(positions);
     let projector =
-        Projector::new(positions, triangles, &mesh.compact().2, diagonal * params.max_surface_distance_rel);
+        Projector::new(positions, triangles, &mesh.feature_edges(), scale.tolerance, 0.5 * target);
     let mut report =
         RemeshReport { input_faces: triangles.len(), target_edge_length: target, ..Default::default() };
-    let max_faces = face_ceiling(positions, triangles, target, params);
+    let max_faces = face_ceiling(positions, triangles, target, params).min(scale.face_limit);
 
     for iteration in 0..params.iterations {
         control.set_progress(stage, iteration as f32 / params.iterations.max(1) as f32);
@@ -128,7 +154,7 @@ pub fn remesh(
                 mesh.rebuilt().map_err(|e| Error::internal(stage, format!("remesh rebuild failed: {e}")))?.0;
         }
         let sizes = sizing::vertex_sizes(&mesh, target, projector.max_distance, params);
-        let mut pass = passes::Pass { mesh: &mut mesh, sizes, projector: &projector, max_faces };
+        let mut pass = passes::Pass { mesh: &mut mesh, sizes, projector: &projector, max_faces, control };
         report.splits += pass.split_long();
         control.checkpoint(stage)?;
         report.collapses += pass.collapse_short();
@@ -142,10 +168,19 @@ pub fn remesh(
         }
     }
 
+    // Face centroids, each against its own sheet: vertices are always
+    // projected, so only faces show where the result pulls away (or bridges).
+    let centroid_gap = mesh
+        .faces()
+        .map(|f| {
+            let [a, b, c] = mesh.face_corners(f).map(|v| mesh.position(v));
+            projector.surface_distance_facing((a + b + c) / 3.0, mesh.reference_normal(f))
+        })
+        .fold(0.0, f64::max);
     let (positions, triangles, feature_edges) = mesh.compact();
     report.output_faces = triangles.len();
     report.max_surface_distance =
-        positions.iter().map(|&p| projector.surface_distance(p)).fold(0.0, f64::max);
+        positions.iter().map(|&p| projector.surface_distance(p)).fold(centroid_gap, f64::max);
     let (min_angle, mean_ratio) = triangle_quality(&positions, &triangles);
     report.min_angle_deg = min_angle;
     report.mean_radius_ratio = mean_ratio;
