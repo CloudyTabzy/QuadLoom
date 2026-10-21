@@ -37,7 +37,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
     )
     min_component_faces: IntProperty(
         name="Minimum Part Size",
-        description="Loose parts with fewer faces than this are skipped (the largest part is always kept)",
+        description="Tiny loose parts (under 1% of the object's size) with fewer faces than this are skipped as debris; the largest part is always kept",
         default=8,
         min=1,
     )

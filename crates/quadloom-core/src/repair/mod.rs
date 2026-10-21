@@ -17,6 +17,10 @@ use crate::mesh::InputMesh;
 const ZERO_AREA_RATIO: f64 = 1e-12;
 /// How many cut-and-reorient rounds a non-orientable surface gets.
 const MAX_ORIENT_ROUNDS: usize = 4;
+/// A part counts as debris (and may be skipped for having few faces) only if
+/// its bounding box is also below this fraction of the whole mesh's diagonal:
+/// a large panel modelled with two triangles is surface, not noise.
+const DEBRIS_EXTENT_REL: f64 = 0.01;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RepairParams {
@@ -26,8 +30,9 @@ pub struct RepairParams {
     pub remove_degenerate: bool,
     pub split_non_manifold: bool,
     pub orient: bool,
-    /// Components with fewer faces are skipped (and reported), except that the
-    /// largest component is always kept.
+    /// Components with fewer faces that are also tiny (bounding box under 1%
+    /// of the mesh's diagonal) are skipped as debris and reported. The largest
+    /// component is always kept.
     pub min_component_faces: usize,
 }
 
@@ -168,8 +173,16 @@ pub fn repair(
     // always survives, so a small but complete mesh is never thrown away.
     let largest = all_components.iter().map(|c| c.faces.len()).max().unwrap_or(0);
     let min_faces = params.min_component_faces.min(largest);
+    let extent = |faces: &[u32]| {
+        let mut corners = faces.iter().flat_map(|&f| triangles[f as usize]).map(|v| positions[v as usize]);
+        let first = corners.next().unwrap_or(DVec3::ZERO);
+        let (lo, hi) = corners.fold((first, first), |(lo, hi), q| (lo.min(q), hi.max(q)));
+        (hi - lo).length()
+    };
+    let all_faces: Vec<u32> = (0..triangles.len() as u32).collect();
+    let debris_extent = DEBRIS_EXTENT_REL * extent(&all_faces);
     for component in all_components {
-        if component.faces.len() < min_faces {
+        if component.faces.len() < min_faces && extent(&component.faces) < debris_extent {
             report.skipped_small_components += 1;
             report.skipped_small_component_faces += component.faces.len();
             continue;
@@ -297,7 +310,8 @@ mod tests {
             messy_cube().positions().iter().flat_map(|q| [q.x as f32, q.y as f32, q.z as f32]).collect();
         let mut i: Vec<u32> = messy_cube().triangles().iter().flatten().copied().collect();
         let base = (p.len() / 3) as u32;
-        p.extend([5.0, 0.0, 0.0, 6.0, 0.0, 0.0, 5.0, 1.0, 0.0]);
+        // A speck of debris: one triangle 0.01 across.
+        p.extend([5.0, 0.0, 0.0, 5.01, 0.0, 0.0, 5.0, 0.01, 0.0]);
         i.extend([base, base + 1, base + 2]);
         let input = InputMesh::from_buffers(&p, &i).unwrap();
         let (mesh, components, report) =
@@ -326,6 +340,25 @@ mod tests {
             original.sort_by(|a, b| a.partial_cmp(b).unwrap());
             assert_eq!(repaired, original);
         }
+    }
+
+    #[test]
+    fn large_part_with_few_faces_is_kept() {
+        // Regression (khronos/CommercialRefrigerator): a glass panel modelled as
+        // two triangles beside a detailed part was skipped by face count alone,
+        // leaving a hole 7.5% of the diagonal wide.
+        let mut p: Vec<f32> =
+            messy_cube().positions().iter().flat_map(|q| [q.x as f32, q.y as f32, q.z as f32]).collect();
+        let mut i: Vec<u32> = messy_cube().triangles().iter().flatten().copied().collect();
+        let base = (p.len() / 3) as u32;
+        p.extend([3.0, 0.0, 0.0, 4.0, 0.0, 0.0, 4.0, 1.0, 0.0, 3.0, 1.0, 0.0]);
+        i.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        let input = InputMesh::from_buffers(&p, &i).unwrap();
+        let (mesh, components, report) =
+            repair(&input, &RepairParams::default(), &Control::default()).unwrap();
+        assert_eq!(report.skipped_small_components, 0);
+        assert_eq!(components.len(), 2);
+        assert_eq!(mesh.triangles.len(), 14);
     }
 
     #[test]
