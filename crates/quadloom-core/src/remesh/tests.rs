@@ -131,8 +131,12 @@ fn coarse_cube_refined_to_target() {
 
 #[test]
 fn sphere_becomes_isotropic() {
+    // A coarse 224-face polyhedral sphere. Under the default bound (1/2500 of
+    // the diagonal) faces must hug its facets, so it can't become isotropic;
+    // with a loose bound the remesher is free to.
     let (p, t) = sphere_mesh(8, 16);
-    let (mesh, report) = run(&p, &t, &[], &params(0.08));
+    let prm = RemeshParams { max_surface_distance_rel: 0.01, ..params(0.08) };
+    let (mesh, report) = run(&p, &t, &[], &prm);
     assert!(mesh.triangles.len() > 200);
     assert!(report.mean_radius_ratio > 0.85, "{report:?}");
     assert!(report.min_angle_deg > 20.0, "{report:?}");

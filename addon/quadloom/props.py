@@ -67,7 +67,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
     )
     remesh_adaptive: BoolProperty(
         name="Adaptive Density",
-        description="Use smaller triangles where the surface curves (and larger ones on flat areas, if Coarsest is above 1)",
+        description="Use smaller triangles where the surface curves, as much as Max Deviation needs (and larger ones on flat areas, if Coarsest is above 1)",
         default=True,
     )
     remesh_min_mult: FloatProperty(

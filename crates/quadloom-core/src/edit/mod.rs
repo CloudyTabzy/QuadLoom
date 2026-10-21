@@ -337,7 +337,7 @@ impl EditMesh {
 
     /// The point reached by walking from `from` through `next` along its
     /// feature line for at least `reach` (or until a junction or end).
-    fn walk_feature(&self, from: u32, next: u32, reach: f64) -> DVec3 {
+    pub fn walk_feature(&self, from: u32, next: u32, reach: f64) -> DVec3 {
         let (mut prev, mut at) = (from, next);
         let mut travelled = (self.positions[at as usize] - self.positions[prev as usize]).length();
         for _ in 0..MAX_FAN {
@@ -353,39 +353,78 @@ impl EditMesh {
     }
 
     /// Cosine of the angle between the two sides of edge `h`/`t`, each side's
-    /// normal being the area-weighted mean over faces within `radius` of the
-    /// edge (found by a bounded flood fill from the edge's two faces).
+    /// normal being the mean over faces within `radius` of the edge, weighted
+    /// by area × exp(−(3·distance/radius)²): noise averages out over the
+    /// neighbourhood, while a side that curls away from the crease is still
+    /// judged near the crease.
+    ///
+    /// Each side is flooded from its own face of the edge without crossing the
+    /// edge's feature line (the chain of feature edges through it, out to
+    /// `radius` each way), so a curving ridge keeps its two sides apart.
+    /// Other feature lines are crossed: parallel tessellation-noise lines then
+    /// average out. A face both floods reach (the line ends within `radius`)
+    /// goes to the side of the plane through the edge it lies on.
     fn side_normals_cos(&self, h: HalfEdge, t: HalfEdge, radius: f64) -> f64 {
-        const MAX_FACES: usize = 512;
-        let (pa, pb) = (self.position(self.from(h)), self.position(self.to(h)));
+        const MAX_FACES: usize = 256;
+        let (a, b) = (self.from(h), self.to(h));
+        let (pa, pb) = (self.position(a), self.position(b));
         let (f0, f1) = (self.face(h), self.face(t));
-        let axis = (pb - pa).cross(self.face_normal(f0) + self.face_normal(f1)).normalize_or_zero();
-        let side_of = |c: DVec3| (c - pa).dot(axis);
-        let near = |c: DVec3| {
+        let mut line: FastSet<(u32, u32)> = FastSet::default();
+        line.insert(key(a, b));
+        for (from, start) in [(b, a), (a, b)] {
+            let (mut prev, mut at, mut travelled) = (from, start, 0.0);
+            for _ in 0..MAX_FAN {
+                let ahead: Vec<u32> =
+                    self.feature_neighbours(at).into_iter().filter(|&n| n != prev).collect();
+                let [step] = ahead.as_slice() else { break };
+                if !line.insert(key(at, *step)) || travelled > radius {
+                    break;
+                }
+                travelled += (self.position(*step) - self.position(at)).length();
+                (prev, at) = (at, *step);
+            }
+        }
+        let distance = |c: DVec3| {
             let e = pb - pa;
             let s = ((c - pa).dot(e) / e.length_squared().max(f64::MIN_POSITIVE)).clamp(0.0, 1.0);
-            (c - (pa + e * s)).length() <= radius
+            (c - (pa + e * s)).length()
         };
-        let reference = side_of(self.centroid(f0)).signum();
-        let mut sides = [DVec3::ZERO; 2];
-        let mut queue = vec![f0, f1];
-        let mut seen: FastSet<u32> = queue.iter().copied().collect();
-        while let Some(f) = queue.pop() {
-            let c = self.centroid(f);
-            let [x, y, z] = self.corners[f as usize].map(|v| self.positions[v as usize]);
-            let weighted = (y - x).cross(z - x);
-            sides[usize::from(side_of(c).signum() != reference)] += weighted;
-            if seen.len() >= MAX_FACES {
-                continue;
-            }
-            for i in 0..3 {
-                let Some(o) = self.twin(HalfEdge(3 * f + i)) else { continue };
-                let g = self.face(o);
-                if !seen.contains(&g) && near(self.centroid(g)) {
-                    seen.insert(g);
-                    queue.push(g);
+        let near = |c: DVec3| distance(c) <= radius;
+        let flood = |start: u32| {
+            let mut seen: FastSet<u32> = FastSet::default();
+            seen.insert(start);
+            let mut queue = vec![start];
+            while let Some(f) = queue.pop() {
+                if seen.len() >= MAX_FACES {
+                    break;
+                }
+                for i in 0..3 {
+                    let e = HalfEdge(3 * f + i);
+                    let Some(o) = self.twin(e) else { continue };
+                    let g = self.face(o);
+                    if !line.contains(&key(self.from(e), self.to(e)))
+                        && near(self.centroid(g))
+                        && seen.insert(g)
+                    {
+                        queue.push(g);
+                    }
                 }
             }
+            seen
+        };
+        let (side0, side1) = (flood(f0), flood(f1));
+        let axis = (pb - pa).cross(self.face_normal(f0) + self.face_normal(f1)).normalize_or_zero();
+        let reference = (self.centroid(f0) - pa).dot(axis).signum();
+        let mut sides = [DVec3::ZERO; 2];
+        for &f in side0.iter().chain(side1.iter().filter(|f| !side0.contains(f))) {
+            let side = match (side0.contains(&f), side1.contains(&f)) {
+                (true, false) => 0,
+                (false, true) => 1,
+                _ => usize::from((self.centroid(f) - pa).dot(axis).signum() != reference),
+            };
+            let [x, y, z] = self.corners[f as usize].map(|v| self.positions[v as usize]);
+            let d = distance(self.centroid(f)) / (radius / 3.0).max(f64::MIN_POSITIVE);
+            sides[side] += (y - x).cross(z - x) * (-d * d).exp().max(1e-12);
         }
         sides[0].normalize_or_zero().dot(sides[1].normalize_or_zero())
     }
@@ -1063,6 +1102,46 @@ mod tests {
         let (rebuilt, _) = mesh.rebuilt().unwrap();
         assert!(rebuilt.faces().all(|f| rebuilt.reference_normal(f).dot(up) > 0.999));
         assert!(rebuilt.faces().any(|f| rebuilt.face_normal(f).dot(up) < 0.99));
+    }
+
+    #[test]
+    fn ridge_with_a_curling_side_is_not_released() {
+        // A 110° crease along x. Side A leaves the crease horizontally and
+        // curls up through 120° on a radius-0.5 arc; side B runs flat, 70°
+        // down. Judged within 1.0 of an edge, the plane through the edge put
+        // A's curled-up faces on B's side, mixing the sides into "smooth".
+        // Flooding each side from its own face, up to the crease, keeps them
+        // apart. (Found on khronos/Duck's beak: 28° by the plane, 55° by sides.)
+        let (columns, arc, flat) = (21u32, 12u32, 8u32);
+        let mut profile = Vec::new();
+        for k in (1..=flat).rev() {
+            let s = 0.1 * f64::from(k);
+            let down = 70f64.to_radians();
+            profile.push((-s * down.cos(), -s * down.sin()));
+        }
+        for k in 0..=arc {
+            let phi = 120f64.to_radians() * f64::from(k) / f64::from(arc);
+            profile.push((0.5 * phi.sin(), 0.5 * (1.0 - phi.cos())));
+        }
+        let width = profile.len() as u32;
+        let mut p = Vec::new();
+        for i in 0..columns {
+            for &(y, z) in &profile {
+                p.push(DVec3::new(0.1 * f64::from(i), y, z));
+            }
+        }
+        let mut t = Vec::new();
+        for i in 0..columns - 1 {
+            for j in 0..width - 1 {
+                let (a, b) = (i * width + j, i * width + j + 1);
+                t.extend([[a, b + width, b], [a, a + width, b + width]]);
+            }
+        }
+        let crease: Vec<[u32; 2]> =
+            (0..columns - 1).map(|i| [i * width + flat, (i + 1) * width + flat]).collect();
+        let mut mesh = EditMesh::from_triangles(&p, &t, &crease).unwrap();
+        mesh.mark_soft(&crease);
+        assert_eq!(mesh.release_flat_soft_features(35.0, 1.0), 0);
     }
 
     #[test]

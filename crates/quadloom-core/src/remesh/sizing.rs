@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use glam::DVec3;
+use glam::{DMat4, DVec3, DVec4};
 use rayon::prelude::*;
 
 use super::RemeshParams;
@@ -12,9 +12,6 @@ use crate::edit::{EditMesh, VertexKind};
 /// "about 10,000 faces" length. Open surfaces have no volume, which would
 /// otherwise drive the target to zero.
 const OPEN_SURFACE_FLOOR: f64 = 0.25;
-/// Normal-deviation angle (radians) that one target-length edge may span
-/// before adaptivity shortens edges.
-const ANGLE_PER_EDGE: f64 = 0.3;
 /// Curvature is measured over vertices within this fraction of the target
 /// length, so tessellation noise finer than the target averages out.
 const BALL_RADIUS: f64 = 0.5;
@@ -51,14 +48,16 @@ pub fn target_length(positions: &[DVec3], triangles: &[[u32; 3]], params: &Remes
 
 /// Desired edge length at every vertex slot of `mesh` (dead slots get `target`).
 ///
-/// With adaptivity on, the length shrinks where the surface curves: the
-/// desired length is `ANGLE_PER_EDGE / κ`, clamped to `[min_mult, max_mult] ×
-/// target`, with κ measured at each free vertex over the nearby free surface
-/// (see [`Ball::curvature`]). Feature and corner vertices sit on creases, which
-/// are features rather than curvature, so they take the mean of their free
-/// neighbours. The field is then smoothed twice. This is QuadLoom's choice
-/// (decision 0004); the oracle adapts to triangle quality instead.
-pub fn vertex_sizes(mesh: &EditMesh, target: f64, params: &RemeshParams) -> Vec<f64> {
+/// With adaptivity on, the length follows the allowed deviation `tolerance`:
+/// an edge of length h on a surface of curvature radius r strays about
+/// `h²/8r` from it, and Dunyach et al. (EG 2013) size edges as
+/// `h = √(6·tolerance·r − 3·tolerance²)` so triangles stay within the tolerance.
+/// r is the *maximum* curvature radius at each free vertex, from a local jet
+/// fit (see [`Ball::curvature`]); h is clamped to `[min_mult, max_mult] ×
+/// target`. Feature and corner vertices sit on creases, which are features
+/// rather than curvature, so they take the mean of their free neighbours. The
+/// field is then smoothed twice (decision 0004).
+pub fn vertex_sizes(mesh: &EditMesh, target: f64, tolerance: f64, params: &RemeshParams) -> Vec<f64> {
     let slots = mesh.vertex_slots();
     if !params.adaptive {
         return vec![target; slots];
@@ -72,20 +71,35 @@ pub fn vertex_sizes(mesh: &EditMesh, target: f64, params: &RemeshParams) -> Vec<
                 return None;
             }
             let k = ball.curvature(mesh, &normals, v, BALL_RADIUS * target);
-            Some(if k > 1e-12 { (ANGLE_PER_EDGE / k).clamp(lo, hi) } else { hi })
+            Some(error_bounded_length(k, tolerance).clamp(lo, hi))
         })
         .collect();
     let mut sizes: Vec<f64> = free_sizes.iter().map(|s| s.unwrap_or(target)).collect();
     let measured: Vec<bool> = free_sizes.iter().map(Option::is_some).collect();
-    // Crease vertices borrow their free neighbours' sizes.
+    // Crease vertices borrow their free neighbours' sizes, but no more than
+    // their own feature line's curvature allows: a long chord would cut a
+    // curved crease just as it cuts a curved surface.
     for v in 0..slots as u32 {
         if !mesh.is_vertex_alive(v) || measured[v as usize] {
             continue;
         }
         let free: Vec<f64> =
             mesh.one_ring(v).filter(|&n| measured[n as usize]).map(|n| sizes[n as usize]).collect();
-        sizes[v as usize] =
+        let borrowed =
             if free.is_empty() { target.clamp(lo, hi) } else { free.iter().sum::<f64>() / free.len() as f64 };
+        let line = match mesh.feature_neighbours(v).as_slice() {
+            &[a, b] => {
+                let reach = BALL_RADIUS * target;
+                let k = menger_curvature(
+                    mesh.walk_feature(v, a, reach),
+                    mesh.position(v),
+                    mesh.walk_feature(v, b, reach),
+                );
+                error_bounded_length(k, tolerance).clamp(lo, hi)
+            }
+            _ => hi,
+        };
+        sizes[v as usize] = borrowed.min(line);
     }
     for _ in 0..2 {
         let previous = sizes.clone();
@@ -102,6 +116,23 @@ pub fn vertex_sizes(mesh: &EditMesh, target: f64, params: &RemeshParams) -> Vec<
         }
     }
     sizes
+}
+
+/// Dunyach et al.'s edge length for curvature `k` and deviation `tolerance`
+/// (infinite on flat surfaces; the tolerance itself where r < tolerance).
+fn error_bounded_length(k: f64, tolerance: f64) -> f64 {
+    if k <= 1e-12 {
+        return f64::INFINITY;
+    }
+    let r = 1.0 / k;
+    let squared = 6.0 * tolerance * r - 3.0 * tolerance * tolerance;
+    if squared > 0.0 { squared.sqrt() } else { tolerance }
+}
+
+/// Curvature of the circle through three points (0 if they're collinear).
+fn menger_curvature(a: DVec3, b: DVec3, c: DVec3) -> f64 {
+    let product = (b - a).length() * (c - b).length() * (c - a).length();
+    if product <= 0.0 { 0.0 } else { 2.0 * (b - a).cross(c - a).length() / product }
 }
 
 /// Area-weighted (unnormalized) vertex normals.
@@ -127,14 +158,19 @@ struct Ball {
 }
 
 impl Ball {
-    /// Curvature at free vertex `v`, judged over the free surface within
-    /// `radius` (flooding through free vertices only, so it never crosses a
-    /// crease; at least the one-ring, at most [`MAX_BALL`] samples).
+    /// Maximum absolute curvature at free vertex `v`, judged over the free
+    /// surface within `radius` (flooding through free vertices only, so it
+    /// never crosses a crease; at least the one-ring, at most [`MAX_BALL`]
+    /// samples).
     ///
-    /// Against the plane through `v` with the ball's mean normal, a sample at
-    /// distance d on a sphere of radius R sits d²/2R off the plane, so
-    /// κ = 2·Σ height / Σ d²: exact on spheres at any sampling, while noise much
-    /// finer than the ball only adds its own (small) amplitude to the heights.
+    /// The samples' heights over the tangent plane (ball-mean normal) are fitted
+    /// by least squares with `h = a·x² + b·xy + c·y² + d`, a degree-2 osculating
+    /// jet (Cazals & Pouget, SGP 2003) plus a constant. The principal
+    /// curvatures are the eigenvalues of `[[2a, b], [b, 2c]]`. Zero-mean noise
+    /// finer than the ball doesn't correlate with the quadratic terms, so it
+    /// ends up in `d` rather than in the curvature. When the samples can't
+    /// determine a quadric (e.g. all on a line) the sagitta estimate
+    /// `2·Σ|height| / Σ d²` is used instead.
     fn curvature(&mut self, mesh: &EditMesh, normals: &[DVec3], v: u32, radius: f64) -> f64 {
         let p = mesh.position(v);
         self.seen.clear();
@@ -165,12 +201,48 @@ impl Ball {
             return ring_curvature(mesh, v);
         }
         let n = normal.normalize();
-        let (height, d2) = self.samples.iter().fold((0.0, 0.0), |(h, d2), &u| {
-            let e = mesh.position(u) - p;
-            (h + e.dot(n).abs(), d2 + e.length_squared())
-        });
-        if d2 > 0.0 { 2.0 * height / d2 } else { 0.0 }
+        let offsets: Vec<DVec3> = self.samples.iter().map(|&u| mesh.position(u) - p).collect();
+        jet_curvature(&offsets, n).unwrap_or_else(|| {
+            let (height, d2) =
+                offsets.iter().fold((0.0, 0.0), |(h, d2), e| (h + e.dot(n).abs(), d2 + e.length_squared()));
+            if d2 > 0.0 { 2.0 * height / d2 } else { 0.0 }
+        })
     }
+}
+
+/// Maximum absolute principal curvature of the quadric `a·x² + b·xy + c·y² + d`
+/// fitted to `offsets` (sample − centre) over the plane with normal `n`, or
+/// `None` if the samples don't determine it. Coordinates are scaled to the
+/// sample spread so the normal equations stay well conditioned.
+fn jet_curvature(offsets: &[DVec3], n: DVec3) -> Option<f64> {
+    if offsets.len() < 5 {
+        return None;
+    }
+    let (t1, t2) = n.any_orthonormal_pair();
+    let scale = offsets.iter().map(|e| e.length()).fold(0.0, f64::max);
+    if scale <= 0.0 {
+        return None;
+    }
+    let (mut m, mut rhs) = (DMat4::ZERO, DVec4::ZERO);
+    for e in offsets {
+        // Tangent direction stretched to the chord length: on a sphere a chord
+        // d long rises exactly d²/2R, so the quadric is exact at any ball size
+        // (the plain projection is only exact to second order).
+        let (px, py) = (e.dot(t1), e.dot(t2));
+        let stretch = e.length() / px.hypot(py).max(f64::MIN_POSITIVE);
+        let (x, y, h) = (px * stretch / scale, py * stretch / scale, e.dot(n) / scale);
+        let row = DVec4::new(x * x, x * y, y * y, 1.0);
+        m += DMat4::from_cols(row * row.x, row * row.y, row * row.z, row * row.w);
+        rhs += row * h;
+    }
+    // Determinant of the (scaled, so O(1)-sized) normal matrix: near zero when
+    // the samples don't span both tangent directions.
+    if m.determinant().abs() < 1e-9 * (offsets.len() as f64).powi(4) {
+        return None;
+    }
+    let [a, b, c, _] = (m.inverse() * rhs).to_array();
+    let (mean, half_gap) = (a + c, ((a - c) * (a - c) + b * b).sqrt());
+    Some(((mean + half_gap).abs().max((mean - half_gap).abs())) / scale)
 }
 
 /// One-ring curvature: a vertex whose incident face normals spread by angle θ
@@ -200,14 +272,14 @@ mod tests {
     fn adaptive_sizes_shrink_on_curved_regions() {
         let params = RemeshParams::default();
         let mean = |m: &EditMesh, target: f64| {
-            let s = vertex_sizes(m, target, &params);
+            let s = vertex_sizes(m, target, 0.01, &params);
             s.iter().sum::<f64>() / s.len() as f64
         };
         // Same target, tighter curvature → shorter edges.
         let (tight, loose) = (sphere(1.0), sphere(4.0));
         assert!(mean(&tight, 1.0) < mean(&loose, 1.0));
         let off = RemeshParams { adaptive: false, ..params.clone() };
-        assert!(vertex_sizes(&tight, 1.0, &off).iter().all(|&s| s == 1.0));
+        assert!(vertex_sizes(&tight, 1.0, 0.01, &off).iter().all(|&s| s == 1.0));
     }
 
     #[test]
@@ -220,6 +292,73 @@ mod tests {
             let k = ball.curvature(&mesh, &normals, 40, 0.6 * radius);
             assert!((k * radius - 1.0).abs() < 0.1, "κ·R = {} at R = {radius}", k * radius);
         }
+    }
+
+    #[test]
+    fn ball_curvature_finds_the_maximum_on_a_cylinder() {
+        // Radius 0.5, length 2: principal curvatures 2 (around) and 0 (along).
+        let (rings, segments) = (40u32, 48u32);
+        let mut p = Vec::new();
+        for i in 0..=rings {
+            for j in 0..segments {
+                let a = std::f64::consts::TAU * f64::from(j) / f64::from(segments);
+                p.push(DVec3::new(0.5 * a.cos(), 0.5 * a.sin(), 2.0 * f64::from(i) / f64::from(rings)));
+            }
+        }
+        let mut t = Vec::new();
+        for i in 0..rings {
+            for j in 0..segments {
+                let (a, b) = (i * segments + j, i * segments + (j + 1) % segments);
+                t.extend([[a, b, b + segments], [a, b + segments, a + segments]]);
+            }
+        }
+        let mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
+        let normals = vertex_normals(&mesh);
+        let k = Ball::default().curvature(&mesh, &normals, (rings / 2) * segments, 0.3);
+        assert!((k - 2.0).abs() < 0.2, "κ_max = {k}, expected 2");
+    }
+
+    #[test]
+    fn menger_curvature_of_a_circle() {
+        let on = |a: f64| DVec3::new(2.0 * a.cos(), 2.0 * a.sin(), 0.0);
+        assert!((menger_curvature(on(0.0), on(0.3), on(1.1)) - 0.5).abs() < 1e-12);
+        assert_eq!(menger_curvature(DVec3::ZERO, DVec3::X, 2.0 * DVec3::X), 0.0);
+    }
+
+    #[test]
+    fn crease_vertices_follow_their_line_curvature() {
+        // A cylinder's rim circle (radius 0.5) is a feature line on a surface
+        // that is flat along the rim's band only when far from it; sizes at the
+        // rim may not exceed what the circle's curvature allows.
+        let (rings, segments) = (6u32, 96u32);
+        let mut p = Vec::new();
+        for i in 0..=rings {
+            for j in 0..segments {
+                let a = std::f64::consts::TAU * f64::from(j) / f64::from(segments);
+                p.push(DVec3::new(0.5 * a.cos(), 0.5 * a.sin(), 0.05 * f64::from(i)));
+            }
+        }
+        let mut t = Vec::new();
+        for i in 0..rings {
+            for j in 0..segments {
+                let (a, b) = (i * segments + j, i * segments + (j + 1) % segments);
+                t.extend([[a, b, b + segments], [a, b + segments, a + segments]]);
+            }
+        }
+        let mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
+        let params = RemeshParams { max_mult: 10.0, min_mult: 0.01, ..RemeshParams::default() };
+        let tolerance = 0.001;
+        let sizes = vertex_sizes(&mesh, 1.0, tolerance, &params);
+        let allowed = error_bounded_length(2.0, tolerance);
+        assert!(sizes[0] <= 1.05 * allowed, "rim size {} vs {allowed}", sizes[0]);
+    }
+
+    #[test]
+    fn error_bounded_length_follows_dunyach() {
+        // r = 1, ε = 0.01: h = √(0.06 − 0.0003).
+        assert!((error_bounded_length(1.0, 0.01) - 0.0597_f64.sqrt()).abs() < 1e-12);
+        assert_eq!(error_bounded_length(0.0, 0.01), f64::INFINITY);
+        assert_eq!(error_bounded_length(1000.0, 0.01), 0.01, "r below the tolerance");
     }
 
     #[test]
@@ -245,7 +384,7 @@ mod tests {
         }
         let mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
         let params = RemeshParams { max_mult: 3.0, ..RemeshParams::default() };
-        let sizes = vertex_sizes(&mesh, 0.1, &params);
+        let sizes = vertex_sizes(&mesh, 0.1, 1.4 / 2500.0, &params);
         let centre = (n / 2) * w + n / 2;
         assert!(sizes[centre as usize] > 0.1, "noise shrank the size to {}", sizes[centre as usize]);
         assert!(ring_curvature(&mesh, centre) > 10.0, "the one-ring alone sees the noise as curvature");

@@ -24,6 +24,12 @@ const MIN_REFERENCE_DOT: f64 = 0.0;
 const FLIP_MIN_NORMAL_DOT: f64 = 0.9;
 /// Tangential smoothing step (fraction of the way to the neighbour centroid).
 const SMOOTH_STEP: f64 = 0.5;
+/// A smoothing move is made only if projecting it back onto the input moves
+/// it by at most this fraction of the deviation bound. Vertices on folds of a
+/// faceted input then stay on them, so faces keep following its facets: on
+/// the benchmark this took the median Hausdorff distance from 1.7× to 0.75×
+/// the oracle's (the full bound allowed too much sliding; decision 0004).
+const SMOOTH_DEVIATION: f64 = 0.25;
 /// Quality guard: an operation may not leave a face with a radius ratio below
 /// `min(QUALITY_FLOOR, worst ratio among the faces it replaces)`. So it can
 /// never make a neighbourhood's worst face worse, but it *can* clean up a
@@ -208,11 +214,15 @@ impl Pass<'_> {
             .filter(|c| !(c.contains(&keep) && c.contains(&gone)))
             .map(|c| c.map(moved))
             .collect();
-        [self.mesh.position(keep), self.mesh.position(gone)].into_iter().all(|q| {
-            remaining.iter().any(|&[a, b, c]| {
-                (closest_point_on_triangle(q, a, b, c) - q).length() <= self.projector.max_distance
-            })
-        })
+        let limit = self.projector.max_distance;
+        // Old points → new faces: the surface stays near where the vertices were.
+        let covered = [self.mesh.position(keep), self.mesh.position(gone)].into_iter().all(|q| {
+            remaining.iter().any(|&[a, b, c]| (closest_point_on_triangle(q, a, b, c) - q).length() <= limit)
+        });
+        // New faces → input (as the oracle's VCG remesher checks): each new
+        // face's centroid lies near the input surface.
+        covered
+            && remaining.iter().all(|&[a, b, c]| self.projector.surface_distance((a + b + c) / 3.0) <= limit)
     }
 
     /// Whether moving each of `movers` to `target` keeps every remaining face
@@ -296,6 +306,15 @@ impl Pass<'_> {
             {
                 continue;
             }
+            // The new edge may not stray further from the input than the
+            // deviation bound, or than the edge it replaces (so flips on an
+            // already-coarse curved mesh keep improving its shape).
+            let new_gap = self.projector.surface_distance(0.5 * (pc + pd));
+            if new_gap > self.projector.max_distance
+                && new_gap > self.projector.surface_distance(0.5 * (pa + pb))
+            {
+                continue;
+            }
             if self.mesh.flip(h) {
                 flips += 1;
             }
@@ -329,6 +348,13 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
         return None;
     }
     let p = mesh.position(v);
+    // Like the oracle's smoothing, slide only where the input is flat at the
+    // scale of the step: if projection pulls the tangential target back by
+    // more than SMOOTH_DEVIATION of the bound, the vertex sits on a fold of the
+    // input (a facet corner of a coarse model, a tight bend) and stays there.
+    let settled = |raw: DVec3, projected: DVec3| {
+        ((projected - raw).length() <= SMOOTH_DEVIATION * projector.max_distance).then_some(projected)
+    };
     match mesh.kind(v) {
         VertexKind::Corner => None,
         VertexKind::Free => {
@@ -340,7 +366,8 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
             let normal =
                 mesh.faces_around(v).iter().map(|&f| mesh.face_normal(f)).sum::<DVec3>().normalize_or_zero();
             let delta = centroid - p;
-            Some(projector.onto_surface(p + SMOOTH_STEP * (delta - normal * delta.dot(normal))))
+            let raw = p + SMOOTH_STEP * (delta - normal * delta.dot(normal));
+            settled(raw, projector.onto_surface(raw))
         }
         VertexKind::Feature => {
             let ends = mesh.feature_neighbours(v);
@@ -348,7 +375,8 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
             let (q0, q1) = (mesh.position(*e0), mesh.position(*e1));
             let tangent = (q1 - q0).normalize_or_zero();
             let delta = 0.5 * (q0 + q1) - p;
-            Some(projector.onto_features(p + SMOOTH_STEP * tangent * delta.dot(tangent)))
+            let raw = p + SMOOTH_STEP * tangent * delta.dot(tangent);
+            settled(raw, projector.onto_features(raw))
         }
     }
 }

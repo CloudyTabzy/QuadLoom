@@ -127,7 +127,7 @@ pub fn remesh(
             mesh =
                 mesh.rebuilt().map_err(|e| Error::internal(stage, format!("remesh rebuild failed: {e}")))?.0;
         }
-        let sizes = sizing::vertex_sizes(&mesh, target, params);
+        let sizes = sizing::vertex_sizes(&mesh, target, projector.max_distance, params);
         let mut pass = passes::Pass { mesh: &mut mesh, sizes, projector: &projector, max_faces };
         report.splits += pass.split_long();
         control.checkpoint(stage)?;
