@@ -172,3 +172,21 @@ fn feature_groups_of_wrong_length_are_rejected() {
     assert_eq!(err.kind, ErrorKind::InvalidInput);
     assert!(err.message.contains("material"), "{}", err.message);
 }
+
+#[test]
+fn out_of_range_params_rejected() {
+    let (p, i) = tetrahedron();
+    let mut params = Params::default();
+    params.repair.weld_epsilon_rel = f64::NAN;
+    let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
+    assert!(err.message.contains("repair.weld_epsilon_rel"), "{}", err.message);
+    params.repair.weld_epsilon_rel = 0.5;
+    assert!(run(&p, &i, &FeatureInput::default(), &params, &Control::default()).is_err());
+    let mut params = Params::default();
+    params.features.angle_deg = 400.0;
+    let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
+    assert!(err.message.contains("features.angle_deg"), "{}", err.message);
+    let mut params = Params::default();
+    params.repair.weld_epsilon_rel = -1.0; // negative disables welding: allowed
+    assert!(run(&p, &i, &FeatureInput::default(), &params, &Control::default()).is_ok());
+}

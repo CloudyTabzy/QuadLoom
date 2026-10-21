@@ -39,6 +39,7 @@ pub fn run(
     control: &Control,
 ) -> Result<RunOutput, Error> {
     control.checkpoint(Stage::Validate)?;
+    params.check()?;
     check_limits(positions.len() / 3, indices.len(), params)?;
 
     let mut timings_ms = Vec::new();

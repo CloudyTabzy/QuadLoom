@@ -15,6 +15,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         "exporters split at UV seams or hard normals, so seams don't become holes",
         default=1e-6,
         min=0.0,
+        max=1e-2,
         soft_max=1e-3,
         precision=7,
     )

@@ -140,6 +140,21 @@ def test_params_wrong_type_rejected():
     assert "repair.orient" in str(e.value)
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_param_rejected(value):
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"repair": {"weld_epsilon_rel": value}})
+    assert "repair.weld_epsilon_rel" in str(e.value)
+
+
+def test_weld_distance_capped():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"repair": {"weld_epsilon_rel": 1.0}})
+    assert "weld_epsilon_rel" in str(e.value)
+
+
 def test_marked_sharp_edges_used():
     p, i = cube()
     params = {"features": {"use_angle": False, "use_open_boundaries": False}}

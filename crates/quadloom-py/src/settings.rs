@@ -19,7 +19,7 @@ enum Field<'a> {
 impl Field<'_> {
     fn type_name(&self) -> &'static str {
         match self {
-            Self::F64(_) => "number",
+            Self::F64(_) => "finite number",
             Self::Bool(_) => "bool",
             Self::Usize(_) => "non-negative integer",
         }

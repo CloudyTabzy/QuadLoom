@@ -136,7 +136,18 @@ def decode_result(result):
         raise ValueError("result has a face with fewer than 3 corners")
     if corners and max(corners) >= vertex_count:
         raise ValueError("result references a vertex that doesn't exist")
+    if _has_repeated_corner(offsets, corners, vertex_count):
+        raise ValueError("result has a face that uses the same vertex twice")
     return positions, offsets, corners
+
+
+def _has_repeated_corner(offsets, corners, vertex_count):
+    import numpy as np
+
+    sizes = np.diff(np.frombuffer(offsets, dtype=np.uint32).astype(np.int64))
+    face_of = np.repeat(np.arange(len(sizes), dtype=np.int64), sizes)
+    keys = face_of * max(vertex_count, 1) + np.frombuffer(corners, dtype=np.uint32).astype(np.int64)
+    return len(np.unique(keys)) != len(keys)
 
 
 def _mark_feature_edges(mesh, feature_edges):
