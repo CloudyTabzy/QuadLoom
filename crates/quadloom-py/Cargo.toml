@@ -1,0 +1,25 @@
+[package]
+name = "quadloom-py"
+description = "Python bindings (quadloom_native) for the QuadLoom remeshing core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+name = "quadloom_native"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+fault-injection = ["quadloom-core/fault-injection"]
+
+[dependencies]
+quadloom-core.workspace = true
+pyo3.workspace = true
+
+[lints]
+workspace = true
