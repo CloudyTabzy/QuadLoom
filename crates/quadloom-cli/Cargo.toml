@@ -1,0 +1,22 @@
+[package]
+name = "quadloom-cli"
+description = "Command-line runner for the QuadLoom remeshing core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "quadloom"
+path = "src/main.rs"
+
+[dependencies]
+quadloom-core = { workspace = true, features = ["serde"] }
+serde_json.workspace = true
+tobj.workspace = true
+stl_io.workspace = true
+
+[lints]
+workspace = true
