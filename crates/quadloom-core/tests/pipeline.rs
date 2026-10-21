@@ -1,3 +1,7 @@
+// `Params { .., ..Params::default() }` is needed when the fault-injection feature
+// adds a field, and "needless" without it.
+#![allow(clippy::needless_update)]
+
 use quadloom_core::{Control, ErrorKind, Params, Stage, run};
 
 fn tetrahedron() -> (Vec<f32>, Vec<u32>) {
@@ -43,7 +47,6 @@ fn run_counts_degenerate_faces() {
 }
 
 #[test]
-#[allow(clippy::needless_update)] // `..` covers `fault` when fault-injection is on
 fn run_refuses_oversized_input_before_allocating() {
     let (p, i) = tetrahedron();
     let params = Params { max_faces: 1, ..Params::default() };
@@ -54,7 +57,6 @@ fn run_refuses_oversized_input_before_allocating() {
 }
 
 #[test]
-#[allow(clippy::needless_update)] // `..` covers `fault` when fault-injection is on
 fn run_refuses_too_many_vertices() {
     // One face within the limit, but more vertices than any mesh within the
     // face limit could use (3 per face): loose-vertex blowups are refused too.
