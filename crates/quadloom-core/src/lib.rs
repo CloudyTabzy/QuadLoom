@@ -8,8 +8,17 @@
 
 pub mod control;
 pub mod error;
+pub mod fault;
 pub mod mesh;
+pub mod params;
+pub mod pipeline;
+pub mod validate;
 
 pub use control::{Control, Stage, Ticker};
 pub use error::{Error, ErrorKind};
+#[cfg(feature = "fault-injection")]
+pub use fault::Fault;
 pub use mesh::{InputMesh, PolyMesh};
+pub use params::Params;
+pub use pipeline::{RunOutput, run};
+pub use validate::ValidationReport;
