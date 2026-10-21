@@ -8,6 +8,7 @@
 
 pub mod components;
 pub mod control;
+pub mod edit;
 pub mod error;
 pub mod fault;
 pub mod features;
