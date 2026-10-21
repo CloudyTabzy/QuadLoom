@@ -91,8 +91,10 @@ def install_into_addon(wheel: Path) -> None:
         new, count = re.subn(r"(?m)^wheels\s*=.*$", line, text)
         if count != 1:
             raise BuildError(f"{MANIFEST.name}: expected exactly one 'wheels = ...' line, found {count}")
-        MANIFEST.write_text(new, encoding="utf-8")
-        print(f"==> manifest wheels -> {wheel.name}")
+        if new != text:
+            # newline="\n": the manifest is tracked in git with LF endings.
+            MANIFEST.write_text(new, encoding="utf-8", newline="\n")
+            print(f"==> manifest wheels -> {wheel.name}")
 
 
 def build_zip(blender: Path, dev: bool) -> Path:
@@ -105,9 +107,8 @@ def build_zip(blender: Path, dev: bool) -> Path:
     zips = list(out_dir.glob("quadloom-*.zip"))
     if len(zips) != 1:
         raise BuildError(f"expected one extension zip in {out_dir}, found {len(zips)}")
-    output = step("validate extension zip", [blender, "--factory-startup", "-c", "extension", "validate", zips[0]])
-    if "error" in output.lower():
-        raise BuildError(f"extension validate reported problems:\n{output}")
+    # `step` raises on a non-zero exit, which is how `extension validate` reports problems.
+    step("validate extension zip", [blender, "--factory-startup", "-c", "extension", "validate", zips[0]])
     return zips[0]
 
 
