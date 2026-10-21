@@ -5,3 +5,11 @@
 //! through [`Control`], and returns typed errors instead of panicking.
 
 #![forbid(unsafe_code)]
+
+pub mod control;
+pub mod error;
+pub mod mesh;
+
+pub use control::Stage;
+pub use error::{Error, ErrorKind};
+pub use mesh::{InputMesh, PolyMesh};
