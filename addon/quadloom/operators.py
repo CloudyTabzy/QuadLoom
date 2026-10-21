@@ -42,19 +42,24 @@ class Job:
 
 
 def job_running():
-    return _active_job is not None
+    """True while a job's worker thread is still running.
+
+    A finished job whose modal operator never collected it (the handler was
+    dropped by a file load, say) doesn't count, so it can never lock the add-on.
+    """
+    return _active_job is not None and not _active_job.done
 
 
 def start_job(context):
     """Snapshots the active object and starts a job. Raises on bad input."""
     global _active_job
-    if _active_job is not None:
+    if job_running():
         raise RuntimeError("a QuadLoom run is already in progress")
     settings = context.scene.quadloom
     kwargs = {"max_faces": settings.max_faces}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
-    snapshot = mesh_io.extract(context.active_object, context.evaluated_depsgraph_get())
+    snapshot = mesh_io.extract(context.active_object, context.evaluated_depsgraph_get(), settings.max_faces)
     job = Job(snapshot, kwargs)
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
@@ -103,6 +108,22 @@ def cancel_active_job(join_timeout=None):
         job.thread.join(join_timeout)
 
 
+def discard_active_job(join_timeout=5.0):
+    """Cancels, waits for, and forgets the active job. Its result (if any) is dropped.
+
+    Used when the context the job belongs to goes away: the add-on being
+    disabled, or a different .blend being loaded.
+    """
+    global _active_job
+    cancel_active_job(join_timeout)
+    _active_job = None
+
+
+@bpy.app.handlers.persistent
+def _on_load_pre(*_args):
+    discard_active_job()
+
+
 def _redraw_panels(context):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
@@ -114,7 +135,9 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
     bl_idname = "quadloom.remesh"
     bl_label = "Remesh"
     bl_description = "Remesh the active object into a new quad mesh. The original is left untouched"
-    bl_options = {"REGISTER"}
+    # UNDO: the step is pushed when the modal operator returns FINISHED, so
+    # Ctrl+Z removes exactly the result object.
+    bl_options = {"REGISTER", "UNDO"}
 
     _timer = None
     _job = None
@@ -131,7 +154,9 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
         if obj is None or obj.type != "MESH":
             cls.poll_message_set("Select a mesh object")
             return False
-        if len(obj.data.polygons) == 0:
+        # Faces may come from modifiers alone (Screw, Geometry Nodes, …); the
+        # evaluated mesh is checked when the run starts.
+        if len(obj.data.polygons) == 0 and not obj.modifiers:
             cls.poll_message_set("The active mesh has no faces")
             return False
         return True
@@ -140,6 +165,8 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
         try:
             self._job = start_job(context)
         except Exception as e:
+            last = context.scene.quadloom_last_run
+            last.status, last.message, last.stage, last.hint = "ERROR", str(e), "validate", ""
             self.report({"ERROR"}, f"QuadLoom could not start: {e}")
             return {"CANCELLED"}
         wm = context.window_manager
@@ -149,6 +176,10 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
 
     def modal(self, context, event):
         job = self._job
+        if _active_job is not job and not job.done:
+            # The job was discarded underneath us (add-on disabled, file loaded).
+            self._remove_timer(context)
+            return {"CANCELLED"}
         if event.type == "ESC" and event.value == "PRESS":
             job.control.cancel()
         if event.type != "TIMER":
@@ -158,11 +189,23 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
             context.scene.quadloom_last_run.message = f"{stage.replace('_', ' ')} {fraction:.0%}"
             _redraw_panels(context)
             return {"RUNNING_MODAL"}
-        context.window_manager.event_timer_remove(self._timer)
+        self._remove_timer(context)
         result, (level, message) = finish_job(context, job)
         self.report({level}, message)
         _redraw_panels(context)
         return result
+
+    def cancel(self, context):
+        # Blender calls this when it drops a running modal operator (file load,
+        # window closed). Stop the job and release the add-on for the next run.
+        self._remove_timer(context)
+        if _active_job is self._job:
+            discard_active_job()
+
+    def _remove_timer(self, context):
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
 
 
 class QUADLOOM_OT_cancel(bpy.types.Operator):
@@ -196,3 +239,13 @@ def _run_job_blocking(context, timeout_s=30.0, on_started=None):
 
 
 classes = (QUADLOOM_OT_remesh, QUADLOOM_OT_cancel)
+
+
+def register_handlers():
+    if _on_load_pre not in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.append(_on_load_pre)
+
+
+def unregister_handlers():
+    if _on_load_pre in bpy.app.handlers.load_pre:
+        bpy.app.handlers.load_pre.remove(_on_load_pre)

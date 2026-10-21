@@ -16,11 +16,14 @@ def register():
     for cls in _classes:
         bpy.utils.register_class(cls)
     props.register_props()
+    operators.register_handlers()
 
 
 def unregister():
-    # Stop any running job before its operator and properties disappear.
-    operators.cancel_active_job(join_timeout=5.0)
+    # Stop and forget any running job before its operator and properties
+    # disappear; Blender may reuse this module object on re-enable.
+    operators.unregister_handlers()
+    operators.discard_active_job(join_timeout=5.0)
     props.unregister_props()
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
