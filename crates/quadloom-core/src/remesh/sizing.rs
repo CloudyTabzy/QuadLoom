@@ -244,7 +244,8 @@ mod tests {
             }
         }
         let mesh = EditMesh::from_triangles(&p, &t, &[]).unwrap();
-        let sizes = vertex_sizes(&mesh, 0.1, &RemeshParams::default());
+        let params = RemeshParams { max_mult: 3.0, ..RemeshParams::default() };
+        let sizes = vertex_sizes(&mesh, 0.1, &params);
         let centre = (n / 2) * w + n / 2;
         assert!(sizes[centre as usize] > 0.1, "noise shrank the size to {}", sizes[centre as usize]);
         assert!(ring_curvature(&mesh, centre) > 10.0, "the one-ring alone sees the noise as curvature");

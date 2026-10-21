@@ -1,9 +1,11 @@
 //! The four remeshing passes over an [`EditMesh`].
 
 use glam::DVec3;
+use rayon::prelude::*;
 
 use super::Projector;
 use crate::edit::{EditMesh, HalfEdge, VertexKind};
+use crate::spatial::closest_point_on_triangle;
 
 const SPLIT_ABOVE: f64 = 4.0 / 3.0;
 const COLLAPSE_BELOW: f64 = 4.0 / 5.0;
@@ -143,9 +145,6 @@ impl Pass<'_> {
             }
             _ => self.mesh.position(keep),
         };
-        if !self.projector.within_bound(target) {
-            return false;
-        }
         // No new edge over the split limit, unless the edge it replaces was
         // already about that long (slivers' long sides): the splitter deals
         // with those next pass.
@@ -159,10 +158,35 @@ impl Pass<'_> {
         };
         let ring_ok =
             self.mesh.one_ring(keep).all(|n| fits(n, pk)) && self.mesh.one_ring(gone).all(|n| fits(n, pg));
-        if !ring_ok || !self.faces_survive(&[keep, gone], target, Some((keep, gone))) {
+        if !ring_ok
+            || !self.stays_close(keep, gone, target)
+            || !self.faces_survive(&[keep, gone], target, Some((keep, gone)))
+        {
             return false;
         }
         self.mesh.collapse_prechecked(h, target)
+    }
+
+    /// Whether the faces left by collapsing `gone` into `keep` at `target`
+    /// pass within the deviation bound of both endpoints' old positions.
+    /// Those points lie on the input surface, and coarsening is what pulls the
+    /// surface away from it: projection keeps every *vertex* on the surface,
+    /// but only this keeps the faces near where the removed vertex was.
+    fn stays_close(&self, keep: u32, gone: u32, target: DVec3) -> bool {
+        let mut faces = self.mesh.faces_around(keep);
+        faces.extend(self.mesh.faces_around(gone));
+        let moved = |v: u32| if v == keep || v == gone { target } else { self.mesh.position(v) };
+        let remaining: Vec<[DVec3; 3]> = faces
+            .iter()
+            .map(|&f| self.mesh.face_corners(f))
+            .filter(|c| !(c.contains(&keep) && c.contains(&gone)))
+            .map(|c| c.map(moved))
+            .collect();
+        [self.mesh.position(keep), self.mesh.position(gone)].into_iter().all(|q| {
+            remaining.iter().any(|&[a, b, c]| {
+                (closest_point_on_triangle(q, a, b, c) - q).length() <= self.projector.max_distance
+            })
+        })
     }
 
     /// Whether moving each of `movers` to `target` keeps every remaining face
@@ -252,44 +276,50 @@ impl Pass<'_> {
 
     /// Moves each free vertex toward its neighbours' centroid within the
     /// tangent plane, and each feature vertex along its feature line, then
-    /// projects them back; corners stay put.
+    /// projects them back; corners stay put. Targets are computed in parallel
+    /// from the current positions, then each move is checked and applied in
+    /// vertex order (so the result doesn't depend on the thread count).
     pub fn smooth_tangential(&mut self) {
-        for v in 0..self.mesh.vertex_slots() as u32 {
-            if !self.mesh.is_vertex_alive(v) {
-                continue;
-            }
-            let p = self.mesh.position(v);
-            let target = match self.mesh.kind(v) {
-                VertexKind::Corner => continue,
-                VertexKind::Free => {
-                    let ring: Vec<u32> = self.mesh.one_ring(v).collect();
-                    if ring.is_empty() {
-                        continue;
-                    }
-                    let centroid =
-                        ring.iter().map(|&n| self.mesh.position(n)).sum::<DVec3>() / ring.len() as f64;
-                    let normal = self
-                        .mesh
-                        .faces_around(v)
-                        .iter()
-                        .map(|&f| self.mesh.face_normal(f))
-                        .sum::<DVec3>()
-                        .normalize_or_zero();
-                    let delta = centroid - p;
-                    self.projector.onto_surface(p + SMOOTH_STEP * (delta - normal * delta.dot(normal)))
-                }
-                VertexKind::Feature => {
-                    let ends = self.mesh.feature_neighbours(v);
-                    let [e0, e1] = ends.as_slice() else { continue };
-                    let (q0, q1) = (self.mesh.position(*e0), self.mesh.position(*e1));
-                    let tangent = (q1 - q0).normalize_or_zero();
-                    let delta = 0.5 * (q0 + q1) - p;
-                    self.projector.onto_features(p + SMOOTH_STEP * tangent * delta.dot(tangent))
-                }
-            };
+        let (mesh, projector) = (&*self.mesh, self.projector);
+        let moves: Vec<(u32, DVec3)> = (0..mesh.vertex_slots() as u32)
+            .into_par_iter()
+            .filter_map(|v| smoothing_target(mesh, projector, v).map(|t| (v, t)))
+            .collect();
+        for (v, target) in moves {
             if self.faces_survive(&[v], target, None) {
                 self.mesh.set_position(v, target);
             }
+        }
+    }
+}
+
+/// Where tangential smoothing would move `v` (`None` for corners, dead or
+/// isolated vertices).
+fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DVec3> {
+    if !mesh.is_vertex_alive(v) {
+        return None;
+    }
+    let p = mesh.position(v);
+    match mesh.kind(v) {
+        VertexKind::Corner => None,
+        VertexKind::Free => {
+            let ring: Vec<u32> = mesh.one_ring(v).collect();
+            if ring.is_empty() {
+                return None;
+            }
+            let centroid = ring.iter().map(|&n| mesh.position(n)).sum::<DVec3>() / ring.len() as f64;
+            let normal =
+                mesh.faces_around(v).iter().map(|&f| mesh.face_normal(f)).sum::<DVec3>().normalize_or_zero();
+            let delta = centroid - p;
+            Some(projector.onto_surface(p + SMOOTH_STEP * (delta - normal * delta.dot(normal))))
+        }
+        VertexKind::Feature => {
+            let ends = mesh.feature_neighbours(v);
+            let [e0, e1] = ends.as_slice() else { return None };
+            let (q0, q1) = (mesh.position(*e0), mesh.position(*e1));
+            let tangent = (q1 - q0).normalize_or_zero();
+            let delta = 0.5 * (q0 + q1) - p;
+            Some(projector.onto_features(p + SMOOTH_STEP * tangent * delta.dot(tangent)))
         }
     }
 }

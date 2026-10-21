@@ -361,3 +361,17 @@ fn adaptive_remesh_of_corrugated_slivers_neither_folds_nor_explodes() {
         assert!(n.z > 0.5, "folded face {:?}: {report:?}", [pa, pb, pc]);
     }
 }
+
+#[test]
+fn deviation_bound_limits_coarsening() {
+    // A fine unit sphere at a target far too coarse for it: collapses stop
+    // where the surface would pull away from the input by more than the bound.
+    let (p, t) = sphere_mesh(32, 64);
+    let prm = RemeshParams { target_edge_rel: 0.4, max_surface_distance_rel: 0.002, ..params(0.4) };
+    let bound = 0.002 * bbox_diagonal(&p);
+    let (mesh, report) = run(&p, &t, &[], &prm);
+    assert!(mesh.triangles.len() < t.len(), "{report:?}");
+    let output = crate::spatial::TriangleBvh::new(&mesh.positions, &mesh.triangles);
+    let worst = p.iter().filter_map(|&q| output.closest_point(q)).map(|(_, d)| d).fold(0.0, f64::max);
+    assert!(worst <= 2.0 * bound, "input vertex {:.2}× the bound from the result: {report:?}", worst / bound);
+}

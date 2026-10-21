@@ -11,7 +11,8 @@ pub struct Projector {
     /// Feature segments stored as degenerate triangles `(a, b, b)`; the BVH's
     /// closest-point routine handles them as segments.
     features: TriangleBvh,
-    /// Largest allowed distance from the input surface.
+    /// Largest allowed distance between the remeshed surface and the input
+    /// (see `Pass::stays_close`).
     pub max_distance: f64,
 }
 
@@ -41,9 +42,5 @@ impl Projector {
 
     pub fn surface_distance(&self, p: DVec3) -> f64 {
         self.surface.closest_point(p).map_or(f64::INFINITY, |(_, d)| d)
-    }
-
-    pub fn within_bound(&self, p: DVec3) -> bool {
-        self.surface_distance(p) <= self.max_distance
     }
 }

@@ -38,7 +38,8 @@ pub struct RemeshParams {
     pub adaptive: bool,
     pub min_mult: f64,
     pub max_mult: f64,
-    /// Furthest any vertex may move from the input surface, × bbox diagonal.
+    /// Furthest the remeshed surface may pull away from the input where a
+    /// vertex is collapsed, × bbox diagonal.
     pub max_surface_distance_rel: f64,
 }
 
@@ -50,7 +51,7 @@ impl Default for RemeshParams {
             iterations: 15,
             adaptive: true,
             min_mult: 0.3,
-            max_mult: 3.0,
+            max_mult: 1.0,
             max_surface_distance_rel: 1.0 / 2500.0,
         }
     }
