@@ -6,10 +6,12 @@
 //! a cross share one value, and smoothness is a quadratic energy over the
 //! faces' shared edges. See `docs/superpowers/plans/2026-10-23-m4-cross-field.md`.
 
+pub mod constraints;
 pub mod frames;
 pub mod singular;
 pub mod solve;
 
+pub use constraints::{curvature_alignment, hard_constraints, sufficient_features};
 pub use frames::{Cx, FaceFrames};
 pub use singular::vertex_indices;
 pub use solve::{Field, Hard, ROSY, Soft, smooth_field};
