@@ -55,6 +55,19 @@ fn out_of_range_index_exits_2() {
 }
 
 #[test]
+fn uv_seams_do_not_split_vertices() {
+    // Two triangles sharing edge 2-3; vertex 3 uses a different UV in each face.
+    let obj = "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 1 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nvt 1 1\nvt 0.5 0.5\n\
+               f 1/1 2/2 4/4\nf 1/1 4/5 3/3\n";
+    let input = scratch("uv_seam.obj", obj);
+    let out = quadloom(&["info", input.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["vertices"], 4);
+    assert_eq!(json["boundary_edges"], 4);
+}
+
+#[test]
 fn usage_error_exits_64() {
     let out = quadloom(&["frobnicate"]);
     assert_eq!(out.status.code(), Some(64));

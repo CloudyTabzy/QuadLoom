@@ -31,8 +31,11 @@ pub fn load(path: &Path) -> Result<Buffers, IoError> {
 }
 
 fn load_obj(path: &Path) -> Result<Buffers, IoError> {
+    // `single_index: false` keeps `indices` as pure position indices. With
+    // `true`, tobj splits vertices at every UV/normal seam, which turns seams
+    // into holes in the topology.
     let options = tobj::LoadOptions {
-        single_index: true,
+        single_index: false,
         triangulate: true,
         ignore_points: true,
         ignore_lines: true,
