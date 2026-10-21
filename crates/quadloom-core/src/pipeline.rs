@@ -29,14 +29,7 @@ pub fn run(
     control: &Control,
 ) -> Result<RunOutput, Error> {
     control.checkpoint(Stage::Validate)?;
-    let faces = indices.len() / 3;
-    if faces > params.max_faces {
-        return Err(Error::invalid_input(
-            Stage::Validate,
-            format!("mesh has {faces} faces, above the limit {}", params.max_faces),
-        )
-        .with_hint("decimate the mesh first, or raise the face limit under Advanced"));
-    }
+    check_limits(positions.len() / 3, indices.len(), params)?;
 
     let mut timings_ms = Vec::new();
     let started = Instant::now();
@@ -53,6 +46,37 @@ pub fn run(
     timings_ms.push((Stage::Output, elapsed_ms(started)));
 
     Ok(RunOutput { mesh, validation, timings_ms })
+}
+
+/// Refuses inputs that are too large, using only their sizes, so callers (the
+/// Python binding, the add-on) can check *before* copying any data.
+///
+/// The vertex limit is three per allowed face: no mesh within the face limit
+/// can use more, so anything beyond that is loose-vertex bloat.
+pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) -> Result<(), Error> {
+    let stage = Stage::Validate;
+    let hint = "decimate the mesh first, or raise the face limit under Advanced";
+    let faces = index_count / 3;
+    if faces > params.max_faces {
+        return Err(Error::invalid_input(
+            stage,
+            format!("mesh has {faces} faces, above the limit {}", params.max_faces),
+        )
+        .with_hint(hint));
+    }
+    let max_vertices = params.max_faces.saturating_mul(3);
+    if vertex_count > max_vertices {
+        return Err(Error::invalid_input(
+            stage,
+            format!("mesh has {vertex_count} vertices, above the limit {max_vertices}"),
+        )
+        .with_hint("remove loose vertices, or raise the face limit under Advanced"));
+    }
+    let addressable = u32::MAX as usize;
+    if vertex_count > addressable || index_count > addressable {
+        return Err(Error::invalid_input(stage, "mesh is too large to index with 32-bit indices"));
+    }
+    Ok(())
 }
 
 fn elapsed_ms(started: Instant) -> f64 {

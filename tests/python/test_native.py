@@ -83,6 +83,21 @@ def test_oversized_rejected():
     assert e.value.hint
 
 
+def test_limits_checked_before_conversion():
+    # Over the face limit *and* the wrong positions dtype: the size check must
+    # win, proving it runs before any buffer is converted or copied.
+    _, i = tet()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(array("d", TET_POSITIONS), i, ql.Control(), max_faces=1)
+    assert "limit" in str(e.value)
+
+
+def test_too_many_vertices_rejected():
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(array("f", [0.0] * 12), array("I", [0, 1, 2]), ql.Control(), max_faces=1)
+    assert "vertices" in str(e.value)
+
+
 def test_panic_becomes_internal_error():
     p, i = tet()
     with pytest.raises(ql.InternalError) as e:

@@ -82,9 +82,14 @@ mod quadloom_native {
         max_faces: usize,
         fault: Option<&str>,
     ) -> PyResult<Bound<'py, PyDict>> {
+        let params = params(py, max_faces, fault)?;
+        // Refuse oversized inputs from their sizes alone, before copying anything.
+        let vertex_floats = convert::item_count(py, positions, "positions")?;
+        let index_count = convert::item_count(py, indices, "indices")?;
+        quadloom_core::check_limits(vertex_floats / 3, index_count, &params)
+            .map_err(|e| errors::to_py_err(py, &e))?;
         let positions = convert::positions(py, positions)?;
         let indices = convert::indices(py, indices)?;
-        let params = params(py, max_faces, fault)?;
         let control = Arc::clone(&control.get().inner);
 
         let outcome = py.detach(move || {

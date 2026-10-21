@@ -20,5 +20,5 @@ pub use error::{Error, ErrorKind};
 pub use fault::Fault;
 pub use mesh::{InputMesh, PolyMesh};
 pub use params::Params;
-pub use pipeline::{RunOutput, run};
+pub use pipeline::{RunOutput, check_limits, run};
 pub use validate::ValidationReport;

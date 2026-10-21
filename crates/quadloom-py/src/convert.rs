@@ -3,12 +3,19 @@
 //! Inputs are copied out of the Python buffer with `PyBuffer::to_vec`, the safe
 //! path: no borrowed views into Python memory outlive the call.
 
-use pyo3::buffer::PyBuffer;
+use pyo3::buffer::{PyBuffer, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::{RunOutput, ValidationReport};
 
 use crate::errors::invalid_argument;
+
+/// Number of elements in a buffer argument, without copying it.
+pub fn item_count(py: Python<'_>, obj: &Bound<'_, PyAny>, name: &str) -> PyResult<usize> {
+    PyUntypedBuffer::get(obj)
+        .map(|buffer| buffer.item_count())
+        .map_err(|e| invalid_argument(py, format!("{name} must be a buffer (e.g. array.array): {e}")))
+}
 
 /// Reads `positions` as a buffer of `float32`.
 pub fn positions(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<f32>> {

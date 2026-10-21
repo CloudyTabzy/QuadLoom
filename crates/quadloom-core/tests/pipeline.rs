@@ -54,6 +54,30 @@ fn run_refuses_oversized_input_before_allocating() {
 }
 
 #[test]
+#[allow(clippy::needless_update)] // `..` covers `fault` when fault-injection is on
+fn run_refuses_too_many_vertices() {
+    // One face within the limit, but more vertices than any mesh within the
+    // face limit could use (3 per face): loose-vertex blowups are refused too.
+    let p = [0.0f32; 12];
+    let params = Params { max_faces: 1, ..Params::default() };
+    let err = run(&p, &[0, 1, 2], &params, &Control::default()).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput);
+    assert!(err.message.contains("4 vertices"), "{}", err.message);
+    assert!(err.message.contains("limit 3"), "{}", err.message);
+}
+
+#[test]
+fn limits_are_exposed_for_bindings() {
+    let params = Params { max_faces: 10, ..Params::default() };
+    assert!(quadloom_core::check_limits(30, 30, &params).is_ok());
+    assert!(quadloom_core::check_limits(31, 30, &params).is_err());
+    assert!(quadloom_core::check_limits(30, 33, &params).is_err());
+    // Index space: more than u32::MAX entries can't be addressed.
+    let huge = Params { max_faces: usize::MAX, ..Params::default() };
+    assert!(quadloom_core::check_limits(3, u32::MAX as usize + 3, &huge).is_err());
+}
+
+#[test]
 fn run_honours_cancel() {
     let (p, i) = tetrahedron();
     let control = Control::default();
