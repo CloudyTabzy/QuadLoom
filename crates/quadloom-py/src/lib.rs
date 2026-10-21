@@ -9,6 +9,7 @@
 
 mod convert;
 mod errors;
+mod settings;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
@@ -73,28 +74,48 @@ mod quadloom_native {
 
     /// Runs the pipeline. See the add-on's `bridge.py` for the result layout.
     #[pyfunction]
-    #[pyo3(signature = (positions, indices, control, *, max_faces = quadloom_core::params::DEFAULT_MAX_FACES, fault = None))]
+    #[pyo3(signature = (
+        positions, indices, control, *,
+        sharp_edges = None, seam_edges = None, material = None, face_set = None, params = None,
+        max_faces = quadloom_core::params::DEFAULT_MAX_FACES, fault = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
     fn run<'py>(
         py: Python<'py>,
         positions: &Bound<'py, PyAny>,
         indices: &Bound<'py, PyAny>,
         control: &Bound<'py, Control>,
+        sharp_edges: Option<&Bound<'py, PyAny>>,
+        seam_edges: Option<&Bound<'py, PyAny>>,
+        material: Option<&Bound<'py, PyAny>>,
+        face_set: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyDict>>,
         max_faces: usize,
         fault: Option<&str>,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let params = params(py, max_faces, fault)?;
+        let mut core_params = base_params(py, max_faces, fault)?;
+        settings::apply(py, &mut core_params, params)?;
+        let params = core_params;
         // Refuse oversized inputs from their sizes alone, before copying anything.
         let vertex_floats = convert::item_count(py, positions, "positions")?;
         let index_count = convert::item_count(py, indices, "indices")?;
         quadloom_core::check_limits(vertex_floats / 3, index_count, &params)
             .map_err(|e| errors::to_py_err(py, &e))?;
         let positions = convert::positions(py, positions)?;
-        let indices = convert::indices(py, indices)?;
+        let indices = convert::indices(py, indices, "indices")?;
+        let feature_input = quadloom_core::features::FeatureInput {
+            sharp_edges: convert::edge_pairs(py, sharp_edges, "sharp_edges")?,
+            seam_edges: convert::edge_pairs(py, seam_edges, "seam_edges")?,
+            material: convert::groups(py, material, "material")?,
+            face_set: convert::groups(py, face_set, "face_set")?,
+        };
         let control = Arc::clone(&control.get().inner);
 
         let outcome = py.detach(move || {
-            catch_unwind(AssertUnwindSafe(|| quadloom_core::run(&positions, &indices, &params, &control)))
-                .map_err(|payload| (payload, control.progress().0))
+            catch_unwind(AssertUnwindSafe(|| {
+                quadloom_core::run(&positions, &indices, &feature_input, &params, &control)
+            }))
+            .map_err(|payload| (payload, control.progress().0))
         });
 
         match outcome {
@@ -106,7 +127,7 @@ mod quadloom_native {
 }
 
 #[cfg(feature = "fault-injection")]
-fn params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<quadloom_core::Params> {
+fn base_params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<quadloom_core::Params> {
     let fault = fault.map(|spec| {
         parse_fault(spec).ok_or_else(|| {
             errors::invalid_argument(
@@ -115,15 +136,15 @@ fn params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<qua
             )
         })
     });
-    Ok(quadloom_core::Params { max_faces, fault: fault.transpose()? })
+    Ok(quadloom_core::Params { max_faces, fault: fault.transpose()?, ..quadloom_core::Params::default() })
 }
 
 #[cfg(not(feature = "fault-injection"))]
-fn params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<quadloom_core::Params> {
+fn base_params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResult<quadloom_core::Params> {
     if fault.is_some() {
         return Err(errors::invalid_argument(py, "fault injection not available in this build"));
     }
-    Ok(quadloom_core::Params { max_faces })
+    Ok(quadloom_core::Params { max_faces, ..quadloom_core::Params::default() })
 }
 
 #[cfg(feature = "fault-injection")]

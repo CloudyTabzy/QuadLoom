@@ -23,8 +23,19 @@ fn info_prints_validation_json() {
     let out = quadloom(&["info", input.to_str().unwrap()]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(json["faces"], 4);
-    assert_eq!(json["boundary_edges"], 0);
+    assert_eq!(json["validation"]["faces"], 4);
+    assert_eq!(json["validation"]["boundary_edges"], 0);
+}
+
+#[test]
+fn info_reports_repair_and_features() {
+    let input = scratch("info_tri_cube.obj", TRI_CUBE_OBJ);
+    let out = quadloom(&["info", input.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["repair"]["components"], 1);
+    assert_eq!(json["features"]["edges"], 12);
+    assert_eq!(json["features"]["corners"], 8);
 }
 
 #[test]
@@ -63,8 +74,8 @@ fn uv_seams_do_not_split_vertices() {
     let out = quadloom(&["info", input.to_str().unwrap()]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(json["vertices"], 4);
-    assert_eq!(json["boundary_edges"], 4);
+    assert_eq!(json["validation"]["vertices"], 4);
+    assert_eq!(json["validation"]["boundary_edges"], 4);
 }
 
 const QUAD_CUBE_OBJ: &str = "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n\

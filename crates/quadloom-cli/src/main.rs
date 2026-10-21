@@ -1,7 +1,7 @@
 //! `quadloom`: run the QuadLoom core on mesh files.
 //!
 //! ```text
-//! quadloom info <mesh.obj|stl>          print the validation report as JSON
+//! quadloom info <mesh.obj|stl>          print validation, repair and feature reports as JSON
 //! quadloom run  <in.obj|stl> <out.obj>  run the pipeline and write the result
 //! quadloom metrics <result.obj> [--reference <input.obj|stl>]
 //!                                       quad quality (+ surface distance) as JSON
@@ -77,7 +77,10 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
     match args {
         ["info", input] => {
             let output = run_file(Path::new(input))?;
-            println!("{}", json!(output.validation));
+            println!(
+                "{}",
+                json!({ "validation": output.validation, "repair": output.repair, "features": output.features })
+            );
             Ok(())
         }
         ["run", input, output_path] => {
@@ -92,6 +95,9 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "output_faces": output.mesh.face_count(),
                     "output_vertices": output.mesh.positions.len(),
                     "validation": output.validation,
+                    "repair": output.repair,
+                    "features": output.features,
+                    "components": output.components,
                     "timings_ms": timings,
                 })
             );
@@ -122,5 +128,6 @@ fn metrics(result: &Path, reference: Option<&Path>) -> Result<(), Failure> {
 
 fn run_file(path: &Path) -> Result<RunOutput, Failure> {
     let (positions, indices) = io::load(path)?;
-    Ok(quadloom_core::run(&positions, &indices, &Params::default(), &Control::default())?)
+    let features = quadloom_core::features::FeatureInput::default();
+    Ok(quadloom_core::run(&positions, &indices, &features, &Params::default(), &Control::default())?)
 }

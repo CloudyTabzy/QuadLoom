@@ -26,7 +26,8 @@ pub struct RepairParams {
     pub remove_degenerate: bool,
     pub split_non_manifold: bool,
     pub orient: bool,
-    /// Components with fewer faces are skipped (and reported).
+    /// Components with fewer faces are skipped (and reported), except that the
+    /// largest component is always kept.
     pub min_component_faces: usize,
 }
 
@@ -141,8 +142,13 @@ pub fn repair(
     let mut kept = Vec::with_capacity(triangles.len());
     let mut kept_origin = Vec::with_capacity(triangles.len());
     let mut components_out = Vec::new();
-    for component in components::split(&triangles, positions.len()) {
-        if component.faces.len() < params.min_component_faces {
+    let all_components = components::split(&triangles, positions.len());
+    // Tiny parts are skipped only next to something bigger: the largest part
+    // always survives, so a small but complete mesh is never thrown away.
+    let largest = all_components.iter().map(|c| c.faces.len()).max().unwrap_or(0);
+    let min_faces = params.min_component_faces.min(largest);
+    for component in all_components {
+        if component.faces.len() < min_faces {
             report.skipped_small_components += 1;
             report.skipped_small_component_faces += component.faces.len();
             continue;
@@ -299,6 +305,18 @@ mod tests {
             original.sort_by(|a, b| a.partial_cmp(b).unwrap());
             assert_eq!(repaired, original);
         }
+    }
+
+    #[test]
+    fn largest_part_is_kept_even_if_small() {
+        // A lone 2-triangle quad is below the 8-face minimum, but it's the whole mesh.
+        let p = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
+        let input = InputMesh::from_buffers(&p, &[0, 1, 2, 0, 2, 3]).unwrap();
+        let (mesh, components, report) =
+            repair(&input, &RepairParams::default(), &Control::default()).unwrap();
+        assert_eq!(mesh.triangles.len(), 2);
+        assert_eq!(components.len(), 1);
+        assert_eq!(report.skipped_small_components, 0);
     }
 
     #[test]

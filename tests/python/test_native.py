@@ -98,6 +98,70 @@ def test_too_many_vertices_rejected():
     assert "vertices" in str(e.value)
 
 
+CUBE_P = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1]
+CUBE_T = [0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5]
+
+
+def cube():
+    return array("f", CUBE_P), array("I", CUBE_T)
+
+
+def test_repair_and_feature_reports_present():
+    p, i = cube()
+    result = ql.run(p, i, ql.Control())
+    assert result["components"] == 1
+    assert result["repair"]["welded_vertices"] == 0
+    assert result["features"]["edges"] == 12
+    assert result["features"]["corners"] == 8
+    pairs = struct.unpack(f"<{2 * 12}I", result["feature_edges"])
+    assert len(pairs) == 24
+
+
+def test_params_select_feature_sources():
+    p, i = cube()
+    result = ql.run(p, i, ql.Control(), params={"features": {"use_angle": False}})
+    assert result["features"]["edges"] == 0
+
+
+def test_params_unknown_key_rejected():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"features": {"angel_deg": 30.0}})
+    assert "features.angel_deg" in str(e.value)
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"smoothing": {}})
+    assert "smoothing" in str(e.value)
+
+
+def test_params_wrong_type_rejected():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"repair": {"orient": "yes"}})
+    assert "repair.orient" in str(e.value)
+
+
+def test_marked_sharp_edges_used():
+    p, i = cube()
+    params = {"features": {"use_angle": False, "use_open_boundaries": False}}
+    result = ql.run(p, i, ql.Control(), sharp_edges=array("I", [0, 1, 1, 2]), params=params)
+    assert result["features"]["edges"] == 2
+    assert result["features"]["by_source"][1] == 2
+
+
+def test_material_length_must_match():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), material=array("i", [0, 1]))
+    assert "material" in str(e.value)
+
+
+def test_odd_edge_buffer_rejected():
+    p, i = cube()
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), seam_edges=array("I", [0, 1, 2]))
+    assert "seam_edges" in str(e.value)
+
+
 def test_panic_becomes_internal_error():
     p, i = tet()
     with pytest.raises(ql.InternalError) as e:

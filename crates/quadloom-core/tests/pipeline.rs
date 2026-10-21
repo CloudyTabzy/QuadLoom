@@ -2,6 +2,7 @@
 // adds a field, and "needless" without it.
 #![allow(clippy::needless_update)]
 
+use quadloom_core::features::FeatureInput;
 use quadloom_core::{Control, ErrorKind, Params, Stage, run};
 
 fn tetrahedron() -> (Vec<f32>, Vec<u32>) {
@@ -13,7 +14,7 @@ fn tetrahedron() -> (Vec<f32>, Vec<u32>) {
 #[test]
 fn run_passthrough_preserves_tetrahedron() {
     let (p, i) = tetrahedron();
-    let out = run(&p, &i, &Params::default(), &Control::default()).unwrap();
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
     assert_eq!(out.mesh.face_count(), 4);
     assert_eq!(out.mesh.positions.len(), 4);
     assert_eq!(out.validation.faces, 4);
@@ -31,7 +32,7 @@ fn run_reports_two_components() {
         5.0, 0.0, 0.0, 6.0, 0.0, 0.0, 5.0, 1.0, 0.0,
     ];
     let i = [0, 1, 2, 3, 4, 5];
-    let out = run(&p, &i, &Params::default(), &Control::default()).unwrap();
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
     assert_eq!(out.validation.components, 2);
     assert_eq!(out.validation.boundary_edges, 6);
 }
@@ -42,7 +43,7 @@ fn run_counts_degenerate_faces() {
     // face 2 repeats a vertex index.
     let p = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 0.0];
     let i = [0, 1, 2, 0, 1, 3, 0, 0, 1];
-    let out = run(&p, &i, &Params::default(), &Control::default()).unwrap();
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
     assert_eq!(out.validation.degenerate_faces, 2);
 }
 
@@ -50,7 +51,7 @@ fn run_counts_degenerate_faces() {
 fn run_refuses_oversized_input_before_allocating() {
     let (p, i) = tetrahedron();
     let params = Params { max_faces: 1, ..Params::default() };
-    let err = run(&p, &i[..6], &params, &Control::default()).unwrap_err();
+    let err = run(&p, &i[..6], &FeatureInput::default(), &params, &Control::default()).unwrap_err();
     assert_eq!(err.kind, ErrorKind::InvalidInput);
     assert!(err.message.contains("2 faces"), "{}", err.message);
     assert!(err.message.contains("limit 1"), "{}", err.message);
@@ -62,7 +63,7 @@ fn run_refuses_too_many_vertices() {
     // face limit could use (3 per face): loose-vertex blowups are refused too.
     let p = [0.0f32; 12];
     let params = Params { max_faces: 1, ..Params::default() };
-    let err = run(&p, &[0, 1, 2], &params, &Control::default()).unwrap_err();
+    let err = run(&p, &[0, 1, 2], &FeatureInput::default(), &params, &Control::default()).unwrap_err();
     assert_eq!(err.kind, ErrorKind::InvalidInput);
     assert!(err.message.contains("4 vertices"), "{}", err.message);
     assert!(err.message.contains("limit 3"), "{}", err.message);
@@ -84,7 +85,7 @@ fn run_honours_cancel() {
     let (p, i) = tetrahedron();
     let control = Control::default();
     control.cancel();
-    let err = run(&p, &i, &Params::default(), &control).unwrap_err();
+    let err = run(&p, &i, &FeatureInput::default(), &Params::default(), &control).unwrap_err();
     assert_eq!(err.kind, ErrorKind::Cancelled);
 }
 
@@ -98,7 +99,7 @@ mod faults {
     fn fault_error_is_returned() {
         let (p, i) = tetrahedron();
         let params = Params { fault: Some(Fault::Error(Stage::Validate)), ..Params::default() };
-        let err = run(&p, &i, &params, &Control::default()).unwrap_err();
+        let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
         assert_eq!(err.kind, ErrorKind::Internal);
         assert_eq!(err.stage, Stage::Validate);
     }
@@ -107,7 +108,8 @@ mod faults {
     fn fault_panic_panics() {
         let (p, i) = tetrahedron();
         let params = Params { fault: Some(Fault::Panic(Stage::Validate)), ..Params::default() };
-        let caught = std::panic::catch_unwind(|| run(&p, &i, &params, &Control::default()));
+        let caught =
+            std::panic::catch_unwind(|| run(&p, &i, &FeatureInput::default(), &params, &Control::default()));
         assert!(caught.is_err(), "the injected panic must unwind out of run()");
     }
 
@@ -122,9 +124,51 @@ mod faults {
                 std::thread::sleep(Duration::from_millis(50));
                 control.cancel();
             });
-            run(&p, &i, &params, &control)
+            run(&p, &i, &FeatureInput::default(), &params, &control)
         });
         assert_eq!(result.unwrap_err().kind, ErrorKind::Cancelled);
         assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
     }
+}
+
+#[test]
+fn run_with_features_on_cube() {
+    // A unit cube whose 24 corners are split per face, like a glTF export.
+    let corners = [
+        [0., 0., 0.],
+        [1., 0., 0.],
+        [1., 1., 0.],
+        [0., 1., 0.],
+        [0., 0., 1.],
+        [1., 0., 1.],
+        [1., 1., 1.],
+        [0., 1., 1.],
+    ];
+    let quads = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [3, 7, 6, 2], [0, 4, 7, 3], [1, 2, 6, 5]];
+    let (mut p, mut i) = (Vec::new(), Vec::new());
+    for q in quads {
+        let base = (p.len() / 3) as u32;
+        for c in q {
+            p.extend(corners[c].map(|x: f64| x as f32));
+        }
+        i.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
+    assert_eq!(out.repair.welded_vertices, 16);
+    assert_eq!(out.components, 1);
+    assert_eq!(out.mesh.positions.len(), 8);
+    assert_eq!(out.features.edges, 12);
+    assert_eq!(out.features.corners, 8);
+    assert_eq!(out.feature_edges.len(), 12);
+    assert!(out.timings_ms.iter().any(|(s, _)| *s == Stage::Repair));
+    assert!(out.timings_ms.iter().any(|(s, _)| *s == Stage::Features));
+}
+
+#[test]
+fn feature_groups_of_wrong_length_are_rejected() {
+    let (p, i) = tetrahedron();
+    let input = FeatureInput { material: Some(vec![0, 1]), ..FeatureInput::default() };
+    let err = run(&p, &i, &input, &Params::default(), &Control::default()).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput);
+    assert!(err.message.contains("material"), "{}", err.message);
 }
