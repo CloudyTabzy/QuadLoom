@@ -71,6 +71,8 @@ pub struct RepairedMesh {
     pub vertex_map: Vec<Option<u32>>,
     /// Every repaired vertex descending from each input vertex (several after a split).
     pub vertex_copies: Vec<Vec<u32>>,
+    /// The input triangle each repaired triangle comes from.
+    pub face_origin: Vec<u32>,
 }
 
 /// Runs the repair ladder: weld → degenerate removal → manifold split →
@@ -92,6 +94,7 @@ pub fn repair(
     } else {
         (input.positions().to_vec(), input.triangles().to_vec(), (0..input.vertex_count() as u32).collect())
     };
+    let mut face_origin: Vec<u32> = (0..triangles.len() as u32).collect();
     // `ancestor[v]`: the welded vertex each current vertex descends from.
     let mut ancestor: Vec<u32> = (0..positions.len() as u32).collect();
     control.set_progress(stage, 0.2);
@@ -102,6 +105,7 @@ pub fn repair(
         report.removed_repeated = d.removed_repeated;
         report.removed_zero_area = d.removed_zero_area;
         report.removed_duplicates = d.removed_duplicates;
+        face_origin = d.kept;
         triangles = d.triangles;
     }
     control.set_progress(stage, 0.35);
@@ -135,6 +139,7 @@ pub fn repair(
     control.set_progress(stage, 0.75);
 
     let mut kept = Vec::with_capacity(triangles.len());
+    let mut kept_origin = Vec::with_capacity(triangles.len());
     let mut components_out = Vec::new();
     for component in components::split(&triangles, positions.len()) {
         if component.faces.len() < params.min_component_faces {
@@ -144,6 +149,7 @@ pub fn repair(
         }
         let start = kept.len() as u32;
         kept.extend(component.faces.iter().map(|&f| triangles[f as usize]));
+        kept_origin.extend(component.faces.iter().map(|&f| face_origin[f as usize]));
         components_out.push(Component { faces: (start..kept.len() as u32).collect() });
     }
     report.components = components_out.len();
@@ -176,7 +182,13 @@ pub fn repair(
 
     control.set_progress(stage, 1.0);
     Ok((
-        RepairedMesh { positions: compact_positions, triangles, vertex_map, vertex_copies },
+        RepairedMesh {
+            positions: compact_positions,
+            triangles,
+            vertex_map,
+            vertex_copies,
+            face_origin: kept_origin,
+        },
         components_out,
         report,
     ))
@@ -269,6 +281,24 @@ mod tests {
         assert_eq!(components.len(), 1);
         assert_eq!(mesh.triangles.len(), 12);
         assert_eq!(mesh.vertex_map[base as usize], None, "vertices of skipped parts map to nothing");
+    }
+
+    #[test]
+    fn face_origin_points_at_input_triangles() {
+        let input = messy_cube();
+        let (mesh, _, _) = repair(&input, &RepairParams::default(), &Control::default()).unwrap();
+        assert_eq!(mesh.face_origin.len(), mesh.triangles.len());
+        assert!(!mesh.face_origin.contains(&12), "the duplicate (input triangle 12) was removed");
+        for (t, &origin) in mesh.triangles.iter().zip(&mesh.face_origin) {
+            let mut repaired: Vec<_> = t.iter().map(|&v| mesh.positions[v as usize].to_array()).collect();
+            let mut original: Vec<_> = input.triangles()[origin as usize]
+                .iter()
+                .map(|&v| input.positions()[v as usize].to_array())
+                .collect();
+            repaired.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            original.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            assert_eq!(repaired, original);
+        }
     }
 
     #[test]

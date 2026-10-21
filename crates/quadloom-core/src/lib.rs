@@ -10,6 +10,7 @@ pub mod components;
 pub mod control;
 pub mod error;
 pub mod fault;
+pub mod features;
 pub mod mesh;
 pub mod metrics;
 pub mod params;

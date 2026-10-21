@@ -6,6 +6,8 @@ pub use glam::DVec3;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Degenerate {
     pub triangles: Vec<[u32; 3]>,
+    /// Input index of each surviving face.
+    pub kept: Vec<u32>,
     pub removed_repeated: usize,
     pub removed_zero_area: usize,
     pub removed_duplicates: usize,
@@ -16,6 +18,7 @@ pub struct Degenerate {
 pub fn remove(positions: &[DVec3], triangles: &[[u32; 3]], area_eps: f64) -> Degenerate {
     let mut result = Degenerate {
         triangles: Vec::with_capacity(triangles.len()),
+        kept: Vec::with_capacity(triangles.len()),
         removed_repeated: 0,
         removed_zero_area: 0,
         removed_duplicates: 0,
@@ -50,6 +53,7 @@ pub fn remove(positions: &[DVec3], triangles: &[[u32; 3]], area_eps: f64) -> Deg
                 result.removed_zero_area += 1;
             } else {
                 result.triangles.push([a, b, c]);
+                result.kept.push(f as u32);
             }
         }
     }
