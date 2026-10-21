@@ -15,6 +15,7 @@ __pycache__/
 
 # Downloaded / generated data
 /benchmark/meshes/
+/benchmark/runs/
 /benchmark/reports/**/renders/
 
 # Agent and editor state
