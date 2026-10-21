@@ -52,9 +52,59 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     col.label(text=line, icon="LIGHT" if line.startswith("Hint") else "BLANK1")
             if last.status == "OK":
                 col.label(text=f"Faces: {last.faces_in} → {last.faces_out}")
+                for summary, icon in ((last.repair_summary, "TOOL_SETTINGS"), (last.feature_summary, "EDGESEL")):
+                    for n, line in enumerate(_wrap(summary)):
+                        col.label(text=line, icon=icon if n == 0 else "BLANK1")
             if last.status != "RUNNING":
                 col.label(text=f"Time: {last.elapsed_ms:.0f} ms")
         layout.label(text=f"Backend {bridge.version()}", icon="SETTINGS")
+
+
+class _SubPanel:
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "QuadLoom"
+    bl_parent_id = "QUADLOOM_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return bridge.available()
+
+
+class QUADLOOM_PT_cleanup(_SubPanel, bpy.types.Panel):
+    bl_label = "Cleanup"
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.prop(settings, "weld_distance_rel")
+        layout.prop(settings, "remove_degenerate")
+        layout.prop(settings, "split_non_manifold")
+        layout.prop(settings, "orient")
+        layout.prop(settings, "min_component_faces")
+
+
+class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
+    bl_label = "Sharp Features"
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        row = layout.row(heading="By Angle")
+        row.prop(settings, "use_angle", text="")
+        sub = row.row()
+        sub.active = settings.use_angle
+        sub.prop(settings, "angle_deg", text="")
+        col = layout.column(heading="Sources", align=True)
+        col.prop(settings, "use_marked_sharp")
+        col.prop(settings, "use_seams")
+        col.prop(settings, "use_material_boundaries")
+        col.prop(settings, "use_face_set_boundaries")
+        col.prop(settings, "use_open_boundaries")
+        layout.prop(settings, "prune_steps")
 
 
 class QUADLOOM_PT_advanced(bpy.types.Panel):
@@ -93,4 +143,4 @@ def _wrap(text, width=38):
     return lines or [""]
 
 
-classes = (QUADLOOM_PT_main, QUADLOOM_PT_advanced)
+classes = (QUADLOOM_PT_main, QUADLOOM_PT_cleanup, QUADLOOM_PT_features, QUADLOOM_PT_advanced)

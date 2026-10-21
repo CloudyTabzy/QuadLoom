@@ -2,12 +2,95 @@
 """Scene-level settings and the record of the last run."""
 
 import bpy
-from bpy.props import EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 
 DEFAULT_MAX_FACES = 2_000_000
 
 
 class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
+    # --- Cleanup (stage 0) ---------------------------------------------------
+    weld_distance_rel: FloatProperty(
+        name="Weld Distance",
+        description="Merge vertices closer than this fraction of the object's size. Joins vertices that "
+        "exporters split at UV seams or hard normals, so seams don't become holes",
+        default=1e-6,
+        min=0.0,
+        soft_max=1e-3,
+        precision=7,
+    )
+    remove_degenerate: BoolProperty(
+        name="Remove Degenerate Faces",
+        description="Drop faces with zero area, repeated corners, or exact duplicates",
+        default=True,
+    )
+    split_non_manifold: BoolProperty(
+        name="Fix Non-Manifold",
+        description="Split edges shared by more than two faces and vertices joining separate fans, "
+        "so every part is a clean surface",
+        default=True,
+    )
+    orient: BoolProperty(
+        name="Fix Normals",
+        description="Make face winding consistent and point closed parts outward",
+        default=True,
+    )
+    min_component_faces: IntProperty(
+        name="Minimum Part Size",
+        description="Loose parts with fewer faces than this are skipped (the largest part is always kept)",
+        default=8,
+        min=1,
+    )
+
+    # --- Sharp features (stage 1) ------------------------------------------------
+    use_angle: BoolProperty(
+        name="By Angle",
+        description="Edges where the surface bends more than the angle threshold become features",
+        default=True,
+    )
+    angle_deg: FloatProperty(
+        name="Angle Threshold",
+        description="Bend angle, in degrees, above which an edge becomes a feature. "
+        "Lower finds subtler creases",
+        default=35.0,
+        min=0.0,
+        max=180.0,
+        precision=1,
+    )
+    use_marked_sharp: BoolProperty(
+        name="Marked Sharp",
+        description="Edges you marked Sharp become features",
+        default=True,
+    )
+    use_seams: BoolProperty(
+        name="UV Seams",
+        description="UV seam edges become features",
+        default=True,
+    )
+    use_material_boundaries: BoolProperty(
+        name="Material Boundaries",
+        description="Edges between faces with different materials become features",
+        default=True,
+    )
+    use_face_set_boundaries: BoolProperty(
+        name="Face Set Boundaries",
+        description="Edges between sculpt face sets become features",
+        default=True,
+    )
+    use_open_boundaries: BoolProperty(
+        name="Open Boundaries",
+        description="Holes and open edges (necklines, cuffs, hems…) become features",
+        default=True,
+    )
+    prune_steps: IntProperty(
+        name="Prune Short Spurs",
+        description="Remove angle-detected feature fragments up to this many edges long that dangle "
+        "from the feature network. Your marks are never pruned. 0 disables",
+        default=4,
+        min=0,
+        soft_max=20,
+    )
+
+    # --- Advanced ------------------------------------------------------------
     max_faces: IntProperty(
         name="Face Limit",
         description="Inputs with more triangles than this are refused before any work starts. "
@@ -41,6 +124,8 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     faces_out: IntProperty(name="Faces Out")
     elapsed_ms: FloatProperty(name="Time (ms)")
     report_json: StringProperty(name="Report")
+    repair_summary: StringProperty(name="Cleanup")
+    feature_summary: StringProperty(name="Features")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
@@ -55,3 +140,26 @@ def unregister_props():
     for name in ("quadloom_last_run", "quadloom"):
         if hasattr(bpy.types.Scene, name):
             delattr(bpy.types.Scene, name)
+
+
+def run_params(settings):
+    """The native `params` dict for the current settings."""
+    return {
+        "repair": {
+            "weld_epsilon_rel": settings.weld_distance_rel,
+            "remove_degenerate": settings.remove_degenerate,
+            "split_non_manifold": settings.split_non_manifold,
+            "orient": settings.orient,
+            "min_component_faces": settings.min_component_faces,
+        },
+        "features": {
+            "angle_deg": settings.angle_deg,
+            "use_angle": settings.use_angle,
+            "use_marked_sharp": settings.use_marked_sharp,
+            "use_seams": settings.use_seams,
+            "use_material_boundaries": settings.use_material_boundaries,
+            "use_face_set_boundaries": settings.use_face_set_boundaries,
+            "use_open_boundaries": settings.use_open_boundaries,
+            "prune_steps": settings.prune_steps,
+        },
+    }

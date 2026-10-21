@@ -148,6 +148,14 @@ def test_marked_sharp_edges_used():
     assert result["features"]["by_source"][1] == 2
 
 
+def test_empty_buffers_accepted():
+    # An empty array's data pointer isn't aligned; empty inputs must still work.
+    p, i = cube()
+    result = ql.run(p, i, ql.Control(), sharp_edges=array("i"), seam_edges=array("I"),
+                    material=array("i", [0] * 12), face_set=array("i", [0] * 12))
+    assert result["features"]["edges"] == 12
+
+
 def test_material_length_must_match():
     p, i = cube()
     with pytest.raises(ql.InvalidInputError) as e:

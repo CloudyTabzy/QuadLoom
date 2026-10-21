@@ -3,7 +3,7 @@
 //! Inputs are copied out of the Python buffer with `PyBuffer::to_vec`, the safe
 //! path: no borrowed views into Python memory outlive the call.
 
-use pyo3::buffer::{PyBuffer, PyUntypedBuffer};
+use pyo3::buffer::{Element, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
@@ -18,23 +18,32 @@ pub fn item_count(py: Python<'_>, obj: &Bound<'_, PyAny>, name: &str) -> PyResul
         .map_err(|e| invalid_argument(py, format!("{name} must be a buffer (e.g. array.array): {e}")))
 }
 
+/// Copies a buffer of `T` out of Python. Empty buffers are accepted as long as
+/// their format matches: an empty `array.array` has no meaningfully aligned
+/// data pointer, which PyO3's typed view would otherwise reject.
+fn read<T: Element>(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<T>> {
+    let raw = PyUntypedBuffer::get(obj)?;
+    if raw.item_count() == 0 && T::is_compatible_format(raw.format()) {
+        return Ok(Vec::new());
+    }
+    raw.into_typed::<T>()?.to_vec(py)
+}
+
 /// Reads `positions` as a buffer of `float32`.
 pub fn positions(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<f32>> {
-    let buffer = PyBuffer::<f32>::get(obj).map_err(|e| {
+    read::<f32>(py, obj).map_err(|e| {
         invalid_argument(py, format!("positions must be a float32 buffer (e.g. array('f')): {e}"))
-    })?;
-    buffer.to_vec(py).map_err(|e| invalid_argument(py, format!("positions: {e}")))
+    })
 }
 
 /// Reads an index buffer argument as `uint32`, or `int32` with every value >= 0.
 pub fn indices(py: Python<'_>, obj: &Bound<'_, PyAny>, name: &str) -> PyResult<Vec<u32>> {
-    if let Ok(buffer) = PyBuffer::<u32>::get(obj) {
-        return buffer.to_vec(py).map_err(|e| invalid_argument(py, format!("{name}: {e}")));
+    if let Ok(unsigned) = read::<u32>(py, obj) {
+        return Ok(unsigned);
     }
-    let buffer = PyBuffer::<i32>::get(obj).map_err(|e| {
+    let signed = read::<i32>(py, obj).map_err(|e| {
         invalid_argument(py, format!("{name} must be a uint32 or int32 buffer (e.g. array('I')): {e}"))
     })?;
-    let signed = buffer.to_vec(py).map_err(|e| invalid_argument(py, format!("{name}: {e}")))?;
     signed
         .into_iter()
         .enumerate()
@@ -60,10 +69,9 @@ pub fn edge_pairs(py: Python<'_>, obj: Option<&Bound<'_, PyAny>>, name: &str) ->
 /// Reads an optional per-triangle `int32` group buffer (material, face set).
 pub fn groups(py: Python<'_>, obj: Option<&Bound<'_, PyAny>>, name: &str) -> PyResult<Option<Vec<i32>>> {
     let Some(obj) = obj else { return Ok(None) };
-    let buffer = PyBuffer::<i32>::get(obj).map_err(|e| {
-        invalid_argument(py, format!("{name} must be an int32 buffer (e.g. array('i')): {e}"))
-    })?;
-    buffer.to_vec(py).map(Some).map_err(|e| invalid_argument(py, format!("{name}: {e}")))
+    read::<i32>(py, obj)
+        .map(Some)
+        .map_err(|e| invalid_argument(py, format!("{name} must be an int32 buffer (e.g. array('i')): {e}")))
 }
 
 /// Packs a run's output into the dict the add-on consumes.

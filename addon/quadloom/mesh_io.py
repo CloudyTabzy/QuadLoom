@@ -28,10 +28,41 @@ class MeshSnapshot:
     matrix_world: Matrix
     positions: array  # float32 xyz, object space
     indices: array  # int32 triangle corners
+    sharp_edges: array  # int32 vertex pairs of edges marked sharp
+    seam_edges: array  # int32 vertex pairs of UV seams
+    material: array  # int32 material index per triangle
+    face_set: array | None  # int32 sculpt face set per triangle, if the mesh has them
 
     @property
     def face_count(self):
         return len(self.indices) // 3
+
+    def feature_kwargs(self):
+        kwargs = {"sharp_edges": self.sharp_edges, "seam_edges": self.seam_edges, "material": self.material}
+        if self.face_set is not None:
+            kwargs["face_set"] = self.face_set
+        return kwargs
+
+
+def _flagged_edge_pairs(mesh, prop):
+    """Vertex pairs of the edges where boolean edge property `prop` is set."""
+    import numpy as np
+
+    count = len(mesh.edges)
+    flags = np.zeros(count, dtype=bool)
+    mesh.edges.foreach_get(prop, flags)
+    vertices = np.zeros(count * 2, dtype=np.int32)
+    mesh.edges.foreach_get("vertices", vertices)
+    return array("i", vertices.reshape(-1, 2)[flags].ravel().tobytes())
+
+
+def _per_triangle(mesh, polygon_values):
+    """Spreads a per-polygon int array onto loop triangles."""
+    import numpy as np
+
+    polygon_of = np.zeros(len(mesh.loop_triangles), dtype=np.int32)
+    mesh.loop_triangles.foreach_get("polygon_index", polygon_of)
+    return array("i", np.asarray(polygon_values, dtype=np.int32)[polygon_of].tobytes())
 
 
 def extract(obj, depsgraph, max_faces):
@@ -56,6 +87,18 @@ def extract(obj, depsgraph, max_faces):
         mesh.vertices.foreach_get("co", positions)
         indices = array("i", bytes(4 * 3 * len(mesh.loop_triangles)))
         mesh.loop_triangles.foreach_get("vertices", indices)
+
+        sharp_edges = _flagged_edge_pairs(mesh, "use_edge_sharp")
+        seam_edges = _flagged_edge_pairs(mesh, "use_seam")
+        polygon_material = array("i", bytes(4 * len(mesh.polygons)))
+        mesh.polygons.foreach_get("material_index", polygon_material)
+        material = _per_triangle(mesh, polygon_material)
+        face_set = None
+        attr = mesh.attributes.get(".sculpt_face_set")
+        if attr is not None and attr.domain == "FACE" and attr.data_type == "INT":
+            polygon_set = array("i", bytes(4 * len(mesh.polygons)))
+            attr.data.foreach_get("value", polygon_set)
+            face_set = _per_triangle(mesh, polygon_set)
     finally:
         evaluated.to_mesh_clear()
     collections = obj.users_collection
@@ -65,6 +108,10 @@ def extract(obj, depsgraph, max_faces):
         matrix_world=obj.matrix_world.copy(),
         positions=positions,
         indices=indices,
+        sharp_edges=sharp_edges,
+        seam_edges=seam_edges,
+        material=material,
+        face_set=face_set,
     )
 
 
@@ -90,6 +137,22 @@ def decode_result(result):
     if corners and max(corners) >= vertex_count:
         raise ValueError("result references a vertex that doesn't exist")
     return positions, offsets, corners
+
+
+def _mark_feature_edges(mesh, feature_edges):
+    """Shows the detected feature lines as the result's Sharp edges."""
+    import numpy as np
+
+    pairs = np.frombuffer(feature_edges, dtype="<u4").reshape(-1, 2)
+    if len(pairs) == 0:
+        return
+    vertices = np.zeros(len(mesh.edges) * 2, dtype=np.int32)
+    mesh.edges.foreach_get("vertices", vertices)
+    edges = np.sort(vertices.reshape(-1, 2), axis=1)
+    wanted = {(int(a), int(b)) for a, b in np.sort(pairs.astype(np.int64), axis=1)}
+    flags = np.fromiter(((int(a), int(b)) in wanted for a, b in edges), dtype=bool, count=len(edges))
+    attr = mesh.attributes.get("sharp_edge") or mesh.attributes.new("sharp_edge", "BOOLEAN", "EDGE")
+    attr.data.foreach_set("value", flags)
 
 
 def _target_collection(snapshot, scene):
@@ -120,11 +183,14 @@ def build_result(snapshot, result, scene):
         mesh.polygons.add(len(offsets) - 1)
         mesh.polygons.foreach_set("loop_start", array("i", offsets[:-1]))
         mesh.update(calc_edges=True)
+        _mark_feature_edges(mesh, result.get("feature_edges", b""))
 
         obj = bpy.data.objects.new(name, mesh)
         obj.matrix_world = snapshot.matrix_world
         _target_collection(snapshot, scene).objects.link(obj)
-        obj["quadloom_report"] = json.dumps(dict(result["validation"]))
+        obj["quadloom_report"] = json.dumps(
+            {key: dict(result[key]) for key in ("validation", "repair", "features") if key in result}
+        )
     except Exception:
         if obj is not None:
             bpy.data.objects.remove(obj)

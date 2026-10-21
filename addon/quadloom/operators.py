@@ -6,13 +6,12 @@ runs on a worker thread (the backend releases the GIL), and the result is
 turned into a new object back on the main thread. At most one job runs at a time.
 """
 
-import json
 import threading
 import time
 
 import bpy
 
-from . import bridge, mesh_io
+from . import bridge, mesh_io, props
 
 _active_job = None
 
@@ -56,14 +55,15 @@ def start_job(context):
     if job_running():
         raise RuntimeError("a QuadLoom run is already in progress")
     settings = context.scene.quadloom
-    kwargs = {"max_faces": settings.max_faces}
+    snapshot = mesh_io.extract(context.active_object, context.evaluated_depsgraph_get(), settings.max_faces)
+    kwargs = {"max_faces": settings.max_faces, "params": props.run_params(settings), **snapshot.feature_kwargs()}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
-    snapshot = mesh_io.extract(context.active_object, context.evaluated_depsgraph_get(), settings.max_faces)
     job = Job(snapshot, kwargs)
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
+    last.repair_summary, last.feature_summary = "", ""
     _active_job = job
     job.thread.start()
     return job
@@ -85,7 +85,9 @@ def finish_job(context, job):
         else:
             last.status, last.message = "OK", f"Created {obj.name}"
             last.faces_out = len(obj.data.polygons)
-            last.report_json = json.dumps(dict(job.result["validation"]))
+            last.report_json = obj["quadloom_report"]
+            last.repair_summary = repair_summary(job.result["repair"])
+            last.feature_summary = feature_summary(job.result["features"])
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -96,6 +98,30 @@ def finish_job(context, job):
     if cancelled:
         return {"CANCELLED"}, ("INFO", "QuadLoom: cancelled")
     return {"CANCELLED"}, ("ERROR", f"QuadLoom failed: {error}")
+
+
+def repair_summary(repair):
+    """One line describing what cleanup changed, e.g. "welded 812 vertices, 2 parts"."""
+    parts = []
+    removed = repair["removed_repeated"] + repair["removed_zero_area"] + repair["removed_duplicates"]
+    for count, text in (
+        (repair["welded_vertices"], "welded {} vertices"),
+        (removed, "removed {} degenerate faces"),
+        (repair["split_non_manifold_edges"], "split {} non-manifold edges"),
+        (repair["split_non_manifold_vertices"], "split {} non-manifold vertices"),
+        (repair["flipped_faces"], "flipped {} faces"),
+        (repair["cut_edges"], "cut {} edges to fix orientation"),
+        (repair["skipped_small_components"], "skipped {} tiny parts"),
+    ):
+        if count:
+            parts.append(text.format(f"{count:,}"))
+    components = repair["components"]
+    parts.append(f"{components} part" + ("" if components == 1 else "s"))
+    return ", ".join(parts) if len(parts) > 1 else f"no cleanup needed, {parts[0]}"
+
+
+def feature_summary(features):
+    return f"{features['edges']:,} feature edges, {features['corners']:,} corners"
 
 
 def cancel_active_job(join_timeout=None):
