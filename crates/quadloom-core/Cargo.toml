@@ -1,0 +1,27 @@
+[package]
+name = "quadloom-core"
+description = "QuadLoom remeshing core: feature-aligned quad remeshing in safe Rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+# Test-only switches that inject panics, errors and slow stages so the
+# crash-safety harness can be exercised end to end. Never enabled in releases.
+fault-injection = []
+serde = ["dep:serde"]
+
+[dependencies]
+glam.workspace = true
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
