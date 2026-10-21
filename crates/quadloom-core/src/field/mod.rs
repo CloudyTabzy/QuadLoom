@@ -66,7 +66,7 @@ impl Default for FieldParams {
         Self {
             enabled: true,
             curvature_alignment: CurvatureAlignment::Auto,
-            alignment_weight: 0.3,
+            alignment_weight: 0.02,
             sharp_factor: 6.0,
         }
     }

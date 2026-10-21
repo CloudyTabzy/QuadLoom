@@ -111,11 +111,13 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
     )
     field_alignment_weight: FloatProperty(
         name="Curvature Strength",
-        description="How strongly the flow follows curvature instead of staying smooth",
-        default=0.3,
+        description="How strongly the flow follows curvature instead of staying smooth. Small values "
+        "already align wherever curvature is consistent; large ones also follow noisy curvature",
+        default=0.02,
         min=0.0,
         max=100.0,
-        soft_max=2.0,
+        soft_max=0.5,
+        precision=3,
     )
     field_sharp_factor: FloatProperty(
         name="Feature Sufficiency",

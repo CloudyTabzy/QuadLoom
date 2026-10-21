@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use glam::DVec3;
 
 use super::frames::{Cx, FaceFrames, dual_edges};
-use super::solve::{Hard, Soft};
+use super::solve::{Hard, ROSY, Soft};
 
 /// The oracle's test (`TriangleMesh::SufficientFeatures`): features alone
 /// guide the field when their total length exceeds `sharp_factor` × √area.
@@ -14,10 +14,16 @@ pub fn sufficient_features(feature_length: f64, area: f64, sharp_factor: f64) ->
     area > 0.0 && feature_length / area.sqrt() > sharp_factor
 }
 
-/// Every face beside a feature edge or a border edge, aligned to that edge
-/// (the oracle's feature constraints plus `align_borders`). A face with two
-/// such edges takes the longer one, which also settles the rare case where
-/// they disagree by other than a multiple of 90°.
+/// Constrained edges of one face must agree this well (|Σ ℓ·e^{4iφ}| / Σ ℓ)
+/// to fix its cross; edges at right angles agree exactly.
+const MIN_AGREEMENT: f64 = 0.5;
+
+/// Every face beside a feature edge or a border edge, aligned to it (the
+/// oracle's feature constraints plus `align_borders`). A face with several
+/// such edges takes their length-weighted average as crosses (power 4), so
+/// edges at right angles agree; if they genuinely conflict (a bevel strip's
+/// triangle between edges 45° apart) the face is left to the smooth solve
+/// rather than forced, which would create singularities between them.
 pub fn hard_constraints(
     positions: &[DVec3],
     triangles: &[[u32; 3]],
@@ -31,18 +37,21 @@ pub fn hard_constraints(
             *uses.entry((a.min(b), a.max(b))).or_default() += 1;
         }
     }
+    let frames = FaceFrames::new(positions, triangles);
     let mut hard = Vec::new();
     for (f, t) in triangles.iter().enumerate() {
-        let longest = (0..3)
-            .map(|i| (t[i], t[(i + 1) % 3]))
-            .filter(|&(a, b)| {
-                let key = (a.min(b), a.max(b));
-                features.contains(&key) || uses.get(&key) == Some(&1)
-            })
-            .map(|(a, b)| positions[b as usize] - positions[a as usize])
-            .max_by(|x, y| x.length_squared().total_cmp(&y.length_squared()));
-        if let Some(edge) = longest {
-            hard.push(Hard { face: f as u32, direction: edge.normalize_or_zero() });
+        let f = f as u32;
+        let (mut sum, mut total) = (Cx::ZERO, 0.0);
+        for (a, b) in (0..3).map(|i| (t[i], t[(i + 1) % 3])) {
+            let key = (a.min(b), a.max(b));
+            if features.contains(&key) || uses.get(&key) == Some(&1) {
+                let edge = positions[b as usize] - positions[a as usize];
+                sum = sum + frames.power(f, edge, ROSY).scale(edge.length());
+                total += edge.length();
+            }
+        }
+        if total > 0.0 && !frames.is_degenerate(f) && sum.norm() >= MIN_AGREEMENT * total {
+            hard.push(Hard { face: f, direction: frames.direction(f, sum.arg() / ROSY) });
         }
     }
     hard
@@ -201,12 +210,24 @@ mod tests {
     }
 
     #[test]
-    fn two_constrained_edges_take_the_longer() {
-        // One triangle with all edges on the border: the longest is the base.
-        let p = [DVec3::ZERO, DVec3::new(3.0, 0.0, 0.0), DVec3::new(1.0, 1.0, 0.0)];
-        let hard = hard_constraints(&p, &[[0, 1, 2]], &[]);
-        assert_eq!(hard.len(), 1);
-        assert!((hard[0].direction - DVec3::X).length() < 1e-12);
+    fn edges_at_right_angles_agree() {
+        // A unit square of two triangles: each has two border sides at right
+        // angles (and the interior diagonal), so one cross fits both sides.
+        let p = [DVec3::ZERO, DVec3::X, DVec3::new(1.0, 1.0, 0.0), DVec3::Y];
+        let hard = hard_constraints(&p, &[[0, 1, 2], [0, 2, 3]], &[]);
+        assert_eq!(hard.len(), 2);
+        for h in hard {
+            let d = h.direction;
+            assert!(d.x.abs() > 1.0 - 1e-9 || d.y.abs() > 1.0 - 1e-9, "{d:?}");
+        }
+    }
+
+    #[test]
+    fn conflicting_edges_leave_the_face_free() {
+        // An equilateral triangle on the border: its edges are 60° apart, so
+        // no cross fits them all; forcing one would only create singularities.
+        let p = [DVec3::ZERO, DVec3::X, DVec3::new(0.5, 3f64.sqrt() / 2.0, 0.0)];
+        assert!(hard_constraints(&p, &[[0, 1, 2]], &[]).is_empty());
     }
 
     #[test]

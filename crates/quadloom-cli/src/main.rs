@@ -141,6 +141,12 @@ fn field_index(mesh: &Path, rosy: &Path) -> Result<(), Failure> {
         .map(|f| frames.power(f, directions[f as usize], quadloom_core::field::ROSY))
         .collect();
     let indices = quadloom_core::field::vertex_indices(&positions, &triangles, &powers);
+    let listed: Vec<[i64; 2]> = indices
+        .iter()
+        .enumerate()
+        .filter(|(_, k)| **k != 0)
+        .map(|(v, &k)| [v as i64, i64::from(k)])
+        .collect();
     let singular: Vec<i32> = indices.into_iter().filter(|&k| k != 0).collect();
     println!(
         "{}",
@@ -149,6 +155,7 @@ fn field_index(mesh: &Path, rosy: &Path) -> Result<(), Failure> {
             "singularities": singular.len(),
             "positive_quarters": singular.iter().filter(|&&k| k > 0).sum::<i32>(),
             "negative_quarters": singular.iter().filter(|&&k| k < 0).sum::<i32>(),
+            "vertices": listed,
         })
     );
     Ok(())
