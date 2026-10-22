@@ -88,7 +88,7 @@ impl FrameMesh {
         directions: &[DVec3],
         control: &Control,
     ) -> Result<Self, Error> {
-        let stage = Stage::Field; // Task 2: Stage::Frame
+        let stage = Stage::Frame;
         control.checkpoint(stage)?;
         let invalid = |message: &str| Error::invalid_input(stage, message);
         let nv = positions.len();
@@ -268,7 +268,7 @@ fn corner_signs(
     halfedge_of: &HashMap<(u32, u32), (u32, u8)>,
     control: &Control,
 ) -> Result<(Vec<[i8; 3]>, Vec<bool>), Error> {
-    let stage = Stage::Field; // Task 2: Stage::Frame
+    let stage = Stage::Frame;
     let nf = triangles.len();
     let mut fans: Vec<Vec<u32>> = vec![Vec::new(); nv];
     for (f, t) in triangles.iter().enumerate() {

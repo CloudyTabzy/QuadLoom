@@ -21,6 +21,7 @@ pub enum Stage {
     Features,
     PrepRemesh,
     Field,
+    Frame,
     Trace,
     Layout,
     Quantize,
@@ -32,12 +33,13 @@ pub enum Stage {
 
 impl Stage {
     /// Every stage, in pipeline order.
-    pub const ALL: [Stage; 12] = [
+    pub const ALL: [Stage; 13] = [
         Self::Validate,
         Self::Repair,
         Self::Features,
         Self::PrepRemesh,
         Self::Field,
+        Self::Frame,
         Self::Trace,
         Self::Layout,
         Self::Quantize,
@@ -54,6 +56,7 @@ impl Stage {
             Self::Features => "features",
             Self::PrepRemesh => "prep_remesh",
             Self::Field => "field",
+            Self::Frame => "frame",
             Self::Trace => "trace",
             Self::Layout => "layout",
             Self::Quantize => "quantize",

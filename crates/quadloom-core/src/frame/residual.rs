@@ -159,7 +159,7 @@ pub fn evaluate(
     lambda: Option<&[f64]>,
     control: &Control,
 ) -> Result<Evaluation, Error> {
-    let stage = Stage::Field; // Task 2: Stage::Frame
+    let stage = Stage::Frame;
     control.checkpoint(stage)?;
     if x.len() != unknowns.len() || lambda.is_some_and(|l| l.len() != mesh.free.len()) {
         return Err(Error::internal(stage, "frame evaluation: vector sizes do not match the mesh"));
