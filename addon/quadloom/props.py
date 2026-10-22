@@ -191,6 +191,37 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         max=10,
     )
 
+    # --- Quad Shape (stage 3b) ---------------------------------------------------
+    frame_enabled: BoolProperty(
+        name="Rectangular Quads",
+        description="Shape the quads as rectangles that follow the cross field, instead of "
+        "leaving their shape to the field alone (needs the Cross Field)",
+        default=False,
+    )
+    frame_balance: FloatProperty(
+        name="Keep Square",
+        description="0 keeps the quads the same size and lets them stretch; 1 keeps them square "
+        "and lets their size vary",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        precision=2,
+    )
+    frame_curvature_stretch: BoolProperty(
+        name="Stretch Along Curvature",
+        description="Let quads stretch along the surface's curvature, longer where it bends less",
+        default=False,
+    )
+    frame_max_stretch: FloatProperty(
+        name="Max Stretch",
+        description="Largest allowed ratio between a quad's long and short sides",
+        default=3.0,
+        min=1.0,
+        max=20.0,
+        soft_max=6.0,
+        precision=1,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -278,6 +309,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     remesh_summary: StringProperty(name="Remesh")
     feature_summary: StringProperty(name="Features")
     field_summary: StringProperty(name="Field")
+    frame_summary: StringProperty(name="Shape")
     trace_summary: StringProperty(name="Layout")
 
 
@@ -329,6 +361,12 @@ def run_params(settings):
             "curvature_alignment": settings.field_curvature.lower(),
             "alignment_weight": settings.field_alignment_weight,
             "sharp_factor": settings.field_sharp_factor,
+        },
+        "frame": {
+            "enabled": settings.frame_enabled,
+            "balance": settings.frame_balance,
+            "curvature_stretch": settings.frame_curvature_stretch,
+            "max_stretch": settings.frame_max_stretch,
         },
         "trace": {
             "enabled": settings.trace_enabled,

@@ -141,6 +141,37 @@ def decode_result(result):
     return positions, offsets, corners
 
 
+def decode_frame(frame, field_faces, source_face=None, output_faces=None):
+    """Unpacks a result's frame scales and maps them onto the output faces.
+
+    `frame` holds `size` and `stretch` (float32), one per field-mesh face
+    (`field_faces` of them). `source_face` (uint32, one per output triangle) names
+    the field-mesh face each output face was split from; None means the output is
+    the field mesh itself. Returns (size, stretch) as float32 arrays, one per output
+    face. Raises ValueError if the buffers don't match.
+    """
+    size, stretch = array("f"), array("f")
+    if not isinstance(frame.get("size"), bytes) or not isinstance(frame.get("stretch"), bytes):
+        raise ValueError("frame scales are not byte buffers")
+    size.frombytes(frame["size"])
+    stretch.frombytes(frame["stretch"])
+    if len(size) != field_faces or len(stretch) != field_faces:
+        raise ValueError("frame scales don't have one value per field face")
+    if source_face is None:
+        if output_faces is not None and output_faces != field_faces:
+            raise ValueError("frame scales don't match the output face count")
+        return size, stretch
+    if not isinstance(source_face, bytes):
+        raise ValueError("frame source faces are not a byte buffer")
+    sources = array("I")
+    sources.frombytes(source_face)
+    if output_faces is not None and len(sources) != output_faces:
+        raise ValueError("frame source faces don't match the layout's face count")
+    if sources and max(sources) >= field_faces:
+        raise ValueError("frame source face refers to a face that doesn't exist")
+    return array("f", (size[s] for s in sources)), array("f", (stretch[s] for s in sources))
+
+
 def decode_layout(trace):
     """Unpacks and checks a result's patch layout (on its own refined mesh).
 
@@ -203,17 +234,32 @@ def _target_collection(snapshot, scene):
     return collection
 
 
+def _frame_report(frame):
+    """The frame's report fields, without the per-face byte buffers."""
+    return {key: value for key, value in frame.items() if key not in ("size", "stretch")}
+
+
 def build_result(snapshot, result, scene):
     """Creates a new object from a run result. Never touches the source object.
 
     Raises ValueError (without leaving partial data behind) if the result is malformed.
     """
     positions, offsets, corners = decode_result(result)
+    field_faces = len(offsets) - 1
     feature_edges, patch = result.get("feature_edges", b""), None
+    frame = None
     if result.get("trace"):
         # Until quads exist, the result shows the layout: its (refined) mesh,
         # with each triangle's patch as the integer face attribute "quadloom_patch".
         positions, offsets, corners, patch, feature_edges = decode_layout(result["trace"])
+    if result.get("frame"):
+        # The frame's per-face scales reach the layout's triangles through source_face.
+        source = None
+        if result.get("trace"):
+            source = result["trace"].get("source_face")
+            if source is None:
+                raise ValueError("frame result has no layout source faces")
+        frame = decode_frame(result["frame"], field_faces, source_face=source, output_faces=len(offsets) - 1)
     name = snapshot.source_name + RESULT_SUFFIX
     mesh = bpy.data.meshes.new(name)
     obj = None
@@ -229,6 +275,10 @@ def build_result(snapshot, result, scene):
         if patch is not None:
             attr = mesh.attributes.new("quadloom_patch", "INT", "FACE")
             attr.data.foreach_set("value", array("i", patch))
+        if frame is not None:
+            for attr_name, values in zip(("quadloom_size", "quadloom_stretch"), frame):
+                attr = mesh.attributes.new(attr_name, "FLOAT", "FACE")
+                attr.data.foreach_set("value", values)
 
         obj = bpy.data.objects.new(name, mesh)
         obj.matrix_world = snapshot.matrix_world
@@ -236,6 +286,7 @@ def build_result(snapshot, result, scene):
         obj["quadloom_report"] = json.dumps(
             {key: dict(result[key]) for key in ("validation", "repair", "features") if key in result}
             | ({"trace": dict(result["trace"]["report"])} if result.get("trace") else {})
+            | ({"frame": _frame_report(result["frame"])} if result.get("frame") else {})
         )
     except Exception:
         if obj is not None:

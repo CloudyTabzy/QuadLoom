@@ -57,6 +57,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     (last.feature_summary, "EDGESEL"),
                     (last.remesh_summary, "MOD_REMESH"),
                     (last.field_summary, "ORIENTATION_GIMBAL"),
+                    (last.frame_summary, "MOD_SIMPLEDEFORM"),
                     (last.trace_summary, "MOD_LATTICE"),
                 ):
                     for n, line in enumerate(_wrap(summary)):
@@ -131,6 +132,26 @@ class QUADLOOM_PT_field(_SubPanel, bpy.types.Panel):
         sub = col.column(align=True)
         sub.active = settings.field_curvature == "AUTO"
         sub.prop(settings, "field_sharp_factor")
+
+
+class QUADLOOM_PT_shape(_SubPanel, bpy.types.Panel):
+    bl_label = "Quad Shape"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "frame_enabled", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = settings.frame_enabled and settings.field_enabled
+        if not settings.field_enabled:
+            layout.label(text="Needs the Cross Field", icon="INFO")
+        layout.prop(settings, "frame_balance")
+        layout.prop(settings, "frame_curvature_stretch")
+        col = layout.column()
+        col.active = settings.frame_curvature_stretch
+        col.prop(settings, "frame_max_stretch")
 
 
 class QUADLOOM_PT_layout(_SubPanel, bpy.types.Panel):
@@ -218,6 +239,7 @@ classes = (
     QUADLOOM_PT_features,
     QUADLOOM_PT_remesh,
     QUADLOOM_PT_field,
+    QUADLOOM_PT_shape,
     QUADLOOM_PT_layout,
     QUADLOOM_PT_advanced,
 )

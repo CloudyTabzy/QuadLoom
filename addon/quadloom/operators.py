@@ -64,7 +64,7 @@ def start_job(context):
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
-    last.trace_summary = ""
+    last.trace_summary, last.frame_summary = "", ""
     _active_job = job
     job.thread.start()
     return job
@@ -91,6 +91,7 @@ def finish_job(context, job):
             last.feature_summary = feature_summary(job.result["features"])
             last.remesh_summary = remesh_summary(job.result.get("remesh"), job.kwargs["params"]["remesh"]["enabled"])
             last.field_summary = field_summary(job.result.get("field"))
+            last.frame_summary = frame_summary(job.result.get("frame"))
             last.trace_summary = trace_summary(job.result.get("trace"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
@@ -141,6 +142,31 @@ def field_summary(field):
     if report["fallback_parts"]:
         text += f", {report['fallback_parts']} parts used the fallback field"
     return text
+
+
+def frame_summary(frame):
+    """One line about the rectangular frame, e.g. "rotated ≤ 23.7°, size 0.70–1.91×, stretch 1.5 (p95 3.6)"."""
+    if not frame:
+        return "off"
+    if frame["solved_parts"] == 0:
+        if frame["fallback_parts"]:
+            text = "kept the regular field (the field could not be made rectangular)"
+        else:
+            text = "no part was large enough to shape"
+    else:
+        text = (
+            f"rotated ≤ {frame['max_rotation_deg']:.1f}°, size {frame['size_p5']:.2f}–{frame['size_p95']:.2f}×, "
+            f"stretch {frame['stretch_p50']:.1f} (p95 {frame['stretch_p95']:.1f})"
+        )
+        if frame["fallback_parts"]:
+            text += f"; kept the regular field on {_parts(frame['fallback_parts'])}"
+    if frame["skipped_parts"]:
+        text += f"; {_parts(frame['skipped_parts'])} too large"
+    return text
+
+
+def _parts(count):
+    return f"{count} part" + ("" if count == 1 else "s")
 
 
 def trace_summary(trace):
