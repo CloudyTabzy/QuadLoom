@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyString};
-use quadloom_core::{CurvatureAlignment, Params};
+use quadloom_core::{CurvatureAlignment, Params, TraceCost};
 
 use crate::errors::invalid_argument;
 
@@ -15,6 +15,7 @@ enum Field<'a> {
     Bool(&'a mut bool),
     Usize(&'a mut usize),
     Alignment(&'a mut CurvatureAlignment),
+    Cost(&'a mut TraceCost),
 }
 
 impl Field<'_> {
@@ -24,6 +25,7 @@ impl Field<'_> {
             Self::Bool(_) => "bool",
             Self::Usize(_) => "non-negative integer",
             Self::Alignment(_) => "one of \"auto\", \"on\", \"off\"",
+            Self::Cost(_) => "one of \"anisotropic\", \"angle_penalty\"",
         }
     }
 
@@ -44,6 +46,12 @@ impl Field<'_> {
                 .and_then(|name| CurvatureAlignment::from_name(&name))
                 .map(|mode| **slot = mode)
                 .is_some(),
+            Self::Cost(slot) => value
+                .extract::<String>()
+                .ok()
+                .and_then(|name| TraceCost::from_name(&name))
+                .map(|cost| **slot = cost)
+                .is_some(),
             _ => false,
         }
     }
@@ -61,6 +69,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
         let f = &mut params.features;
         let m = &mut params.remesh;
         let c = &mut params.field;
+        let t = &mut params.trace;
         let mut fields: Vec<(&str, Field<'_>)> = match section.as_str() {
             "repair" => vec![
                 ("weld_epsilon_rel", Field::F64(&mut r.weld_epsilon_rel)),
@@ -94,10 +103,22 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("alignment_weight", Field::F64(&mut c.alignment_weight)),
                 ("sharp_factor", Field::F64(&mut c.sharp_factor)),
             ],
+            "trace" => vec![
+                ("enabled", Field::Bool(&mut t.enabled)),
+                ("max_sides", Field::Usize(&mut t.max_sides)),
+                ("cost", Field::Cost(&mut t.cost)),
+                ("drift", Field::F64(&mut t.drift)),
+                ("cc_tolerance", Field::F64(&mut t.cc_tolerance)),
+                ("match_valence", Field::Bool(&mut t.match_valence)),
+                ("loop_density", Field::F64(&mut t.loop_density)),
+                ("sub_passes", Field::Usize(&mut t.sub_passes)),
+            ],
             other => {
                 return Err(invalid_argument(
                     py,
-                    format!("params.{other} is not a known section (known: repair, features, remesh, field)"),
+                    format!(
+                        "params.{other} is not a known section (known: repair, features, remesh, field, trace)"
+                    ),
                 ));
             }
         };

@@ -13,6 +13,7 @@ pub mod refine;
 pub mod sample;
 pub mod search;
 pub mod select;
+pub mod stats;
 pub mod turns;
 
 #[cfg(test)]
@@ -25,6 +26,7 @@ use glam::DVec3;
 use rayon::prelude::*;
 
 pub use patches::PatchKind;
+pub use stats::{LayoutStats, layout_stats};
 
 use crate::control::{Control, Stage};
 use crate::error::Error;
@@ -74,7 +76,7 @@ pub struct TraceMesh {
 pub struct TraceParams {
     pub enabled: bool,
     /// Most sides a patch may have (the oracle's `MaxVal`).
-    pub max_sides: u32,
+    pub max_sides: usize,
     pub cost: TraceCost,
     /// How strongly the cost punishes drifting from the field.
     pub drift: f64,
@@ -85,7 +87,7 @@ pub struct TraceParams {
     /// Loop seeds per vertex (the oracle's `sample_ratio`).
     pub loop_density: f64,
     /// Passes of tracing inside failing patches.
-    pub sub_passes: u32,
+    pub sub_passes: usize,
 }
 
 impl Default for TraceParams {
@@ -106,11 +108,11 @@ impl Default for TraceParams {
 impl TraceParams {
     fn settings(&self) -> select::Settings {
         select::Settings {
-            max_sides: self.max_sides as usize,
+            max_sides: self.max_sides,
             match_valence: self.match_valence,
             cc_tolerance: self.cc_tolerance,
             loop_density: self.loop_density,
-            sub_passes: self.sub_passes as usize,
+            sub_passes: self.sub_passes,
             cost: self.cost,
             drift: self.drift,
             cut_ears: true,

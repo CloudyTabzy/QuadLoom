@@ -114,3 +114,36 @@ fn usage_error_exits_64() {
     let out = quadloom(&["frobnicate"]);
     assert_eq!(out.status.code(), Some(64));
 }
+
+#[test]
+fn layout_files_round_trip() {
+    let input = scratch("layout_cube.obj", TRI_CUBE_OBJ);
+    let output = input.with_file_name("layout_cube_out.obj");
+    let prefix = input.with_file_name("layout_cube");
+    let out = quadloom(&[
+        "run",
+        input.to_str().unwrap(),
+        output.to_str().unwrap(),
+        "--layout",
+        prefix.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let run: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(run["trace"]["patches"], 6);
+    let file = |ext: &str| input.with_file_name(format!("layout_cube_p0.{ext}"));
+    for ext in ["obj", "patch", "corners", "feature", "c_feature"] {
+        assert!(file(ext).exists(), "missing {ext}");
+    }
+    let stats = quadloom(&[
+        "layout-stats",
+        file("obj").to_str().unwrap(),
+        file("patch").to_str().unwrap(),
+        file("corners").to_str().unwrap(),
+    ]);
+    assert!(stats.status.success(), "{}", String::from_utf8_lossy(&stats.stderr));
+    let stats: serde_json::Value = serde_json::from_slice(&stats.stdout).unwrap();
+    assert_eq!(stats["patches"], 6);
+    assert_eq!(stats["valid"], 6);
+    assert_eq!(stats["sides_histogram"], run["trace"]["sides_histogram"]);
+    assert_eq!(stats["unassigned_faces"], 0);
+}

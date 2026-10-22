@@ -1,5 +1,6 @@
 """Tests for the quadloom_native extension module (built with fault injection)."""
 
+import math
 import struct
 import threading
 import time
@@ -288,3 +289,32 @@ def test_field_section_parsed_and_checked():
     assert "field.curvature_alignment" in str(e.value)
     with pytest.raises(ql.InvalidInputError):
         ql.run(p, i, ql.Control(), params={"field": {"alignment_weight": -1.0}})
+
+
+def test_trace_section_and_bytes():
+    p, i = cube()
+    result = ql.run(p, i, ql.Control())
+    trace = result["trace"]
+    faces = len(trace["triangles"]) // 12
+    assert faces > 0 and len(trace["positions"]) % 12 == 0
+    patch = struct.unpack(f"<{faces}I", trace["patch_of_face"])
+    report = trace["report"]
+    assert report["patches"] == 6 and report["unsolved"] == 0
+    assert set(patch) == set(range(report["patches"]))
+    offsets = struct.unpack(f"<{report['patches'] + 1}I", trace["corner_offsets"])
+    assert offsets[0] == 0 and offsets[-1] * 4 == len(trace["corners"])
+    lengths = struct.unpack(f"<{offsets[-1]}d", trace["side_lengths"])
+    assert all(math.isfinite(x) and x > 0 for x in lengths)
+    assert len(trace["kinds"]) == report["patches"]
+    assert set(trace["kind_names"]) >= {"ok", "non_disk"}
+    off = ql.run(p, i, ql.Control(), params={"trace": {"enabled": False}})
+    assert off["trace"] is None
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"trace": {"max_sides": 9}})
+    assert "trace.max_sides" in str(e.value)
+    with pytest.raises(ql.InvalidInputError) as e:
+        ql.run(p, i, ql.Control(), params={"trace": {"cost": "cheap"}})
+    assert "params.trace.cost" in str(e.value)
+    hexes = ql.run(p, i, ql.Control(), params={"trace": {"max_sides": 6, "cost": "angle_penalty", "drift": 100.0}})
+    assert hexes["trace"]["report"]["unsolved"] == 0
+

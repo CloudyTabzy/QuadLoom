@@ -37,4 +37,5 @@ pub use params::Params;
 pub use pipeline::{RunOutput, check_limits, run};
 pub use remesh::{RemeshParams, RemeshReport};
 pub use repair::{RepairParams, RepairReport, RepairedMesh, repair};
+pub use trace::{PatchKind, TraceCost, TraceOutput, TraceParams, TraceReport};
 pub use validate::ValidationReport;

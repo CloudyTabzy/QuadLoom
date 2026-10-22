@@ -129,6 +129,68 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         soft_max=20.0,
     )
 
+    # --- Patch layout (stage 4) --------------------------------------------------
+    trace_enabled: BoolProperty(
+        name="Patch Layout",
+        description="Trace field-aligned paths that cut the surface into patches for the quads "
+        "(needs the cross field)",
+        default=True,
+    )
+    trace_max_sides: IntProperty(
+        name="Max Sides",
+        description="Most sides a patch may have. 5 follows QuadWild; 6 allows hexagonal patches, "
+        "giving fewer, larger patches",
+        default=5,
+        min=4,
+        max=6,
+    )
+    trace_cost: EnumProperty(
+        name="Path Cost",
+        description="How a traced path is charged for drifting off the field",
+        items=[
+            ("ANISOTROPIC", "Anisotropic", "Length measured with sideways motion stretched by Drift"),
+            ("ANGLE_PENALTY", "Angle Penalty", "QuadWild's: length times 1 + Drift × (angle / 45°)²"),
+        ],
+        default="ANISOTROPIC",
+    )
+    trace_drift: FloatProperty(
+        name="Drift",
+        description="How strongly paths are kept on the field. Higher: straighter, more field-true paths; "
+        "lower: shorter paths that may cut across",
+        default=10.0,
+        min=0.0,
+        max=1000.0,
+        soft_max=200.0,
+    )
+    trace_cc_tolerance: FloatProperty(
+        name="Side Tolerance",
+        description="How far (in edge lengths) a patch's sides may be from a clean single-singularity "
+        "quadrangulation before the patch is split further",
+        default=1.0,
+        min=0.0,
+        max=10.0,
+    )
+    trace_match_valence: BoolProperty(
+        name="Match Singularities",
+        description="Keep at most one singularity per patch, matching its number of sides",
+        default=True,
+    )
+    trace_loop_density: FloatProperty(
+        name="Loop Density",
+        description="Loop seeds per vertex (QuadWild's sample ratio)",
+        default=0.01,
+        min=0.001,
+        max=0.1,
+        precision=3,
+    )
+    trace_sub_passes: IntProperty(
+        name="Patch Passes",
+        description="Rounds of tracing inside patches that still fail a condition",
+        default=3,
+        min=0,
+        max=10,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -216,6 +278,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     remesh_summary: StringProperty(name="Remesh")
     feature_summary: StringProperty(name="Features")
     field_summary: StringProperty(name="Field")
+    trace_summary: StringProperty(name="Layout")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
@@ -266,5 +329,15 @@ def run_params(settings):
             "curvature_alignment": settings.field_curvature.lower(),
             "alignment_weight": settings.field_alignment_weight,
             "sharp_factor": settings.field_sharp_factor,
+        },
+        "trace": {
+            "enabled": settings.trace_enabled,
+            "max_sides": settings.trace_max_sides,
+            "cost": settings.trace_cost.lower(),
+            "drift": settings.trace_drift,
+            "cc_tolerance": settings.trace_cc_tolerance,
+            "match_valence": settings.trace_match_valence,
+            "loop_density": settings.trace_loop_density,
+            "sub_passes": settings.trace_sub_passes,
         },
     }

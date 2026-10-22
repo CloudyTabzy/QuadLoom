@@ -170,3 +170,166 @@ pub fn read_rosy(path: &Path, faces: usize) -> Result<Vec<DVec3>, IoError> {
     };
     (0..count).map(|_| Ok(DVec3::new(number()?, number()?, number()?))).collect()
 }
+
+/// Loads an OBJ's vertices in file order (polygons fan-triangulated), so
+/// vertex ids match files that refer to them (e.g. QuadWild's `.corners`).
+/// `tobj` renumbers vertices by first use, which breaks that.
+pub fn load_obj_ordered(path: &Path) -> Result<(Vec<DVec3>, Vec<[u32; 3]>), IoError> {
+    let invalid = |what: String| IoError::Invalid(format!("{}: {what}", path.display()));
+    let text = read_tokens(path)?;
+    let (mut positions, mut triangles) = (Vec::new(), Vec::new());
+    for (n, line) in text.lines().enumerate() {
+        let mut fields = line.split_whitespace();
+        match fields.next() {
+            Some("v") => {
+                let c: Vec<f64> = fields.take(3).filter_map(|t| t.parse().ok()).collect();
+                let [x, y, z] = c[..] else { return Err(invalid(format!("line {}: bad vertex", n + 1))) };
+                positions.push(DVec3::new(x, y, z));
+            }
+            Some("f") => {
+                let count = positions.len() as i64;
+                let ids: Vec<u32> = fields
+                    .map(|t| {
+                        let i: i64 = t.split('/').next()?.parse().ok()?;
+                        let i = if i < 0 { count + i } else { i - 1 };
+                        u32::try_from(i).ok().filter(|&i| (i as usize) < positions.len())
+                    })
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| invalid(format!("line {}: bad face", n + 1)))?;
+                for k in 1..ids.len().saturating_sub(1) {
+                    triangles.push([ids[0], ids[k], ids[k + 1]]);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok((positions, triangles))
+}
+
+fn read_tokens(path: &Path) -> Result<String, IoError> {
+    std::fs::read_to_string(path).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
+}
+
+/// Reads QuadWild's `.sharp` features of a triangle mesh: a count, then one
+/// `kind,face,edge` line per feature edge (edge `e` of a face runs from its
+/// vertex `e` to vertex `e + 1`). Returns sorted vertex pairs.
+pub fn read_sharp(path: &Path, triangles: &[[u32; 3]]) -> Result<Vec<[u32; 2]>, IoError> {
+    let invalid = |what: &str| IoError::Invalid(format!("{}: {what}", path.display()));
+    let text = read_tokens(path)?;
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    let count: usize =
+        lines.next().and_then(|t| t.parse().ok()).ok_or_else(|| invalid("expected an integer edge count"))?;
+    let mut edges = Vec::with_capacity(count);
+    for _ in 0..count {
+        let line = lines.next().ok_or_else(|| invalid("fewer edges than the count says"))?;
+        let fields: Vec<usize> = line
+            .split(',')
+            .map(|t| t.trim().parse().ok())
+            .collect::<Option<_>>()
+            .ok_or_else(|| invalid("expected kind,face,edge"))?;
+        let [_, face, edge] = fields[..] else { return Err(invalid("expected kind,face,edge")) };
+        let t =
+            triangles.get(face).filter(|_| edge < 3).ok_or_else(|| invalid("face or edge out of range"))?;
+        let (a, b) = (t[edge], t[(edge + 1) % 3]);
+        edges.push([a.min(b), a.max(b)]);
+    }
+    edges.sort_unstable();
+    edges.dedup();
+    Ok(edges)
+}
+
+/// Reads a `.patch` file (a face count, then one patch id per face).
+pub fn read_patch(path: &Path, faces: usize) -> Result<Vec<u32>, IoError> {
+    let invalid = |what: &str| IoError::Invalid(format!("{}: {what}", path.display()));
+    let text = read_tokens(path)?;
+    let mut tokens = text.split_whitespace().map(|t| t.parse::<i64>().ok());
+    let count = tokens.next().flatten().ok_or_else(|| invalid("expected a face count"))?;
+    if count as usize != faces {
+        return Err(invalid(&format!("{count} patch ids for {faces} faces")));
+    }
+    (0..faces)
+        .map(|_| {
+            tokens
+                .next()
+                .flatten()
+                .and_then(|p| u32::try_from(p).ok())
+                .ok_or_else(|| invalid("expected a patch id"))
+        })
+        .collect()
+}
+
+/// Reads a `.corners` file (a patch count, then per patch its corner count
+/// and corner vertex ids).
+pub fn read_corners(path: &Path) -> Result<Vec<Vec<u32>>, IoError> {
+    let invalid = |what: &str| IoError::Invalid(format!("{}: {what}", path.display()));
+    let text = read_tokens(path)?;
+    let mut tokens = text.split_whitespace().map(|t| t.parse::<u32>().ok());
+    let mut next = || tokens.next().flatten().ok_or_else(|| invalid("expected an integer"));
+    let patches = next()?;
+    (0..patches)
+        .map(|_| {
+            let n = next()?;
+            (0..n).map(|_| next()).collect()
+        })
+        .collect()
+}
+
+/// Writes a layout in QuadWild's stage formats: `<prefix>_p0.obj` (the
+/// mesh), `.patch` (patch id per face), `.corners`, `.feature` (`face,edge`
+/// per feature edge) and `.c_feature` (feature vertices that aren't on a
+/// single feature line: ends and junctions).
+pub fn write_layout(prefix: &Path, layout: &quadloom_core::TraceOutput) -> Result<(), IoError> {
+    let path = |ext: &str| {
+        let mut name = prefix.as_os_str().to_owned();
+        name.push(format!("_p0.{ext}"));
+        std::path::PathBuf::from(name)
+    };
+    let write = |p: std::path::PathBuf, text: String| {
+        std::fs::write(&p, text).map_err(|e| IoError::Io(format!("{}: {e}", p.display())))
+    };
+    let mesh = &layout.mesh;
+    let poly = PolyMesh {
+        positions: mesh.positions.clone(),
+        face_offsets: (0..=mesh.triangles.len() as u32).map(|f| 3 * f).collect(),
+        face_indices: mesh.triangles.iter().flatten().copied().collect(),
+    };
+    write_obj(&path("obj"), &poly)?;
+    let mut text = format!("{}\n", layout.patch_of_face.len());
+    for p in &layout.patch_of_face {
+        let _ = writeln!(text, "{p}");
+    }
+    write(path("patch"), text)?;
+    let mut text = format!("{}\n", layout.patches.len());
+    for patch in &layout.patches {
+        let _ = writeln!(text, "{}", patch.corners.len());
+        for c in &patch.corners {
+            let _ = writeln!(text, "{c}");
+        }
+    }
+    write(path("corners"), text)?;
+    let features: std::collections::HashSet<[u32; 2]> = mesh.feature_edges.iter().copied().collect();
+    let mut lines = Vec::new();
+    for (f, t) in mesh.triangles.iter().enumerate() {
+        for e in 0..3 {
+            let (a, b) = (t[e], t[(e + 1) % 3]);
+            if features.contains(&[a.min(b), a.max(b)]) {
+                lines.push(format!("{f},{e}"));
+            }
+        }
+    }
+    write(
+        path("feature"),
+        format!("{}\n{}", lines.len(), lines.iter().map(|l| format!("{l}\n")).collect::<String>()),
+    )?;
+    let mut degree = vec![0u32; mesh.positions.len()];
+    for &[a, b] in &mesh.feature_edges {
+        degree[a as usize] += 1;
+        degree[b as usize] += 1;
+    }
+    let corners: Vec<usize> =
+        degree.iter().enumerate().filter(|&(_, &d)| d != 0 && d != 2).map(|(v, _)| v).collect();
+    write(
+        path("c_feature"),
+        format!("{}\n{}", corners.len(), corners.iter().map(|v| format!("{v}\n")).collect::<String>()),
+    )
+}

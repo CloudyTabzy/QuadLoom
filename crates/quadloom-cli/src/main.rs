@@ -2,9 +2,16 @@
 //!
 //! ```text
 //! quadloom info <mesh.obj|stl>          print validation, repair and feature reports as JSON
-//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>]
+//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]
 //!                                       run the pipeline and write the result
-//!                                       (and its cross field, in QuadWild's format)
+//!                                       (and its cross field and patch layout,
+//!                                       in QuadWild's formats)
+//! quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix>
+//!                                       trace a given mesh, field and features
+//!                                       (e.g. QuadWild's `_rem` files); writes
+//!                                       `<prefix>_p0.*` and prints the report
+//! quadloom layout-stats <mesh.obj> <file.patch> <file.corners>
+//!                                       measure any layout the same way, as JSON
 //! quadloom field-index <mesh.obj> <field.rosy>
 //!                                       singularities of a per-face cross field as JSON
 //! quadloom metrics <result.obj> [--reference <input.obj|stl>]
@@ -24,7 +31,7 @@ use std::process::ExitCode;
 use quadloom_core::{Control, Error, ErrorKind, Params, RunOutput};
 use serde_json::json;
 
-const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>]\n       quadloom field-index <mesh.obj> <field.rosy>";
+const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix>\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
 
 enum Failure {
     Usage,
@@ -88,15 +95,22 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             Ok(())
         }
         ["run", input, output_path, rest @ ..] => {
-            let rosy = match rest {
-                [] => None,
-                ["--rosy", path] => Some(Path::new(*path)),
-                _ => return Err(Failure::Usage),
-            };
+            let (mut rosy, mut layout) = (None, None);
+            let mut options = rest.chunks(2);
+            for pair in &mut options {
+                match pair {
+                    ["--rosy", path] => rosy = Some(Path::new(*path)),
+                    ["--layout", path] => layout = Some(Path::new(*path)),
+                    _ => return Err(Failure::Usage),
+                }
+            }
             let output = run_file(Path::new(input))?;
             io::write_obj(Path::new(output_path), &output.mesh)?;
             if let (Some(path), Some(field)) = (rosy, &output.field) {
                 io::write_rosy(path, &field.directions)?;
+            }
+            if let (Some(prefix), Some(trace)) = (layout, &output.trace) {
+                io::write_layout(prefix, trace)?;
             }
             let timings: serde_json::Map<String, serde_json::Value> =
                 output.timings_ms.iter().map(|(stage, ms)| (stage.name().to_owned(), json!(ms))).collect();
@@ -112,12 +126,19 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "components": output.components,
                     "remesh": output.remesh,
                     "field": output.field.as_ref().map(|f| &f.report),
+                    "trace": output.trace.as_ref().map(|t| &t.report),
                     "timings_ms": timings,
                 })
             );
             Ok(())
         }
         ["field-index", mesh, rosy] => field_index(Path::new(mesh), Path::new(rosy)),
+        ["layout", mesh, rosy, sharp, prefix] => {
+            layout(Path::new(mesh), Path::new(rosy), Path::new(sharp), Path::new(prefix))
+        }
+        ["layout-stats", mesh, patch, corners] => {
+            layout_stats(Path::new(mesh), Path::new(patch), Path::new(corners))
+        }
         ["metrics", result] => metrics(Path::new(result), None),
         ["metrics", result, "--reference", reference] => {
             metrics(Path::new(result), Some(Path::new(reference)))
@@ -158,6 +179,74 @@ fn field_index(mesh: &Path, rosy: &Path) -> Result<(), Failure> {
             "vertices": listed,
         })
     );
+    Ok(())
+}
+
+type Triangles = (Vec<quadloom_core::mesh::DVec3>, Vec<[u32; 3]>);
+
+fn load_triangles(mesh: &Path) -> Result<Triangles, Failure> {
+    if mesh.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("obj")) {
+        return Ok(io::load_obj_ordered(mesh)?);
+    }
+    let (positions, indices) = io::load(mesh)?;
+    let positions = positions
+        .chunks_exact(3)
+        .map(|c| quadloom_core::mesh::DVec3::new(f64::from(c[0]), f64::from(c[1]), f64::from(c[2])))
+        .collect();
+    Ok((positions, indices.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()))
+}
+
+/// Traces a mesh with a given field and features, as the pipeline's stage 4
+/// would, and writes the layout in QuadWild's formats.
+fn layout(mesh: &Path, rosy: &Path, sharp: &Path, prefix: &Path) -> Result<(), Failure> {
+    let (positions, triangles) = load_triangles(mesh)?;
+    let directions = io::read_rosy(rosy, triangles.len())?;
+    let features = io::read_sharp(sharp, &triangles)?;
+    let frames = quadloom_core::field::FaceFrames::new(&positions, &triangles);
+    let powers: Vec<_> = (0..triangles.len() as u32)
+        .map(|f| frames.power(f, directions[f as usize], quadloom_core::field::ROSY))
+        .collect();
+    let singularities = quadloom_core::field::vertex_indices(&positions, &triangles, &powers)
+        .into_iter()
+        .enumerate()
+        .filter(|&(_, k)| k != 0)
+        .map(|(v, k)| (v as u32, k))
+        .collect();
+    let field = quadloom_core::FieldOutput { directions, singularities, ..Default::default() };
+    let started = std::time::Instant::now();
+    let trace = quadloom_core::trace::compute(
+        &positions,
+        &triangles,
+        &features,
+        &field,
+        &quadloom_core::TraceParams::default(),
+        &Control::default(),
+    )?;
+    let ms = started.elapsed().as_secs_f64() * 1000.0;
+    io::write_layout(prefix, &trace)?;
+    let corners: Vec<Vec<u32>> = trace.patches.iter().map(|p| p.corners.clone()).collect();
+    let stats = quadloom_core::trace::layout_stats(
+        &trace.mesh.positions,
+        &trace.mesh.triangles,
+        &trace.patch_of_face,
+        &corners,
+        5,
+        1.0,
+    );
+    println!(
+        "{}",
+        json!({ "report": trace.report, "stats": stats, "trace_ms": ms, "faces": trace.mesh.triangles.len() })
+    );
+    Ok(())
+}
+
+/// Measures a layout from its files (ours or QuadWild's) with the same routine.
+fn layout_stats(mesh: &Path, patch: &Path, corners: &Path) -> Result<(), Failure> {
+    let (positions, triangles) = load_triangles(mesh)?;
+    let patch_of_face = io::read_patch(patch, triangles.len())?;
+    let corners = io::read_corners(corners)?;
+    let stats = quadloom_core::trace::layout_stats(&positions, &triangles, &patch_of_face, &corners, 5, 1.0);
+    println!("{}", json!(stats));
     Ok(())
 }
 

@@ -7,7 +7,9 @@ use pyo3::buffer::{Element, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
-use quadloom_core::{FieldOutput, RemeshReport, RepairReport, RunOutput, ValidationReport};
+use quadloom_core::{
+    FieldOutput, PatchKind, RemeshReport, RepairReport, RunOutput, TraceOutput, ValidationReport,
+};
 
 use crate::errors::invalid_argument;
 
@@ -99,6 +101,10 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         Some(f) => dict.set_item("field", field(py, f)?)?,
         None => dict.set_item("field", py.None())?,
     }
+    match &output.trace {
+        Some(t) => dict.set_item("trace", trace(py, t)?)?,
+        None => dict.set_item("trace", py.None())?,
+    }
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
     Ok(dict)
@@ -127,6 +133,91 @@ fn field<'py>(py: Python<'py>, f: &FieldOutput) -> PyResult<Bound<'py, PyDict>> 
     report.set_item("hard_faces", r.hard_faces)?;
     report.set_item("curvature_aligned", r.curvature_aligned)?;
     report.set_item("fallback_parts", r.fallback_parts)?;
+    dict.set_item("report", report)?;
+    Ok(dict)
+}
+
+/// The patch layout, on its own (refined) copy of the mesh:
+/// - `positions` (float32 × 3) and `triangles` (uint32 × 3): that mesh
+/// - `patch_of_face` (uint32): one patch id per triangle
+/// - `feature_edges` (uint32 pairs): the feature lines on that mesh
+/// - `corner_offsets` (uint32, patches + 1) into `corners` (uint32), and
+///   `side_lengths` (float64, one per corner: the side starting there)
+/// - `kinds` (uint8 per patch, an index into `kind_names`)
+/// - `path_offsets` (uint32) into `path_vertices` (uint32)
+/// - `report`
+fn trace<'py>(py: Python<'py>, t: &TraceOutput) -> PyResult<Bound<'py, PyDict>> {
+    let le_u32 =
+        |values: &mut dyn Iterator<Item = u32>| values.flat_map(u32::to_le_bytes).collect::<Vec<u8>>();
+    let dict = PyDict::new(py);
+    let positions: Vec<u8> = t
+        .mesh
+        .positions
+        .iter()
+        .flat_map(|p| [p.x as f32, p.y as f32, p.z as f32])
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    dict.set_item("positions", PyBytes::new(py, &positions))?;
+    dict.set_item("triangles", PyBytes::new(py, &le_u32(&mut t.mesh.triangles.iter().flatten().copied())))?;
+    dict.set_item("patch_of_face", PyBytes::new(py, &le_u32(&mut t.patch_of_face.iter().copied())))?;
+    dict.set_item(
+        "feature_edges",
+        PyBytes::new(py, &le_u32(&mut t.mesh.feature_edges.iter().flatten().copied())),
+    )?;
+    let mut offsets = vec![0u32];
+    for p in &t.patches {
+        offsets.push(offsets[offsets.len() - 1] + p.corners.len() as u32);
+    }
+    dict.set_item("corner_offsets", PyBytes::new(py, &le_u32(&mut offsets.into_iter())))?;
+    dict.set_item(
+        "corners",
+        PyBytes::new(py, &le_u32(&mut t.patches.iter().flat_map(|p| p.corners.iter().copied()))),
+    )?;
+    let lengths: Vec<u8> =
+        t.patches.iter().flat_map(|p| p.sides.iter().map(|s| s.length)).flat_map(f64::to_le_bytes).collect();
+    dict.set_item("side_lengths", PyBytes::new(py, &lengths))?;
+    let names = [
+        PatchKind::NonDisk,
+        PatchKind::NotConvex,
+        PatchKind::LowSides,
+        PatchKind::HighSides,
+        PatchKind::NotCcAble,
+        PatchKind::ValenceMismatch,
+        PatchKind::Ok,
+    ];
+    let kinds: Vec<u8> =
+        t.patches.iter().map(|p| names.iter().position(|&k| k == p.kind).unwrap_or(0) as u8).collect();
+    dict.set_item("kinds", PyBytes::new(py, &kinds))?;
+    dict.set_item("kind_names", names.iter().map(|k| k.name()).collect::<Vec<_>>())?;
+    let mut path_offsets = vec![0u32];
+    for path in &t.paths {
+        path_offsets.push(path_offsets[path_offsets.len() - 1] + path.len() as u32);
+    }
+    dict.set_item("path_offsets", PyBytes::new(py, &le_u32(&mut path_offsets.into_iter())))?;
+    dict.set_item("path_vertices", PyBytes::new(py, &le_u32(&mut t.paths.iter().flatten().copied())))?;
+    let report = PyDict::new(py);
+    let r = &t.report;
+    for (key, value) in [
+        ("parts", r.parts),
+        ("patches", r.patches),
+        ("non_disk", r.non_disk),
+        ("not_convex", r.not_convex),
+        ("low_sides", r.low_sides),
+        ("high_sides", r.high_sides),
+        ("not_cc_able", r.not_cc_able),
+        ("valence_mismatch", r.valence_mismatch),
+        ("ok", r.ok),
+        ("candidates", r.candidates),
+        ("kept_paths", r.kept_paths),
+        ("removed_paths", r.removed_paths),
+        ("sub_passes_run", r.sub_passes_run),
+        ("relaxed_patches", r.relaxed_patches),
+        ("seams", r.seams),
+        ("unsolved", r.unsolved),
+    ] {
+        report.set_item(key, value)?;
+    }
+    report.set_item("sides_histogram", r.sides_histogram.to_vec())?;
     dict.set_item("report", report)?;
     Ok(dict)
 }

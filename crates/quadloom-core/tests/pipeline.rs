@@ -344,3 +344,50 @@ fn field_can_be_turned_off() {
     let out = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
     assert!(out.field.is_none());
 }
+
+#[test]
+fn trace_runs_after_field() {
+    let (p, i) = cube();
+    let out = run(&p, &i, &FeatureInput::default(), &Params::default(), &Control::default()).unwrap();
+    let layout = out.trace.expect("tracing runs by default");
+    assert_eq!(layout.patches.len(), 6, "{:?}", layout.report);
+    assert!(layout.patches.iter().all(|patch| patch.kind == quadloom_core::PatchKind::Ok));
+    assert_eq!(layout.patch_of_face.len(), layout.mesh.triangles.len());
+    assert_eq!(layout.mesh.directions.len(), layout.mesh.triangles.len());
+    assert_eq!(layout.report.unsolved, 0);
+    assert!(out.timings_ms.iter().any(|(s, _)| *s == Stage::Trace));
+}
+
+#[test]
+fn trace_is_skipped_without_field() {
+    let (p, i) = cube();
+    let mut params = Params::default();
+    params.field.enabled = false;
+    let out = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    assert!(out.trace.is_none());
+    let mut params = Params::default();
+    params.trace.enabled = false;
+    let out = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap();
+    assert!(out.field.is_some() && out.trace.is_none());
+}
+
+#[test]
+fn out_of_range_trace_params_rejected() {
+    let (p, i) = tetrahedron();
+    for (name, change) in [
+        (
+            "trace.max_sides",
+            Box::new(|t: &mut quadloom_core::TraceParams| t.max_sides = 7) as Box<dyn Fn(&mut _)>,
+        ),
+        ("trace.max_sides", Box::new(|t: &mut quadloom_core::TraceParams| t.max_sides = 3)),
+        ("trace.drift", Box::new(|t: &mut quadloom_core::TraceParams| t.drift = f64::NAN)),
+        ("trace.cc_tolerance", Box::new(|t: &mut quadloom_core::TraceParams| t.cc_tolerance = -1.0)),
+        ("trace.loop_density", Box::new(|t: &mut quadloom_core::TraceParams| t.loop_density = 0.5)),
+        ("trace.sub_passes", Box::new(|t: &mut quadloom_core::TraceParams| t.sub_passes = 11)),
+    ] {
+        let mut params = Params::default();
+        change(&mut params.trace);
+        let err = run(&p, &i, &FeatureInput::default(), &params, &Control::default()).unwrap_err();
+        assert!(err.message.contains(name), "{}", err.message);
+    }
+}

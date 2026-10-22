@@ -141,6 +141,32 @@ def decode_result(result):
     return positions, offsets, corners
 
 
+def decode_layout(trace):
+    """Unpacks and checks a result's patch layout (on its own refined mesh).
+
+    Returns (positions, face offsets, face corners, patch ids, feature edges);
+    raises ValueError if it's inconsistent.
+    """
+    positions = array("f")
+    positions.frombytes(trace["positions"])
+    corners = array("I")
+    corners.frombytes(trace["triangles"])
+    patch = array("I")
+    patch.frombytes(trace["patch_of_face"])
+    if len(positions) % 3 or len(corners) % 3:
+        raise ValueError("layout mesh buffers are not triples")
+    face_count = len(corners) // 3
+    if len(patch) != face_count:
+        raise ValueError("layout has a patch id count different from its face count")
+    offsets = array("I", range(0, 3 * face_count + 1, 3))
+    vertex_count = len(positions) // 3
+    if corners and max(corners) >= vertex_count:
+        raise ValueError("layout references a vertex that doesn't exist")
+    if _has_repeated_corner(offsets, corners, vertex_count):
+        raise ValueError("layout has a face that uses the same vertex twice")
+    return positions, offsets, corners, patch, trace.get("feature_edges", b"")
+
+
 def _has_repeated_corner(offsets, corners, vertex_count):
     import numpy as np
 
@@ -183,6 +209,11 @@ def build_result(snapshot, result, scene):
     Raises ValueError (without leaving partial data behind) if the result is malformed.
     """
     positions, offsets, corners = decode_result(result)
+    feature_edges, patch = result.get("feature_edges", b""), None
+    if result.get("trace"):
+        # Until quads exist, the result shows the layout: its (refined) mesh,
+        # with each triangle's patch as the integer face attribute "quadloom_patch".
+        positions, offsets, corners, patch, feature_edges = decode_layout(result["trace"])
     name = snapshot.source_name + RESULT_SUFFIX
     mesh = bpy.data.meshes.new(name)
     obj = None
@@ -194,13 +225,17 @@ def build_result(snapshot, result, scene):
         mesh.polygons.add(len(offsets) - 1)
         mesh.polygons.foreach_set("loop_start", array("i", offsets[:-1]))
         mesh.update(calc_edges=True)
-        _mark_feature_edges(mesh, result.get("feature_edges", b""))
+        _mark_feature_edges(mesh, feature_edges)
+        if patch is not None:
+            attr = mesh.attributes.new("quadloom_patch", "INT", "FACE")
+            attr.data.foreach_set("value", array("i", patch))
 
         obj = bpy.data.objects.new(name, mesh)
         obj.matrix_world = snapshot.matrix_world
         _target_collection(snapshot, scene).objects.link(obj)
         obj["quadloom_report"] = json.dumps(
             {key: dict(result[key]) for key in ("validation", "repair", "features") if key in result}
+            | ({"trace": dict(result["trace"]["report"])} if result.get("trace") else {})
         )
     except Exception:
         if obj is not None:

@@ -57,6 +57,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     (last.feature_summary, "EDGESEL"),
                     (last.remesh_summary, "MOD_REMESH"),
                     (last.field_summary, "ORIENTATION_GIMBAL"),
+                    (last.trace_summary, "MOD_LATTICE"),
                 ):
                     for n, line in enumerate(_wrap(summary)):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
@@ -132,6 +133,28 @@ class QUADLOOM_PT_field(_SubPanel, bpy.types.Panel):
         sub.prop(settings, "field_sharp_factor")
 
 
+class QUADLOOM_PT_layout(_SubPanel, bpy.types.Panel):
+    bl_label = "Patch Layout"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "trace_enabled", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = settings.trace_enabled and settings.field_enabled
+        layout.prop(settings, "trace_max_sides")
+        layout.prop(settings, "trace_match_valence")
+        layout.prop(settings, "trace_cc_tolerance")
+        col = layout.column(align=True)
+        col.prop(settings, "trace_cost")
+        col.prop(settings, "trace_drift")
+        col = layout.column(align=True)
+        col.prop(settings, "trace_loop_density")
+        col.prop(settings, "trace_sub_passes")
+
+
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
     bl_label = "Sharp Features"
 
@@ -195,5 +218,6 @@ classes = (
     QUADLOOM_PT_features,
     QUADLOOM_PT_remesh,
     QUADLOOM_PT_field,
+    QUADLOOM_PT_layout,
     QUADLOOM_PT_advanced,
 )

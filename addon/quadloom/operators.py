@@ -64,6 +64,7 @@ def start_job(context):
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
+    last.trace_summary = ""
     _active_job = job
     job.thread.start()
     return job
@@ -90,6 +91,7 @@ def finish_job(context, job):
             last.feature_summary = feature_summary(job.result["features"])
             last.remesh_summary = remesh_summary(job.result.get("remesh"), job.kwargs["params"]["remesh"]["enabled"])
             last.field_summary = field_summary(job.result.get("field"))
+            last.trace_summary = trace_summary(job.result.get("trace"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -138,6 +140,19 @@ def field_summary(field):
         text += ", follows curvature"
     if report["fallback_parts"]:
         text += f", {report['fallback_parts']} parts used the fallback field"
+    return text
+
+
+def trace_summary(trace):
+    """One line about the patch layout, e.g. "layout: 312 patches (4 need fixing)"."""
+    if not trace:
+        return "patch layout off"
+    report = trace["report"]
+    text = f"layout: {report['patches']:,} patches"
+    if report["unsolved"]:
+        text += f" ({report['unsolved']:,} need fixing)"
+    if report["seams"]:
+        text += f", {report['seams']:,} seams"
     return text
 
 

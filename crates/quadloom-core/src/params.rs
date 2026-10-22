@@ -8,6 +8,7 @@ use crate::features::FeatureParams;
 use crate::field::FieldParams;
 use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
+use crate::trace::TraceParams;
 
 /// Largest allowed weld distance, as a fraction of the bbox diagonal. Above
 /// this, welding stops being "merge split seams" and starts destroying detail
@@ -31,6 +32,8 @@ pub struct Params {
     pub remesh: RemeshParams,
     /// Stage 3: cross field.
     pub field: FieldParams,
+    /// Stage 4: field tracing and patch layout.
+    pub trace: TraceParams,
     /// Test-only fault to inject (see [`crate::fault`]).
     #[cfg(feature = "fault-injection")]
     pub fault: Option<Fault>,
@@ -44,6 +47,7 @@ impl Default for Params {
             features: FeatureParams::default(),
             remesh: RemeshParams::default(),
             field: FieldParams::default(),
+            trace: TraceParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
         }
@@ -95,6 +99,22 @@ impl Params {
         }
         if !(0.0..=1000.0).contains(&f.sharp_factor) {
             return bad(format!("field.sharp_factor must be between 0 and 1000 (got {})", f.sharp_factor));
+        }
+        let t = &self.trace;
+        if !(4..=6).contains(&t.max_sides) {
+            return bad(format!("trace.max_sides must be between 4 and 6 (got {})", t.max_sides));
+        }
+        if !(0.0..=1000.0).contains(&t.drift) {
+            return bad(format!("trace.drift must be between 0 and 1000 (got {})", t.drift));
+        }
+        if !(0.0..=10.0).contains(&t.cc_tolerance) {
+            return bad(format!("trace.cc_tolerance must be between 0 and 10 (got {})", t.cc_tolerance));
+        }
+        if !(0.001..=0.1).contains(&t.loop_density) {
+            return bad(format!("trace.loop_density must be between 0.001 and 0.1 (got {})", t.loop_density));
+        }
+        if t.sub_passes > 10 {
+            return bad(format!("trace.sub_passes must be at most 10 (got {})", t.sub_passes));
         }
         Ok(())
     }

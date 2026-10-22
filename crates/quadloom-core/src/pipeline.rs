@@ -15,6 +15,7 @@ use crate::params::Params;
 use crate::remesh::{self, RemeshReport};
 use crate::repair::RepairedMesh;
 use crate::repair::{RepairReport, repair};
+use crate::trace::{self, TraceOutput};
 use crate::validate::{ValidationReport, validate};
 
 /// Everything a successful run produces.
@@ -32,6 +33,9 @@ pub struct RunOutput {
     pub remesh: RemeshReport,
     /// The cross field on `mesh` (one direction per triangle), if enabled.
     pub field: Option<FieldOutput>,
+    /// The patch layout, if the field and tracing ran. It lives on its own
+    /// copy of `mesh`, refined around singularities.
+    pub trace: Option<TraceOutput>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -111,6 +115,19 @@ pub fn run(
         None
     };
 
+    let trace = match &field {
+        Some(field) if params.trace.enabled => {
+            let started = Instant::now();
+            control.checkpoint(Stage::Trace)?;
+            fault::inject(params, Stage::Trace, control)?;
+            let layout =
+                trace::compute(&positions, &triangles, &feature_edges, field, &params.trace, control)?;
+            timings_ms.push((Stage::Trace, elapsed_ms(started)));
+            Some(layout)
+        }
+        _ => None,
+    };
+
     let started = Instant::now();
     control.checkpoint(Stage::Output)?;
     fault::inject(params, Stage::Output, control)?;
@@ -132,6 +149,7 @@ pub fn run(
         components: components.len(),
         remesh: remesh_report,
         field,
+        trace,
         timings_ms,
     })
 }
