@@ -68,6 +68,9 @@ pub fn smooth(
         }
     }
     let surface = TriangleBvh::new(&trace.mesh.positions, &trace.mesh.triangles);
+    // A vertex projects onto its own patches and their neighbours: restricting it
+    // to its own patches alone clamps drifting vertices onto shared patch corners.
+    let regions = projection_regions(&patches, trace);
     for _ in 0..iterations {
         let current = &mesh.positions;
         let next: Vec<DVec3> = (0..n)
@@ -90,10 +93,9 @@ pub fn smooth(
                         / quads[v].len() as f64;
                     laplacian.lerp(parallelogram, PARALLELOGRAM_WEIGHT)
                 };
-                let allowed: HashSet<u32> = patches[v].iter().copied().collect();
                 let goal = p.lerp(average, STEP);
                 let projected = surface.closest_point_where(goal, |t| {
-                    trace.patch_of_face.get(t as usize).is_some_and(|q| allowed.contains(q))
+                    trace.patch_of_face.get(t as usize).is_some_and(|&q| regions.contains(v, q))
                 });
                 match projected {
                     Some((q, _)) if q.is_finite() => q,
@@ -101,13 +103,14 @@ pub fn smooth(
                 }
             })
             .collect();
-        mesh.positions = next;
+        mesh.positions = guard_collapse(&mesh.positions, next, &neighbours);
     }
-    untangle(mesh, fixed, &neighbours, &patches, trace, &surface);
+    untangle(mesh, fixed, &neighbours, &regions, trace, &surface);
 }
 
-/// Rounds of untangling after smoothing.
+/// Rounds of untangling after smoothing, and rounds without progress before stopping.
 const UNTANGLE_ROUNDS: usize = 30;
+const UNTANGLE_PATIENCE: usize = 3;
 
 /// Quads with a corner that turns the wrong way against the surface (reflex
 /// or flipped) get their free vertices relaxed with full Laplacian steps (projected back onto their patches)
@@ -116,7 +119,7 @@ fn untangle(
     mesh: &mut PolyMesh,
     fixed: &[bool],
     neighbours: &[Vec<u32>],
-    patches: &[Vec<u32>],
+    regions: &Regions,
     trace: &TraceOutput,
     surface: &TriangleBvh,
 ) {
@@ -130,9 +133,8 @@ fn untangle(
         })
         .collect();
     let project = |v: usize, goal: DVec3| -> Option<(DVec3, DVec3)> {
-        let allowed: HashSet<u32> = patches[v].iter().copied().collect();
         let (q, _, t) = surface.closest_triangle_where(goal, |t| {
-            trace.patch_of_face.get(t as usize).is_some_and(|p| allowed.contains(p))
+            trace.patch_of_face.get(t as usize).is_some_and(|&p| regions.contains(v, p))
         })?;
         Some((q, face_normal.get(t as usize).copied().unwrap_or(DVec3::ZERO)))
     };
@@ -141,12 +143,17 @@ fn untangle(
         .windows(2)
         .map(|w| mesh.face_indices.get(w[0] as usize..w[1] as usize).unwrap_or_default())
         .collect();
-    for _ in 0..UNTANGLE_ROUNDS {
+    // Surface normals once: untangling moves vertices only a little.
+    let normals: Vec<DVec3> = {
         let positions = &mesh.positions;
-        let normals: Vec<DVec3> = (0..positions.len())
+        (0..positions.len())
             .into_par_iter()
             .map(|v| project(v, positions[v]).map_or(DVec3::ZERO, |(_, n)| n))
-            .collect();
+            .collect()
+    };
+    let (mut best, mut stalled) = (usize::MAX, 0);
+    for _ in 0..UNTANGLE_ROUNDS {
+        let positions = &mesh.positions;
         let mut tangled = vec![false; positions.len()];
         let mut any = false;
         for face in &faces {
@@ -173,6 +180,16 @@ fn untangle(
         if !any {
             break;
         }
+        // Stop once rounds stop helping (some corners can't be fixed by moving free vertices).
+        let count = tangled.iter().filter(|&&t| t).count();
+        if count < best {
+            (best, stalled) = (count, 0);
+        } else {
+            stalled += 1;
+            if stalled >= UNTANGLE_PATIENCE {
+                break;
+            }
+        }
         let next: Vec<DVec3> = (0..positions.len())
             .into_par_iter()
             .map(|v| {
@@ -188,6 +205,87 @@ fn untangle(
                 }
             })
             .collect();
-        mesh.positions = next;
+        mesh.positions = guard_collapse(&mesh.positions, next, neighbours);
     }
 }
+
+/// Projection regions: a pool of patch sets, and per vertex an index into it.
+/// Each patch's set is itself plus its neighbours; a vertex on several patches
+/// gets the union (built once).
+struct Regions {
+    pool: Vec<HashSet<u32>>,
+    of_vertex: Vec<usize>,
+}
+
+impl Regions {
+    fn contains(&self, v: usize, patch: u32) -> bool {
+        self.of_vertex.get(v).and_then(|&i| self.pool.get(i)).is_some_and(|set| set.contains(&patch))
+    }
+}
+
+/// The patches each vertex may project onto: its own and their neighbours.
+fn projection_regions(patches: &[Vec<u32>], trace: &TraceOutput) -> Regions {
+    let tm = &trace.mesh;
+    let count = trace.patches.len();
+    let mut pool: Vec<HashSet<u32>> = (0..count as u32).map(|p| HashSet::from([p])).collect();
+    let mut face_of: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+    for (f, t) in tm.triangles.iter().enumerate() {
+        for i in 0..3 {
+            let (a, b) = (t[i], t[(i + 1) % 3]);
+            if let Some(&g) = face_of.get(&(b, a)) {
+                let (pf, pg) =
+                    (trace.patch_of_face.get(f).copied(), trace.patch_of_face.get(g as usize).copied());
+                if let (Some(pf), Some(pg)) = (pf, pg)
+                    && pf != pg
+                    && (pf as usize) < count
+                    && (pg as usize) < count
+                {
+                    pool[pf as usize].insert(pg);
+                    pool[pg as usize].insert(pf);
+                }
+            }
+            face_of.insert((a, b), f as u32);
+        }
+    }
+    let mut merged: std::collections::HashMap<Vec<u32>, usize> = std::collections::HashMap::new();
+    let of_vertex = patches
+        .iter()
+        .map(|own| match own.as_slice() {
+            [p] if (*p as usize) < count => *p as usize,
+            _ => {
+                let mut key: Vec<u32> = own.iter().copied().filter(|&p| (p as usize) < count).collect();
+                key.sort_unstable();
+                *merged.entry(key.clone()).or_insert_with(|| {
+                    let union: HashSet<u32> =
+                        key.iter().flat_map(|&p| pool[p as usize].iter().copied()).collect();
+                    pool.push(union);
+                    pool.len() - 1
+                })
+            }
+        })
+        .collect();
+    Regions { pool, of_vertex }
+}
+
+/// Keeps a vertex where it was if its move would shrink one of its edges below
+/// [`MIN_EDGE_RATIO`] of the edge's current length (projection can otherwise
+/// pull neighbours onto the same point and collapse quads).
+fn guard_collapse(current: &[DVec3], mut next: Vec<DVec3>, neighbours: &[Vec<u32>]) -> Vec<DVec3> {
+    for v in 0..next.len() {
+        if next[v] == current[v] {
+            continue;
+        }
+        let collapses = neighbours[v].iter().any(|&u| {
+            let u = u as usize;
+            let before = (current[v] - current[u]).length();
+            (next[v] - next[u]).length() < MIN_EDGE_RATIO * before
+        });
+        if collapses {
+            next[v] = current[v];
+        }
+    }
+    next
+}
+
+/// Shortest an edge may become in one smoothing round, relative to before.
+const MIN_EDGE_RATIO: f64 = 0.05;
