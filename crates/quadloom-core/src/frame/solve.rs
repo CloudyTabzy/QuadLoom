@@ -36,8 +36,9 @@ const GAUGE_V: f64 = 1e-6;
 /// rotation (a global θ rotation is otherwise free), small enough not to pull
 /// the solution away from the constraints.
 const GAUGE_THETA: f64 = 1e-4;
-/// Smallest backtracking step.
-const MIN_STEP: f64 = 1e-8;
+/// Smallest backtracking step. A Newton direction that cannot reduce the merit
+/// even at this step is stuck: the loop stops and the ACCEPT check decides.
+const MIN_STEP: f64 = 1e-3;
 /// Armijo factor for the KKT residual.
 const ARMIJO: f64 = 1e-4;
 /// Newton steps over which the merit must fall to count as progress.
