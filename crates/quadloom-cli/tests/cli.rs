@@ -147,3 +147,56 @@ fn layout_files_round_trip() {
     assert_eq!(stats["sides_histogram"], run["trace"]["sides_histogram"]);
     assert_eq!(stats["unassigned_faces"], 0);
 }
+
+/// A torus as OBJ text (`rings` × `segments` grid, two triangles per cell).
+fn torus_obj(rings: u32, segments: u32) -> String {
+    let mut obj = String::new();
+    for i in 0..rings {
+        let a = std::f64::consts::TAU * f64::from(i) / f64::from(rings);
+        for j in 0..segments {
+            let b = std::f64::consts::TAU * f64::from(j) / f64::from(segments);
+            let r = 1.0 + 0.35 * b.cos();
+            obj += &format!("v {} {} {}\n", r * a.cos(), r * a.sin(), 0.35 * b.sin());
+        }
+    }
+    let id = |i: u32, j: u32| (i % rings) * segments + (j % segments) + 1;
+    for i in 0..rings {
+        for j in 0..segments {
+            let (a, b, c, d) = (id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j + 1));
+            obj += &format!("f {a} {b} {c}\nf {a} {c} {d}\n");
+        }
+    }
+    obj
+}
+
+#[test]
+fn run_with_frame_reports_frame() {
+    let input = scratch("run_torus_frame.obj", &torus_obj(24, 16));
+    let output = input.with_file_name("run_torus_frame_out.obj");
+    let rosy = input.with_file_name("run_torus_frame.rosy");
+    let out = quadloom(&[
+        "run",
+        input.to_str().unwrap(),
+        output.to_str().unwrap(),
+        "--frame",
+        "{}",
+        "--rosy",
+        rosy.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(json["frame"]["solved_parts"].as_u64().unwrap() >= 1, "{}", json["frame"]);
+    let faces = json["output_faces"].as_u64().unwrap();
+    let written = std::fs::read_to_string(&rosy).unwrap();
+    assert_eq!(written.lines().count(), faces as usize + 2);
+}
+
+#[test]
+fn run_frame_unknown_key_exits_2() {
+    let input = scratch("run_frame_bad_key.obj", TETRAHEDRON_OBJ);
+    let output = input.with_file_name("run_frame_bad_key_out.obj");
+    let out =
+        quadloom(&["run", input.to_str().unwrap(), output.to_str().unwrap(), "--frame", r#"{"bogus": 1}"#]);
+    assert_eq!(out.status.code(), Some(2), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("params.frame.bogus"));
+}

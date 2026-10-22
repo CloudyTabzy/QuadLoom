@@ -2,10 +2,11 @@
 //!
 //! ```text
 //! quadloom info <mesh.obj|stl>          print validation, repair and feature reports as JSON
-//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>]
+//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>] [--frame <json>]
 //!                                       run the pipeline and write the result
 //!                                       (and its cross field and patch layout,
-//!                                       in QuadWild's formats)
+//!                                       in QuadWild's formats; with --frame,
+//!                                       the frame's rotated directions)
 //! quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]
 //!                                       trace a given mesh, field and features
 //!                                       (e.g. QuadWild's `_rem` files); writes
@@ -31,7 +32,7 @@ use std::process::ExitCode;
 use quadloom_core::{Control, Error, ErrorKind, Params, RunOutput};
 use serde_json::json;
 
-const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
+const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>] [--frame <json>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
 
 enum Failure {
     Usage,
@@ -87,7 +88,7 @@ fn main() -> ExitCode {
 fn dispatch(args: &[&str]) -> Result<(), Failure> {
     match args {
         ["info", input] => {
-            let output = run_file(Path::new(input))?;
+            let output = run_file(Path::new(input), &Params::default())?;
             println!(
                 "{}",
                 json!({ "validation": output.validation, "repair": output.repair, "features": output.features })
@@ -95,20 +96,28 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             Ok(())
         }
         ["run", input, output_path, rest @ ..] => {
-            let (mut rosy, mut layout, mut sharp) = (None, None, None);
+            let (mut rosy, mut layout, mut sharp, mut frame) = (None, None, None, None);
             let mut options = rest.chunks(2);
             for pair in &mut options {
                 match pair {
                     ["--rosy", path] => rosy = Some(Path::new(*path)),
                     ["--layout", path] => layout = Some(Path::new(*path)),
                     ["--sharp", path] => sharp = Some(Path::new(*path)),
+                    ["--frame", json] => frame = Some(*json),
                     _ => return Err(Failure::Usage),
                 }
             }
-            let output = run_file(Path::new(input))?;
+            let params = run_params(frame)?;
+            let output = run_file(Path::new(input), &params)?;
             io::write_obj(Path::new(output_path), &output.mesh)?;
-            if let (Some(path), Some(field)) = (rosy, &output.field) {
-                io::write_rosy(path, &field.directions)?;
+            // With a frame, the rosy file carries the frame's rotated directions.
+            let directions = match (&output.frame, &output.field) {
+                (Some(frame), _) => Some(&frame.directions),
+                (None, Some(field)) => Some(&field.directions),
+                (None, None) => None,
+            };
+            if let (Some(path), Some(directions)) = (rosy, directions) {
+                io::write_rosy(path, directions)?;
             }
             if let Some(path) = sharp {
                 io::write_sharp(path, &output.mesh, &output.feature_edges)?;
@@ -130,6 +139,7 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "components": output.components,
                     "remesh": output.remesh,
                     "field": output.field.as_ref().map(|f| &f.report),
+                    "frame": output.frame.as_ref().map(|f| &f.report),
                     "trace": output.trace.as_ref().map(|t| &t.report),
                     "timings_ms": timings,
                 })
@@ -312,8 +322,51 @@ fn metrics(result: &Path, reference: Option<&Path>) -> Result<(), Failure> {
     Ok(())
 }
 
-fn run_file(path: &Path) -> Result<RunOutput, Failure> {
+/// Pipeline settings for `run`: the defaults, with `--frame <json>` applied.
+fn run_params(frame: Option<&str>) -> Result<Params, Failure> {
+    let mut params = Params::default();
+    if let Some(text) = frame {
+        params.frame = frame_params(text)?;
+    }
+    params.check()?;
+    Ok(params)
+}
+
+/// Frame settings from a JSON object of `FrameParams` fields. The frame is
+/// enabled first, so `{}` turns it on with the defaults; keys are applied after.
+fn frame_params(text: &str) -> Result<quadloom_core::FrameParams, Failure> {
+    let bad = |what: String| Failure::Io(io::IoError::Invalid(format!("--frame: {what}")));
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| bad(e.to_string()))?;
+    let object = value.as_object().ok_or_else(|| bad("expected a JSON object".into()))?;
+    let mut frame = quadloom_core::FrameParams { enabled: true, ..Default::default() };
+    for (key, v) in object {
+        let number = || v.as_f64().ok_or_else(|| bad(format!("params.frame.{key} must be a number")));
+        let flag = || v.as_bool().ok_or_else(|| bad(format!("params.frame.{key} must be a bool")));
+        let count = || {
+            v.as_u64().map(|n| n as usize).ok_or_else(|| bad(format!("params.frame.{key} must be a count")))
+        };
+        match key.as_str() {
+            "enabled" => frame.enabled = flag()?,
+            "curvature_stretch" => frame.curvature_stretch = flag()?,
+            "balance" => frame.balance = number()?,
+            "max_stretch" => frame.max_stretch = number()?,
+            "stretch_weight" => frame.stretch_weight = number()?,
+            "align_weight" => frame.align_weight = number()?,
+            "smoothness" => frame.smoothness = number()?,
+            "max_iterations" => frame.max_iterations = count()?,
+            "max_part_faces" => frame.max_part_faces = count()?,
+            other => {
+                return Err(bad(format!(
+                    "params.frame.{other} is not a known setting (known: enabled, balance, curvature_stretch, max_stretch, stretch_weight, align_weight, smoothness, max_iterations, max_part_faces)"
+                )));
+            }
+        }
+    }
+    Ok(frame)
+}
+
+fn run_file(path: &Path, params: &Params) -> Result<RunOutput, Failure> {
     let (positions, indices) = io::load(path)?;
     let features = quadloom_core::features::FeatureInput::default();
-    Ok(quadloom_core::run(&positions, &indices, &features, &Params::default(), &Control::default())?)
+    Ok(quadloom_core::run(&positions, &indices, &features, params, &Control::default())?)
 }

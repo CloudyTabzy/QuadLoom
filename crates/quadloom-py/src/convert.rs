@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
 use quadloom_core::{
-    FieldOutput, PatchKind, RemeshReport, RepairReport, RunOutput, TraceOutput, ValidationReport,
+    FieldOutput, FrameOutput, PatchKind, RemeshReport, RepairReport, RunOutput, TraceOutput, ValidationReport,
 };
 
 use crate::errors::invalid_argument;
@@ -101,6 +101,10 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         Some(f) => dict.set_item("field", field(py, f)?)?,
         None => dict.set_item("field", py.None())?,
     }
+    match &output.frame {
+        Some(f) => dict.set_item("frame", frame(py, f)?)?,
+        None => dict.set_item("frame", py.None())?,
+    }
     match &output.trace {
         Some(t) => dict.set_item("trace", trace(py, t)?)?,
         None => dict.set_item("trace", py.None())?,
@@ -137,6 +141,41 @@ fn field<'py>(py: Python<'py>, f: &FieldOutput) -> PyResult<Bound<'py, PyDict>> 
     Ok(dict)
 }
 
+/// The rectangular frame's report, plus per field-mesh face:
+/// - `size` (float32): the relative quad size e^{−ū} = 1/√(a·b)
+/// - `stretch` (float32): the aspect ratio max(a,b)/min(a,b), with [a, b] the face's scales
+fn frame<'py>(py: Python<'py>, f: &FrameOutput) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    let r = &f.report;
+    for (key, value) in [
+        ("parts", r.parts),
+        ("solved_parts", r.solved_parts),
+        ("fallback_parts", r.fallback_parts),
+        ("skipped_parts", r.skipped_parts),
+        ("iterations", r.iterations),
+    ] {
+        dict.set_item(key, value)?;
+    }
+    for (key, value) in [
+        ("residual", r.residual),
+        ("max_rotation_deg", r.max_rotation_deg),
+        ("size_p5", r.size_p5),
+        ("size_p95", r.size_p95),
+        ("stretch_p50", r.stretch_p50),
+        ("stretch_p95", r.stretch_p95),
+    ] {
+        dict.set_item(key, value)?;
+    }
+    dict.set_item("curvature_stretch", r.curvature_stretch)?;
+    let size: Vec<u8> =
+        f.scales.iter().map(|&[a, b]| (1.0 / (a * b).sqrt()) as f32).flat_map(f32::to_le_bytes).collect();
+    let stretch: Vec<u8> =
+        f.scales.iter().map(|&[a, b]| (a.max(b) / a.min(b)) as f32).flat_map(f32::to_le_bytes).collect();
+    dict.set_item("size", PyBytes::new(py, &size))?;
+    dict.set_item("stretch", PyBytes::new(py, &stretch))?;
+    Ok(dict)
+}
+
 /// The patch layout, on its own (refined) copy of the mesh:
 /// - `positions` (float32 × 3) and `triangles` (uint32 × 3): that mesh
 /// - `patch_of_face` (uint32): one patch id per triangle
@@ -145,6 +184,7 @@ fn field<'py>(py: Python<'py>, f: &FieldOutput) -> PyResult<Bound<'py, PyDict>> 
 ///   `side_lengths` (float64, one per corner: the side starting there)
 /// - `kinds` (uint8 per patch, an index into `kind_names`)
 /// - `path_offsets` (uint32) into `path_vertices` (uint32)
+/// - `source_face` (uint32, one per triangle): the input face each was split from
 /// - `report`
 fn trace<'py>(py: Python<'py>, t: &TraceOutput) -> PyResult<Bound<'py, PyDict>> {
     let le_u32 =
@@ -160,6 +200,7 @@ fn trace<'py>(py: Python<'py>, t: &TraceOutput) -> PyResult<Bound<'py, PyDict>> 
     dict.set_item("positions", PyBytes::new(py, &positions))?;
     dict.set_item("triangles", PyBytes::new(py, &le_u32(&mut t.mesh.triangles.iter().flatten().copied())))?;
     dict.set_item("patch_of_face", PyBytes::new(py, &le_u32(&mut t.patch_of_face.iter().copied())))?;
+    dict.set_item("source_face", PyBytes::new(py, &le_u32(&mut t.source_face.iter().copied())))?;
     dict.set_item(
         "feature_edges",
         PyBytes::new(py, &le_u32(&mut t.mesh.feature_edges.iter().flatten().copied())),
