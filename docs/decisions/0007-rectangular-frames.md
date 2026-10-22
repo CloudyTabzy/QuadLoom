@@ -1,6 +1,6 @@
 # 0007 — Rectangular frames: an integrable frame stage between the field and tracing
 
-**Status:** accepted 2026-10-24. The default (on or off) is settled by the M6a benchmark; see Evidence.
+**Status:** accepted 2026-10-24. Opt-in: off by default (owner ruling), and with it off every run is unchanged.
 
 ## Context
 
@@ -80,7 +80,26 @@ A "Quad Shape" sub-panel: Rectangular Quads (on/off), Keep Square (balance 0–1
 
 ## Evidence
 
-To be filled by M6a Task 7: the benchmark of plain vs rectangular frames on the 60 oracle inputs. It covers layout validity, opposite-side mismatch of 4-sided patches (in the frame's metric), convergence and time.
+Smoke check (M6a Task 7). Release build, our pipeline, on 5 oracle `_rem` inputs; a3b4516.
 
-Prototype numbers so far:
-- **fandisk** (5.2k vertices, 32 singularities): converges in 8 Newton steps. The frame rotates 1.9° median and 24° at most. Sizes span 0.70–1.91× (p5–p95), aspect 1.5 median and 3.6 at p95. Features plus fixed singularities force some stretch, whichever objective is chosen.
+| Model | Off: total | On: frame | On: result | Curvature stretch: result |
+|---|---|---|---|---|
+| fandisk (10k faces) | 1.0 s | 2.0 s | solved, 6 steps; size 0.72–1.76×, stretch 1.46 (p95 3.25) | solved, 6 steps |
+| CesiumMilkTruck (18k, 56 parts) | 0.8 s | 3.6 s | 56/56 solved; size 0.90–1.93×, stretch 1.05 (p95 1.44) | 56/56 solved; stretch 1.28 (p95 2.10) |
+| stanford-bunny (20k, 166 border edges) | 1.6 s | 15 s | kept the regular field | kept the regular field |
+| rocker-arm (20k) | 1.5 s | 13 s | kept the regular field | kept the regular field |
+| armadillo (31k, 336 singularities) | 3.5 s | 20 s | kept the regular field | kept the regular field |
+
+**Frame off:** zero time, and the patch counts and Ok counts are identical to the run before this milestone, on every case.
+
+**Frame on:** layouts stay valid (no non-disk patches anywhere). On MilkTruck the layout has 441 patches (304 Ok) instead of 455 (319 Ok): a different layout, slightly fewer patches meeting every quality condition.
+
+## Limits
+
+- On organic models with open borders or noisy fields, the constrained problem is often infeasible. The paper notes that over-constrained boundaries can make it fail; its cure, automatic cone placement, is deferred. Those parts keep the regular field, reported as a fallback ("kept the regular field" in the panel).
+- A fallback costs the iterations until the stall stop: 13–20 s at 20–30k faces. Each Newton step is one sparse LU of the KKT system, about 1–2 s there, and Cancel is checked between steps.
+- **Deferred:**
+  - automatic cone placement;
+  - symbolic LU reuse across iterations;
+  - a cheaper reduced system;
+  - a regularity measure for the benchmark.
