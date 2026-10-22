@@ -19,6 +19,7 @@ serde = ["dep:serde"]
 glam.workspace = true
 rayon.workspace = true
 faer.workspace = true
+microlp.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, optional = true }
 

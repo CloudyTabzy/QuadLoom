@@ -109,7 +109,9 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             }
             let params = run_params(frame)?;
             let output = run_file(Path::new(input), &params)?;
-            io::write_obj(Path::new(output_path), &output.mesh)?;
+            // The quad mesh when the quad stages ran, else the prep triangles.
+            let written = output.quads.as_ref().map_or(&output.mesh, |q| &q.mesh);
+            io::write_obj(Path::new(output_path), written)?;
             // With a frame, the rosy file carries the frame's rotated directions.
             let directions = match (&output.frame, &output.field) {
                 (Some(frame), _) => Some(&frame.directions),
@@ -131,8 +133,9 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                 "{}",
                 json!({
                     "input_faces": output.validation.faces,
-                    "output_faces": output.mesh.face_count(),
-                    "output_vertices": output.mesh.positions.len(),
+                    "output_faces": written.face_count(),
+                    "output_vertices": written.positions.len(),
+                    "prep_faces": output.mesh.face_count(),
                     "validation": output.validation,
                     "repair": output.repair,
                     "features": output.features,
@@ -141,6 +144,7 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "field": output.field.as_ref().map(|f| &f.report),
                     "frame": output.frame.as_ref().map(|f| &f.report),
                     "trace": output.trace.as_ref().map(|t| &t.report),
+                    "quads": output.quads.as_ref().map(|q| &q.report),
                     "timings_ms": timings,
                 })
             );

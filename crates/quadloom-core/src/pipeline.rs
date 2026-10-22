@@ -13,6 +13,7 @@ use crate::field::{self, FieldOutput};
 use crate::frame::{self, FrameOutput};
 use crate::mesh::{InputMesh, PolyMesh};
 use crate::params::Params;
+use crate::quad::{self, QuadOutput};
 use crate::remesh::{self, RemeshReport};
 use crate::repair::RepairedMesh;
 use crate::repair::{RepairReport, repair};
@@ -39,6 +40,8 @@ pub struct RunOutput {
     /// The patch layout, if the field and tracing ran. It lives on its own
     /// copy of `mesh`, refined around singularities.
     pub trace: Option<TraceOutput>,
+    /// The quad mesh built from the layout, if the quad stages ran.
+    pub quads: Option<QuadOutput>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -154,6 +157,25 @@ pub fn run(
         _ => None,
     };
 
+    let quads = match &trace {
+        Some(layout) if params.quad.enabled => {
+            let started = Instant::now();
+            control.checkpoint(Stage::Quantize)?;
+            fault::inject(params, Stage::Quantize, control)?;
+            // Quads are sized from the prep remesh's edge length (or the mean edge without it).
+            let base = if remesh_report.target_edge_length > 0.0 {
+                remesh_report.target_edge_length
+            } else {
+                mean_edge(&positions, &triangles)
+            };
+            let scales = frame.as_ref().map(|f| f.scales.as_slice());
+            let built = quad::compute(layout, scales, base * params.quad.edge_scale, &params.quad, control)?;
+            timings_ms.push((Stage::Quantize, elapsed_ms(started)));
+            Some(built)
+        }
+        _ => None,
+    };
+
     let started = Instant::now();
     control.checkpoint(Stage::Output)?;
     fault::inject(params, Stage::Output, control)?;
@@ -177,6 +199,7 @@ pub fn run(
         field,
         frame,
         trace,
+        quads,
         timings_ms,
     })
 }
@@ -330,6 +353,21 @@ pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) ->
         return Err(Error::invalid_input(stage, "mesh is too large to index with 32-bit indices"));
     }
     Ok(())
+}
+
+/// Mean edge length of a triangle mesh (each interior edge counted twice).
+fn mean_edge(positions: &[glam::DVec3], triangles: &[[u32; 3]]) -> f64 {
+    let (mut sum, mut count) = (0.0, 0usize);
+    for t in triangles {
+        for i in 0..3 {
+            let (a, b) = (t[i] as usize, t[(i + 1) % 3] as usize);
+            if let (Some(&p), Some(&q)) = (positions.get(a), positions.get(b)) {
+                sum += (p - q).length();
+                count += 1;
+            }
+        }
+    }
+    if count > 0 { sum / count as f64 } else { 0.0 }
 }
 
 fn elapsed_ms(started: Instant) -> f64 {

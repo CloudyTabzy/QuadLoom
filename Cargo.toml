@@ -15,6 +15,7 @@ quadloom-core = { path = "crates/quadloom-core" }
 glam = "0.34.1"
 rayon = "1.12.0"
 # Sequential only (no `rayon` feature): deterministic results, and parts already run in parallel.
+microlp = "0.6.0"
 faer = { version = "0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
 thiserror = "2.0.21"
 serde = { version = "1.0", features = ["derive"] }

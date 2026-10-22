@@ -59,6 +59,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     (last.field_summary, "ORIENTATION_GIMBAL"),
                     (last.frame_summary, "MOD_SIMPLEDEFORM"),
                     (last.trace_summary, "MOD_LATTICE"),
+                    (last.quad_summary, "MESH_GRID"),
                 ):
                     for n, line in enumerate(_wrap(summary)):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
@@ -176,6 +177,22 @@ class QUADLOOM_PT_layout(_SubPanel, bpy.types.Panel):
         col.prop(settings, "trace_sub_passes")
 
 
+class QUADLOOM_PT_quads(_SubPanel, bpy.types.Panel):
+    bl_label = "Quads"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "quad_enabled", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = settings.quad_enabled and settings.trace_enabled and settings.field_enabled
+        if not (settings.trace_enabled and settings.field_enabled):
+            layout.label(text="Needs the Cross Field and Patch Layout", icon="INFO")
+        layout.prop(settings, "quad_size")
+
+
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
     bl_label = "Sharp Features"
 
@@ -241,5 +258,6 @@ classes = (
     QUADLOOM_PT_field,
     QUADLOOM_PT_shape,
     QUADLOOM_PT_layout,
+    QUADLOOM_PT_quads,
     QUADLOOM_PT_advanced,
 )

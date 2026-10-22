@@ -141,6 +141,34 @@ def decode_result(result):
     return positions, offsets, corners
 
 
+def decode_quads(quads):
+    """Unpacks and checks a result's quad mesh. Returns (positions, face offsets,
+    face corners, patch ids); raises ValueError if it's inconsistent."""
+    positions, offsets, corners = decode_result(quads)
+    patch = array("I")
+    patch.frombytes(quads["patch_of_face"])
+    if len(patch) != len(offsets) - 1:
+        raise ValueError("quad mesh patch ids don't match its faces")
+    return positions, offsets, corners, patch
+
+
+def frame_per_quad(frame, field_faces, trace, quad_patch):
+    """The frame's size and stretch per quad: each layout patch's mean over its
+    triangles (mapped to field faces through the layout's source faces)."""
+    import numpy as np
+
+    size, stretch = decode_frame(frame, field_faces, source_face=trace.get("source_face"))
+    tri_patch = np.frombuffer(trace["patch_of_face"], dtype="<u4").astype(np.int64)
+    if len(tri_patch) != len(size):
+        raise ValueError("layout patch ids don't match its faces")
+    quad_patch = np.asarray(quad_patch, dtype=np.int64)
+    patches = int(max(tri_patch.max(initial=0), quad_patch.max(initial=0))) + 1
+    counts = np.bincount(tri_patch, minlength=patches).astype(np.float64)
+    counts[counts == 0] = 1.0
+    mean = [np.bincount(tri_patch, weights=np.asarray(v, dtype=np.float64), minlength=patches) / counts for v in (size, stretch)]
+    return tuple(array("f", m[quad_patch].astype(np.float32).tobytes()) for m in mean)
+
+
 def decode_frame(frame, field_faces, source_face=None, output_faces=None):
     """Unpacks a result's frame scales and maps them onto the output faces.
 
@@ -249,10 +277,17 @@ def build_result(snapshot, result, scene):
     feature_edges, patch = result.get("feature_edges", b""), None
     frame = None
     if result.get("trace"):
-        # Until quads exist, the result shows the layout: its (refined) mesh,
-        # with each triangle's patch as the integer face attribute "quadloom_patch".
+        # Without quads the result shows the layout: its (refined) mesh, with
+        # each triangle's patch as the integer face attribute "quadloom_patch".
         positions, offsets, corners, patch, feature_edges = decode_layout(result["trace"])
-    if result.get("frame"):
+    quads = result.get("quads")
+    if quads:
+        # The quad mesh is the result; its faces carry their layout patch.
+        positions, offsets, corners, patch = decode_quads(quads)
+        feature_edges = quads.get("feature_edges", b"")
+        if result.get("frame") and result.get("trace"):
+            frame = frame_per_quad(result["frame"], field_faces, result["trace"], patch)
+    elif result.get("frame"):
         # The frame's per-face scales reach the layout's triangles through source_face.
         source = None
         if result.get("trace"):
@@ -287,6 +322,7 @@ def build_result(snapshot, result, scene):
             {key: dict(result[key]) for key in ("validation", "repair", "features") if key in result}
             | ({"trace": dict(result["trace"]["report"])} if result.get("trace") else {})
             | ({"frame": _frame_report(result["frame"])} if result.get("frame") else {})
+            | ({"quads": dict(quads["report"])} if quads else {})
         )
     except Exception:
         if obj is not None:

@@ -8,7 +8,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
 use quadloom_core::{
-    FieldOutput, FrameOutput, PatchKind, RemeshReport, RepairReport, RunOutput, TraceOutput, ValidationReport,
+    FieldOutput, FrameOutput, PatchKind, QuadOutput, RemeshReport, RepairReport, RunOutput, TraceOutput,
+    ValidationReport,
 };
 
 use crate::errors::invalid_argument;
@@ -109,8 +110,50 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         Some(t) => dict.set_item("trace", trace(py, t)?)?,
         None => dict.set_item("trace", py.None())?,
     }
+    match &output.quads {
+        Some(q) => dict.set_item("quads", quads(py, q)?)?,
+        None => dict.set_item("quads", py.None())?,
+    }
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
+    Ok(dict)
+}
+
+/// The quad mesh: `positions` (float32 xyz), `face_offsets` and
+/// `face_indices` (uint32, polygons, quads unless a patch kept its
+/// triangles), `patch_of_face` (uint32), `feature_edges` (uint32 pairs), and
+/// `report`.
+fn quads<'py>(py: Python<'py>, q: &QuadOutput) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    let positions: Vec<u8> = q
+        .mesh
+        .positions
+        .iter()
+        .flat_map(|p| [p.x as f32, p.y as f32, p.z as f32])
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    let le_u32 = |values: &[u32]| values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+    dict.set_item("positions", PyBytes::new(py, &positions))?;
+    dict.set_item("face_offsets", PyBytes::new(py, &le_u32(&q.mesh.face_offsets)))?;
+    dict.set_item("face_indices", PyBytes::new(py, &le_u32(&q.mesh.face_indices)))?;
+    dict.set_item("patch_of_face", PyBytes::new(py, &le_u32(&q.patch_of_face)))?;
+    dict.set_item("feature_edges", PyBytes::new(py, &le_u32(q.feature_edges.as_flattened())))?;
+    let report = PyDict::new(py);
+    let r = &q.report;
+    for (key, value) in [
+        ("quads", r.quads),
+        ("triangles", r.triangles),
+        ("segments", r.segments),
+        ("grid_patches", r.grid_patches),
+        ("center_patches", r.center_patches),
+        ("split_patches", r.split_patches),
+        ("fan_patches", r.fan_patches),
+        ("kept_patches", r.kept_patches),
+    ] {
+        report.set_item(key, value)?;
+    }
+    report.set_item("edge_length", r.edge_length)?;
+    dict.set_item("report", report)?;
     Ok(dict)
 }
 

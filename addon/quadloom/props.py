@@ -222,6 +222,22 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=1,
     )
 
+    # --- Quads (stages 5–6) -----------------------------------------------------
+    quad_enabled: BoolProperty(
+        name="Quads",
+        description="Turn the patch layout into an all-quad mesh",
+        default=True,
+    )
+    quad_size: FloatProperty(
+        name="Quad Size",
+        description="Quad edge length relative to the prep remesh's triangles (smaller makes more quads)",
+        default=0.75,
+        min=0.25,
+        max=20.0,
+        soft_max=4.0,
+        precision=2,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -311,6 +327,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     field_summary: StringProperty(name="Field")
     frame_summary: StringProperty(name="Shape")
     trace_summary: StringProperty(name="Layout")
+    quad_summary: StringProperty(name="Quads")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
@@ -377,5 +394,9 @@ def run_params(settings):
             "match_valence": settings.trace_match_valence,
             "loop_density": settings.trace_loop_density,
             "sub_passes": settings.trace_sub_passes,
+        },
+        "quad": {
+            "enabled": settings.quad_enabled,
+            "edge_scale": settings.quad_size,
         },
     }

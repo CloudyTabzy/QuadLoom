@@ -7,6 +7,7 @@ use crate::fault::Fault;
 use crate::features::FeatureParams;
 use crate::field::FieldParams;
 use crate::frame::FrameParams;
+use crate::quad::QuadParams;
 use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
 use crate::trace::TraceParams;
@@ -37,6 +38,8 @@ pub struct Params {
     pub frame: FrameParams,
     /// Stage 4: field tracing and patch layout.
     pub trace: TraceParams,
+    /// Stages 5–6: quantization and quad patterns.
+    pub quad: QuadParams,
     /// Test-only fault to inject (see [`crate::fault`]).
     #[cfg(feature = "fault-injection")]
     pub fault: Option<Fault>,
@@ -52,6 +55,7 @@ impl Default for Params {
             field: FieldParams::default(),
             frame: FrameParams::default(),
             trace: TraceParams::default(),
+            quad: QuadParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
         }
@@ -150,6 +154,16 @@ impl Params {
         }
         if t.sub_passes > 10 {
             return bad(format!("trace.sub_passes must be at most 10 (got {})", t.sub_passes));
+        }
+        let q = &self.quad;
+        if !(q.edge_scale.is_finite() && (0.25..=20.0).contains(&q.edge_scale)) {
+            return bad(format!("quad.edge_scale must be between 0.25 and 20 (got {})", q.edge_scale));
+        }
+        if !(q.regularity.is_finite() && (0.0..=1000.0).contains(&q.regularity)) {
+            return bad(format!("quad.regularity must be between 0 and 1000 (got {})", q.regularity));
+        }
+        if q.smoothing > 100 {
+            return bad(format!("quad.smoothing must be at most 100 (got {})", q.smoothing));
         }
         Ok(())
     }

@@ -64,7 +64,7 @@ def start_job(context):
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
-    last.trace_summary, last.frame_summary = "", ""
+    last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
     _active_job = job
     job.thread.start()
     return job
@@ -93,6 +93,7 @@ def finish_job(context, job):
             last.field_summary = field_summary(job.result.get("field"))
             last.frame_summary = frame_summary(job.result.get("frame"))
             last.trace_summary = trace_summary(job.result.get("trace"))
+            last.quad_summary = quad_summary(job.result.get("quads"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -179,6 +180,23 @@ def trace_summary(trace):
         text += f" ({report['unsolved']:,} need fixing)"
     if report["seams"]:
         text += f", {report['seams']:,} seams"
+    return text
+
+
+def quad_summary(quads):
+    """One line about the quad mesh, e.g. "1,234 quads (310 grid, 40 single-center patches)"."""
+    if not quads:
+        return "quads off"
+    report = quads["report"]
+    text = f"{report['quads']:,} quads"
+    parts = [f"{report['grid_patches']:,} grid", f"{report['center_patches']:,} center"]
+    if report["split_patches"]:
+        parts.append(f"{report['split_patches']:,} split")
+    if report["fan_patches"]:
+        parts.append(f"{report['fan_patches']:,} fallback")
+    text += " (" + ", ".join(parts) + " patches)"
+    if report["kept_patches"]:
+        text += f"; {report['kept_patches']:,} patches kept as triangles"
     return text
 
 

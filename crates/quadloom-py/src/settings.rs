@@ -71,6 +71,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
         let c = &mut params.field;
         let t = &mut params.trace;
         let fr = &mut params.frame;
+        let qd = &mut params.quad;
         let mut fields: Vec<(&str, Field<'_>)> = match section.as_str() {
             "repair" => vec![
                 ("weld_epsilon_rel", Field::F64(&mut r.weld_epsilon_rel)),
@@ -125,11 +126,17 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("max_iterations", Field::Usize(&mut fr.max_iterations)),
                 ("max_part_faces", Field::Usize(&mut fr.max_part_faces)),
             ],
+            "quad" => vec![
+                ("enabled", Field::Bool(&mut qd.enabled)),
+                ("edge_scale", Field::F64(&mut qd.edge_scale)),
+                ("regularity", Field::F64(&mut qd.regularity)),
+                ("smoothing", Field::Usize(&mut qd.smoothing)),
+            ],
             other => {
                 return Err(invalid_argument(
                     py,
                     format!(
-                        "params.{other} is not a known section (known: repair, features, remesh, field, frame, trace)"
+                        "params.{other} is not a known section (known: repair, features, remesh, field, frame, trace, quad)"
                     ),
                 ));
             }

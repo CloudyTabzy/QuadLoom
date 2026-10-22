@@ -48,8 +48,12 @@ fn run_writes_obj_matching_reported_faces() {
     let stats: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let faces = written.lines().filter(|l| l.starts_with("f ")).count();
     assert_eq!(stats["output_faces"], faces);
-    assert_eq!(stats["remesh"]["output_faces"], faces);
-    assert!(faces > 4, "the tetrahedron is refined by the prep remesh");
+    // The written mesh is the quad mesh; the prep remesh's triangles are reported apart.
+    assert_eq!(stats["remesh"]["output_faces"], stats["prep_faces"]);
+    assert!(stats["prep_faces"].as_u64().unwrap() > 4, "the tetrahedron is refined by the prep remesh");
+    let quads = written.lines().filter(|l| l.starts_with("f ") && l.split_whitespace().count() == 5).count();
+    assert_eq!(quads, faces, "all quads");
+    assert_eq!(stats["quads"]["quads"], faces);
 }
 
 #[test]
@@ -186,7 +190,8 @@ fn run_with_frame_reports_frame() {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(json["frame"]["solved_parts"].as_u64().unwrap() >= 1, "{}", json["frame"]);
-    let faces = json["output_faces"].as_u64().unwrap();
+    // The rosy file holds one direction per prep-mesh triangle.
+    let faces = json["prep_faces"].as_u64().unwrap();
     let written = std::fs::read_to_string(&rosy).unwrap();
     assert_eq!(written.lines().count(), faces as usize + 2);
 }
