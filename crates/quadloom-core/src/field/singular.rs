@@ -1,12 +1,12 @@
 //! Singularities of a per-face cross field: the index at each interior vertex.
 
-use std::collections::HashMap;
 use std::f64::consts::TAU;
 
 use glam::DVec3;
 
 use super::frames::{Cx, FaceFrames};
 use super::solve::ROSY;
+use crate::mesh::halfedge::{HalfEdgeId, HalfEdges};
 
 /// Each vertex's index in quarters (+1 = a +¼ singularity, as at a cube
 /// corner; −1 = −¼), or 0 for regular and boundary vertices.
@@ -23,40 +23,59 @@ use super::solve::ROSY;
 /// edges 45° apart) would come out +π both times and break the cancellation.
 pub fn vertex_indices(positions: &[DVec3], triangles: &[[u32; 3]], powers: &[Cx]) -> Vec<i32> {
     let frames = FaceFrames::new(positions, triangles);
-    let mut by_edge: HashMap<(u32, u32), u32> = HashMap::new();
-    let mut corner_of: Vec<Option<u32>> = vec![None; positions.len()];
-    for (f, t) in triangles.iter().enumerate() {
-        for i in 0..3 {
-            by_edge.insert((t[i], t[(i + 1) % 3]), f as u32);
-            corner_of[t[i] as usize].get_or_insert(f as u32);
-        }
-    }
+    let he = HalfEdges::build(triangles, positions.len());
+    let tail = |h: u32| triangles[(h / 3) as usize][(h % 3) as usize];
+    let prev = |h: u32| h - h % 3 + (h + 2) % 3;
+    let next = |h: u32| h - h % 3 + (h + 1) % 3;
     let unit = |z: Cx| if z.norm() > 0.0 { z.scale(1.0 / z.norm()) } else { Cx::ONE };
-    let mut omega: HashMap<(u32, u32), f64> = HashMap::new();
-    for e in super::frames::dual_edges(triangles) {
-        let (lo, hi) = (e.f.min(e.g), e.f.max(e.g));
-        let d = positions[e.b as usize] - positions[e.a as usize];
+    // ω per dual edge, from its lower face to its higher one, stored at the
+    // pair's lower half-edge (NaN where the edge has no twin).
+    let n = 3 * triangles.len();
+    let mut omega = vec![f64::NAN; n];
+    for h in 0..n as u32 {
+        let Some(t) = he.twin(HalfEdgeId(h)).map(|t| t.0) else { continue };
+        if t < h {
+            continue;
+        }
+        let (f, g) = (h / 3, t / 3);
+        let (lo, hi) = (f.min(g), f.max(g));
+        let d = positions[tail(next(h)) as usize] - positions[tail(h) as usize];
         let r = Cx::from_angle(ROSY * (frames.angle(hi, d) - frames.angle(lo, d)));
         let (zl, zh) = (unit(powers[lo as usize]), unit(powers[hi as usize]));
-        omega.insert((lo, hi), (zh * (r * zl).conj()).arg());
+        omega[h as usize] = (zh * (r * zl).conj()).arg();
     }
-    (0..positions.len() as u32)
+    let mut corner_of: Vec<u32> = vec![u32::MAX; positions.len()];
+    for h in 0..n as u32 {
+        let v = tail(h) as usize;
+        if corner_of[v] == u32::MAX {
+            corner_of[v] = h;
+        }
+    }
+    (0..positions.len())
         .map(|v| {
-            let Some(start) = corner_of[v as usize] else { return 0 };
-            let p = positions[v as usize];
-            let (mut f, mut turn, mut angles) = (start, 0.0, 0.0);
-            for _ in 0..triangles.len() {
-                let t = triangles[f as usize];
-                let k = t.iter().position(|&x| x == v).unwrap_or(0);
-                let (a, b) = (t[(k + 1) % 3], t[(k + 2) % 3]);
-                let (da, db) = (positions[a as usize] - p, positions[b as usize] - p);
-                angles += da.angle_between(db);
+            let start = corner_of[v];
+            if start == u32::MAX {
+                return 0;
+            }
+            let p = positions[v];
+            let (mut h, mut turn, mut angles) = (start, 0.0, 0.0);
+            for _ in 0..n {
+                let f = h / 3;
+                let (a, b) = (tail(next(h)), tail(prev(h)));
+                angles += (positions[a as usize] - p).angle_between(positions[b as usize] - p);
                 // The next face around v shares edge v–b, traversed v → b there.
-                let Some(&g) = by_edge.get(&(v, b)) else { return 0 }; // boundary
-                let Some(&w) = omega.get(&(f.min(g), f.max(g))) else { return 0 };
+                let Some(t) = he.twin(HalfEdgeId(prev(h))).map(|t| t.0) else { return 0 }; // boundary
+                if tail(t) as usize != v {
+                    return 0; // inconsistent winding: no loop to measure
+                }
+                let w = omega[prev(h).min(t) as usize];
+                if w.is_nan() {
+                    return 0;
+                }
+                let g = t / 3;
                 turn += if f < g { w } else { -w };
-                f = g;
-                if f == start {
+                h = t;
+                if h == start {
                     let defect = TAU - angles;
                     return ((turn + ROSY * defect) / TAU).round() as i32;
                 }

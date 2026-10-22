@@ -165,8 +165,14 @@ pub fn turn_at(
             let t = cut.triangles[f as usize];
             let k = t.iter().position(|&v| v == b).unwrap_or(0);
             let (x, y) = (cut.positions[t[(k + 1) % 3] as usize], cut.positions[t[(k + 2) % 3] as usize]);
-            (x - p).angle_between(y - p)
+            // A zero-length edge (coincident vertices) has no angle.
+            if (x - p).length_squared() > 0.0 && (y - p).length_squared() > 0.0 {
+                (x - p).angle_between(y - p)
+            } else {
+                0.0
+            }
         })
+        .filter(|a| a.is_finite())
         .sum();
     let by_angle = || ((angle / FRAC_PI_2).round().clamp(0.0, 4.0)) as u8;
     let by_field = if geometric.get(b as usize).copied().unwrap_or(false) {
@@ -254,6 +260,21 @@ mod tests {
         let crosses = FaceCrosses::new(&cut, &vec![DVec3::X; t.len()]);
         let classes = classify_boundary(&cut, &crosses, &[], &edge_label(&cut));
         (cut, classes)
+    }
+
+    #[test]
+    fn coincident_vertices_give_a_finite_angle() {
+        // Review of M5: a NaN angle read as a cusp (a corner).
+        let (mut p, t) = grid(2, 2);
+        p[1] = p[0];
+        let cut = CutMesh::new(&p, &t, &[]);
+        let crosses = FaceCrosses::new(&cut, &vec![DVec3::X; t.len()]);
+        let is_cut = |h: u32| cut.twin(h).is_none();
+        let label = edge_label(&cut);
+        for h in cut.boundary_half_edges() {
+            let turn = turn_at(&cut, &crosses, &[], h, &is_cut, &label);
+            assert!(turn.angle.is_finite(), "at {}", cut.head(h));
+        }
     }
 
     #[test]

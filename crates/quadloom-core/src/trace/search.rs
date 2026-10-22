@@ -110,6 +110,20 @@ impl<'g> Search<'g> {
         !self.restrict || self.corridor[v as usize] == self.stamp
     }
 
+    /// Whether a 2-hop arc's intermediate vertex may be passed: inside the
+    /// corridor, and through an active node (a chosen path turns a vertex's
+    /// nodes in its axis off; only then is the exact node worth computing).
+    fn via_usable(&self, from: Node, via: u32) -> bool {
+        if via == DIRECT || via == TWIN {
+            return true;
+        }
+        if !self.allowed(via) {
+            return false;
+        }
+        let g = self.graph;
+        (0..4).all(|d| g.active(Node::new(via, d))) || g.active(self.via_node(from, via))
+    }
+
     /// A loop through `start`, searched only near the field line: first the
     /// streamline from `start` (always the cheapest arc) is followed until it
     /// comes back next to `start`; then [`Self::closed_loop`] runs inside
@@ -138,10 +152,13 @@ impl<'g> Search<'g> {
         let stamp = self.stamp;
         let mut line: Vec<u32> = vec![origin];
         self.corridor[origin as usize] = stamp;
-        let (mut here, mut cost, mut closed) = (start, 0.0, false);
+        let (mut here, mut cost, mut closed, mut by_twin) = (start, 0.0, false, false);
         for step in 0..g.vertex_count() {
-            let ends = step > 0 && g.is_boundary(here.vertex());
+            // A boundary reached over a mesh edge only lets the line cross a
+            // cut (by a twin arc); the copy reached that way continues freely.
+            let ends = step > 0 && g.is_boundary(here.vertex()) && !by_twin;
             let Some(arc) = g.arcs(here).find(|a| g.active(a.to) && (!ends || a.via == TWIN)) else { break };
+            by_twin = arc.via == TWIN;
             if arc.to == start {
                 closed = true;
                 break;
@@ -278,7 +295,7 @@ impl<'g> Search<'g> {
                 if twins_only {
                     break;
                 }
-                if arc.to == start && arc.via != TWIN {
+                if arc.to == start && arc.via != TWIN && self.via_usable(here, arc.via) {
                     let total = cost + f64::from(arc.cost);
                     if total < best_cost && self.parent[node as usize] != node {
                         best_cost = total;
@@ -317,7 +334,7 @@ impl<'g> Search<'g> {
             if !graph.active(arc.to) || !self.allowed(arc.to.vertex()) {
                 continue;
             }
-            if arc.via != DIRECT && arc.via != TWIN && !self.allowed(arc.via) {
+            if !self.via_usable(here, arc.via) {
                 continue;
             }
             let next = cost + f64::from(arc.cost);
@@ -372,11 +389,11 @@ impl<'g> Search<'g> {
         let mut nodes = vec![start];
         let mut visited: HashMap<u32, ()> = HashMap::new();
         visited.insert(start.vertex(), ());
-        let (mut here, mut cost) = (start, 0.0);
+        let (mut here, mut cost, mut by_twin) = (start, 0.0, false);
         for step in 0..max_steps {
-            let ends =
-                step > 0 && g.is_boundary(here.vertex()) && !g.is_boundary(nodes[nodes.len() - 2].vertex());
+            let ends = step > 0 && g.is_boundary(here.vertex()) && !by_twin;
             let arc = g.arcs(here).find(|a| g.active(a.to) && (!ends || a.via == TWIN))?;
+            by_twin = arc.via == TWIN;
             if arc.via != DIRECT && arc.via != TWIN {
                 let mid = self.via_node(here, arc.via);
                 if visited.insert(mid.vertex(), ()).is_some() {
@@ -609,6 +626,7 @@ mod tests {
             &vec![false; cut.vertex_count()],
             TraceCost::Anisotropic,
             10.0,
+            &Control::default(),
         )
         .unwrap();
         (cut, g)
@@ -639,8 +657,15 @@ mod tests {
         let (p, t) = cylinder(10, 32);
         let field = compute(&p, &t, &[], &FieldParams::default(), &Control::default()).unwrap();
         let cut = CutMesh::new(&p, &t, &[]);
-        let g = FieldGraph::new(&cut, &field.directions, &vec![false; p.len()], TraceCost::Anisotropic, 10.0)
-            .unwrap();
+        let g = FieldGraph::new(
+            &cut,
+            &field.directions,
+            &vec![false; p.len()],
+            TraceCost::Anisotropic,
+            10.0,
+            &Control::default(),
+        )
+        .unwrap();
         let v = 5 * 32;
         let start = Node::new(v, g.closest_dir(v, DVec3::Y));
         let path =

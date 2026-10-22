@@ -133,7 +133,7 @@ pub struct RegionMesh<'a> {
 }
 
 impl Region {
-    pub fn new(mesh: RegionMesh<'_>, settings: &Settings) -> Result<Self, Error> {
+    pub fn new(mesh: RegionMesh<'_>, settings: &Settings, control: &Control) -> Result<Self, Error> {
         let RegionMesh { positions, triangles, barrier, directions, singular, labels, tolerance, merge_id } =
             mesh;
         let cut = CutMesh::new(positions, triangles, barrier);
@@ -157,7 +157,7 @@ impl Region {
             .collect();
         let crosses = FaceCrosses::new(&cut, &directions);
         let is_singular: Vec<bool> = singular.iter().map(|&k| k != 0).collect();
-        let graph = FieldGraph::new(&cut, &directions, &is_singular, settings.cost, settings.drift)?;
+        let graph = FieldGraph::new(&cut, &directions, &is_singular, settings.cost, settings.drift, control)?;
         let mut cut_labels = HashMap::new();
         if !labels.is_empty() {
             for h in cut.boundary_half_edges() {
@@ -337,6 +337,8 @@ enum Mode {
 pub struct Layout<'s> {
     pub region: Region,
     settings: &'s Settings,
+    /// Checked inside setup work that can't return an error itself.
+    control: &'s Control,
     pub chosen: Vec<Chosen>,
     occupancy: Occupancy,
     pub edges: PathEdges,
@@ -352,7 +354,7 @@ pub struct Layout<'s> {
 }
 
 impl<'s> Layout<'s> {
-    pub fn new(region: Region, settings: &'s Settings) -> Self {
+    pub fn new(region: Region, settings: &'s Settings, control: &'s Control) -> Self {
         let needs = region
             .ports
             .iter()
@@ -369,6 +371,7 @@ impl<'s> Layout<'s> {
         Self {
             region,
             settings,
+            control,
             chosen: Vec::new(),
             occupancy: Occupancy::new(),
             edges,
@@ -443,7 +446,7 @@ impl<'s> Layout<'s> {
             self.update_partition(&touched);
         }
         if let Some(d) = self.distances.as_mut() {
-            d.add_sources(path.vertices());
+            d.add_sources(path.vertices(), self.control);
         }
         self.chosen.push(Chosen { path, anchored, removed: false });
     }
@@ -687,16 +690,18 @@ impl<'s> Layout<'s> {
     }
 
     fn distance_field(&mut self) -> &mut DistanceField {
-        let (cut, chosen, singular) = (&self.region.cut, &self.chosen, &self.region.singular);
+        let (cut, chosen, singular, control) =
+            (&self.region.cut, &self.chosen, &self.region.singular, self.control);
         self.distances.get_or_insert_with(|| {
             let mut field = DistanceField::new(cut);
             // Boundaries and singularities repel paths (the oracle's `away_from_singular`).
             field.add_sources(
                 (0..cut.vertex_count() as u32)
                     .filter(|&v| cut.boundary[v as usize] || singular[v as usize] != 0),
+                control,
             );
             for c in chosen.iter().filter(|c| !c.removed) {
-                field.add_sources(c.path.vertices());
+                field.add_sources(c.path.vertices(), control);
             }
             field
         })
@@ -760,7 +765,7 @@ impl<'s> Layout<'s> {
         let want = ((cut.vertex_count() as f64 * self.settings.loop_density).round() as usize)
             .clamp(self.min_seeds, MAX_SEEDS)
             .min(interior);
-        let seeds = farthest_points(cut, &eligible, want);
+        let seeds = farthest_points(cut, &eligible, want, control)?;
         let starts: Vec<Node> =
             seeds.iter().flat_map(|&v| [Node::new(v, 0), Node::new(v, 1)]).filter(|&n| g.active(n)).collect();
         let reach = LOOP_REACH * self.region.area.sqrt();
@@ -968,8 +973,8 @@ impl<'s> Layout<'s> {
             tolerance: self.region.tolerance,
             merge_id: Some(&merge),
         };
-        let sub = Region::new(mesh, self.settings)?;
-        let mut layout = Layout::new(sub, self.settings);
+        let sub = Region::new(mesh, self.settings, control)?;
+        let mut layout = Layout::new(sub, self.settings, control);
         layout.min_seeds = MIN_SUB_SEEDS;
         layout.reach_scale = reach / layout.region.reach().max(f64::MIN_POSITIVE);
         layout.run_rounds(true, relaxed, control)?;
@@ -1108,10 +1113,9 @@ impl<'s> Layout<'s> {
                     for path in paths {
                         if !self.occupancy.collides(&path, &self.region.cut)
                             && !self_intersects(&path, &self.region.cut)
+                            && self.try_accept_if(path, true, std::cmp::Ordering::is_le)
                         {
-                            if self.try_accept_if(path, true, std::cmp::Ordering::is_le) {
-                                added += 1;
-                            }
+                            added += 1;
                         }
                     }
                 }
@@ -1172,9 +1176,9 @@ impl<'s> Layout<'s> {
                     let ring = loops.first()?;
                     let merged = |v: u32| self.region.merge_id[v as usize];
                     let m = ring.len();
-                    let (i, j) = (0..m).find_map(|i| {
-                        ((i + 1)..m).find(|&j| merged(ring[j]) == merged(ring[i])).map(|j| (i, j))
-                    })?;
+                    let mut first_seen: HashMap<u32, usize> = HashMap::with_capacity(m);
+                    let (i, j) =
+                        (0..m).find_map(|j| first_seen.insert(merged(ring[j]), j).map(|i| (i, j)))?;
                     let pinch = merged(ring[i]);
                     let arc = |from: usize, to: usize| -> Vec<u32> {
                         (from + 1..to).map(|k| ring[k % m]).filter(|&v| merged(v) != pinch).collect()

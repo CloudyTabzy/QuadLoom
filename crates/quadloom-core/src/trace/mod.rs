@@ -30,7 +30,7 @@ pub use stats::{LayoutStats, layout_stats};
 
 use crate::control::{Control, Stage};
 use crate::error::Error;
-use crate::field::{FaceFrames, FieldOutput, ROSY, vertex_indices};
+use crate::field::FieldOutput;
 
 /// How a path's cost grows as it drifts from the field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -280,18 +280,11 @@ fn layout_part(
             .collect(),
         singularities: Vec::new(),
     };
-    // The part's own singularities (the field's merge sums parts that touch).
-    let frames = FaceFrames::new(&part.positions, &part.triangles);
-    let powers: Vec<_> = (0..part.triangles.len() as u32)
-        .map(|f| frames.power(f, part.directions[f as usize], ROSY))
-        .collect();
-    part.singularities = vertex_indices(&part.positions, &part.triangles, &powers)
-        .into_iter()
-        .enumerate()
-        .filter(|&(_, k)| k != 0)
-        .map(|(v, k)| (v as u32, k))
-        .collect();
-    let mesh = refine::for_tracing(&part);
+    // The field's singularities guide refinement; refinement then recomputes
+    // the part's own (the field sums parts that only touch at a vertex).
+    part.singularities = field.singularities.iter().filter_map(|&(v, k)| Some((local(v)?, k))).collect();
+    control.checkpoint(Stage::Trace)?;
+    let mesh = refine::for_tracing(&part, control)?;
     let mut singular = vec![0i32; mesh.positions.len()];
     for &(v, k) in &mesh.singularities {
         singular[v as usize] = k;
@@ -317,8 +310,9 @@ fn layout_part(
             merge_id: None,
         },
         settings,
+        control,
     )?;
-    let mut layout = select::Layout::new(region, settings);
+    let mut layout = select::Layout::new(region, settings, control);
     layout.run(control)?;
     let partition = layout.partition().clone();
     let cut = &layout.region.cut;

@@ -234,6 +234,8 @@ fn trace_params(text: &str) -> Result<quadloom_core::TraceParams, Failure> {
             other => return Err(bad(format!("unknown setting {other}"))),
         }
     }
+    let checked = Params { trace: params.clone(), ..Params::default() };
+    checked.check()?;
     Ok(params)
 }
 

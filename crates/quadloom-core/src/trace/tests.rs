@@ -5,9 +5,9 @@ use glam::DVec3;
 use std::collections::HashMap;
 
 use super::*;
-use crate::field::{FieldParams, compute as field_compute};
+use crate::field::{FaceFrames, FieldParams, ROSY, compute as field_compute, vertex_indices};
 use crate::remesh::tests::sphere_mesh;
-use crate::testmesh::{cube, cylinder, grid, icosphere, torus};
+use crate::testmesh::{cube, cylinder, double_torus, grid, icosphere, torus};
 
 fn layout(positions: &[DVec3], triangles: &[[u32; 3]], features: &[[u32; 2]]) -> TraceOutput {
     layout_with(positions, triangles, features, &TraceParams::default())
@@ -112,11 +112,11 @@ fn open_cylinder_is_cut_into_disks() {
 
 #[test]
 fn thin_strip_layout_reports_or_solves() {
+    // Review of M5: the old assertion could not fail. A strip one face wide
+    // is a single quad patch.
     let (p, t) = grid(40, 1);
     let out = layout(&p, &t, &[]);
-    for patch in &out.patches {
-        assert!(patch.kind.is_valid() || out.report.unsolved > 0, "{patch:?}");
-    }
+    assert_valid(&out);
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn diagnose_oracle_case() {
         .collect();
     let part =
         TraceMesh { positions: p, triangles: t, feature_edges: features, directions: d, singularities };
-    let mesh = refine::for_tracing(&part);
+    let mesh = refine::for_tracing(&part, &Control::default()).unwrap();
     let mut singular = vec![0i32; mesh.positions.len()];
     for &(v, k) in &mesh.singularities {
         singular[v as usize] = k;
@@ -240,6 +240,7 @@ fn diagnose_oracle_case() {
             merge_id: None,
         },
         &settings,
+        &Control::default(),
     )
     .unwrap();
     let mut class_counts: std::collections::BTreeMap<String, usize> = Default::default();
@@ -247,8 +248,9 @@ fn diagnose_oracle_case() {
         *class_counts.entry(format!("{c:?}")).or_default() += 1;
     }
     eprintln!("boundary classes {class_counts:?}");
-    let mut layout = select::Layout::new(region, &settings);
-    layout.run(&Control::default()).unwrap();
+    let control = Control::default();
+    let mut layout = select::Layout::new(region, &settings, &control);
+    layout.run(&control).unwrap();
     let mut ends: HashMap<u32, usize> = HashMap::new();
     let mut through: HashMap<u32, usize> = HashMap::new();
     for c in layout.chosen.iter().filter(|c| !c.removed) {
@@ -297,4 +299,81 @@ fn mean_edge(mesh: &TraceMesh) -> f64 {
         .map(|(a, b)| (mesh.positions[a as usize] - mesh.positions[b as usize]).length())
         .collect();
     lengths.iter().sum::<f64>() / lengths.len().max(1) as f64
+}
+
+#[test]
+fn guided_loops_cross_feature_lines() {
+    // Review of M5: a streamline stopped at the copy it reached through a
+    // twin arc, so no guided loop ever crossed a feature.
+    let (p, t) = cylinder(10, 32);
+    let features: Vec<[u32; 2]> = (0..10).map(|i| [i * 32, (i + 1) * 32]).collect();
+    let control = Control::default();
+    let field = field_compute(&p, &t, &features, &FieldParams::default(), &control).unwrap();
+    let settings = TraceParams::default().settings();
+    let labels = HashMap::new();
+    let singular = vec![0; p.len()];
+    let region = select::Region::new(
+        select::RegionMesh {
+            positions: &p,
+            triangles: &t,
+            barrier: &features,
+            directions: field.directions.clone(),
+            singular: &singular,
+            labels: &labels,
+            tolerance: 0.1,
+            merge_id: None,
+        },
+        &settings,
+        &control,
+    )
+    .unwrap();
+    let g = &region.graph;
+    let mut search = search::Search::new(g);
+    let v = 5 * 32 + 16;
+    let around = DVec3::new(-(std::f64::consts::PI).sin(), (std::f64::consts::PI).cos(), 0.0);
+    let start = graph::Node::new(v, g.closest_dir(v, around));
+    let found = search.guided_loop(&region.cut, start, 100.0, 3, &control).unwrap();
+    let path = found.expect("a loop around the cylinder, across the feature");
+    assert!(path.closed);
+}
+
+#[test]
+#[ignore = "timing; run in release"]
+fn cancel_latency_is_bounded() {
+    // Review of M5: setup (refinement, the graph, seeding) didn't check
+    // cancel, so cancelling took seconds on large meshes.
+    let (p, t) = icosphere(7);
+    let field = field_compute(&p, &t, &[], &FieldParams::default(), &Control::default()).unwrap();
+    for delay_ms in [50u64, 300, 800, 1500, 3000] {
+        let control = std::sync::Arc::new(Control::default());
+        let canceller = {
+            let control = control.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                control.cancel();
+                std::time::Instant::now()
+            })
+        };
+        let result = compute(&p, &t, &[], &field, &TraceParams::default(), &control);
+        let returned = std::time::Instant::now();
+        let cancelled_at = canceller.join().unwrap();
+        if let Err(e) = result {
+            assert_eq!(e.kind, crate::error::ErrorKind::Cancelled);
+            let latency = returned.saturating_duration_since(cancelled_at).as_secs_f64();
+            eprintln!("cancel at {delay_ms} ms: returned {latency:.3} s later");
+            assert!(latency < 0.25, "cancel at {delay_ms} ms took {latency:.3} s");
+        }
+    }
+}
+
+#[test]
+fn double_torus_layout_is_all_disks() {
+    // Review of M5: genus 2 with no features relies on loops and recovery.
+    let (p, t) = double_torus();
+    let he = crate::mesh::halfedge::HalfEdges::build(&t, p.len());
+    assert_eq!(he.boundary_edge_count(), 0, "closed");
+    assert_eq!(p.len() as i64 - (3 * t.len() / 2) as i64 + t.len() as i64, -2, "genus 2");
+    let out = layout(&p, &t, &[]);
+    assert_eq!(out.report.non_disk, 0, "{}", summary(&out));
+    assert!(out.patches.iter().all(|patch| (3..=5).contains(&patch.sides.len())), "{}", summary(&out));
 }

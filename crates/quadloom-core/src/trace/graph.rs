@@ -17,7 +17,7 @@ use glam::{DQuat, DVec3};
 
 use super::TraceCost;
 use super::cut::CutMesh;
-use crate::control::Stage;
+use crate::control::{Control, Stage};
 use crate::error::Error;
 use crate::field::Cx;
 
@@ -67,7 +67,12 @@ pub struct Arc {
 /// Bytes per arc, for the memory estimate.
 const ARC_BYTES: usize = std::mem::size_of::<Arc>();
 
-/// Largest graph built (arcs only); above it the part is refused.
+/// Vertices (or faces) between cancel checks in setup loops.
+pub const CANCEL_EVERY: u32 = 4096;
+
+/// Largest graph built for one part (its arcs only); above it the part is
+/// refused. Parts are built in parallel and search buffers come on top, so
+/// peak memory is bounded by the input face limit, not by this alone.
 pub const MAX_GRAPH_BYTES: usize = 1_500_000_000;
 
 /// The arcs of every node, plus each vertex's cross.
@@ -94,6 +99,7 @@ impl FieldGraph {
         singular: &[bool],
         cost: TraceCost,
         drift: f64,
+        control: &Control,
     ) -> Result<Self, Error> {
         let n = cut.vertex_count();
         if n >= 1 << 30 {
@@ -113,7 +119,7 @@ impl FieldGraph {
             )
             .with_hint("lower the remesh resolution"));
         }
-        let (normal, dir0) = vertex_crosses(cut, directions, singular);
+        let (normal, dir0) = vertex_crosses(cut, directions, singular, control)?;
         let mut graph = Self {
             positions: cut.positions.clone(),
             boundary: cut.boundary.clone(),
@@ -133,6 +139,9 @@ impl FieldGraph {
         let mut steps: Vec<(u32, u32)> = Vec::new();
         let mut node_arcs: Vec<Arc> = Vec::new();
         for v in 0..n as u32 {
+            if v % CANCEL_EVERY == 0 {
+                control.checkpoint(Stage::Trace)?;
+            }
             steps.clear();
             if graph.has_cross(v) {
                 let ring = &neighbours[v as usize];
@@ -318,11 +327,19 @@ pub fn transport(d: DVec3, from: DVec3, to: DVec3) -> DVec3 {
 /// direction of its cross: the angle-weighted average of the fan faces'
 /// crosses as fourth powers in a vertex frame (zero for singular vertices,
 /// and where the fan is degenerate or its crosses cancel).
-fn vertex_crosses(cut: &CutMesh, directions: &[DVec3], singular: &[bool]) -> (Vec<DVec3>, Vec<DVec3>) {
+fn vertex_crosses(
+    cut: &CutMesh,
+    directions: &[DVec3],
+    singular: &[bool],
+    control: &Control,
+) -> Result<(Vec<DVec3>, Vec<DVec3>), Error> {
     let n = cut.vertex_count();
     let (mut normals, mut dirs) = (vec![DVec3::ZERO; n], vec![DVec3::ZERO; n]);
     let mut corners: Vec<(f64, DVec3, DVec3)> = Vec::new();
     for v in 0..n as u32 {
+        if v % CANCEL_EVERY == 0 {
+            control.checkpoint(Stage::Trace)?;
+        }
         corners.clear();
         let p = cut.positions[v as usize];
         for &h in cut.fan(v) {
@@ -358,7 +375,7 @@ fn vertex_crosses(cut: &CutMesh, directions: &[DVec3], singular: &[bool]) -> (Ve
             dirs[v as usize] = e1 * theta.cos() + e2 * theta.sin();
         }
     }
-    (normals, dirs)
+    Ok((normals, dirs))
 }
 
 #[cfg(test)]
@@ -369,7 +386,7 @@ mod tests {
     fn graph_of(p: &[DVec3], t: &[[u32; 3]], dir: DVec3, cost: TraceCost, drift: f64) -> FieldGraph {
         let cut = CutMesh::new(p, t, &[]);
         let directions = vec![dir; t.len()];
-        FieldGraph::new(&cut, &directions, &vec![false; p.len()], cost, drift).unwrap()
+        FieldGraph::new(&cut, &directions, &vec![false; p.len()], cost, drift, &Control::default()).unwrap()
     }
 
     #[test]
@@ -429,8 +446,15 @@ mod tests {
         let cut = CutMesh::new(&p, &t, &[]);
         let mut singular = vec![false; p.len()];
         singular[3 * 7 + 3] = true;
-        let g =
-            FieldGraph::new(&cut, &vec![DVec3::X; t.len()], &singular, TraceCost::Anisotropic, 10.0).unwrap();
+        let g = FieldGraph::new(
+            &cut,
+            &vec![DVec3::X; t.len()],
+            &singular,
+            TraceCost::Anisotropic,
+            10.0,
+            &Control::default(),
+        )
+        .unwrap();
         assert!(g.cross(24).is_none());
         for d in 0..4 {
             assert!(!g.active(Node::new(24, d)));
@@ -453,7 +477,15 @@ mod tests {
         ];
         let t = [[0, 1, 2], [0, 2, 3], [1, 4, 2], [2, 4, 3]];
         let cut = CutMesh::new(&p, &t, &[]);
-        let g = FieldGraph::new(&cut, &[DVec3::X; 4], &[false; 5], TraceCost::Anisotropic, 10.0).unwrap();
+        let g = FieldGraph::new(
+            &cut,
+            &[DVec3::X; 4],
+            &[false; 5],
+            TraceCost::Anisotropic,
+            10.0,
+            &Control::default(),
+        )
+        .unwrap();
         assert!(g.cross(0).is_none());
         for k in 0..g.node_count() as u32 {
             for a in g.arcs(Node(k)) {

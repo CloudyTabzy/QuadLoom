@@ -3,6 +3,9 @@
 use std::collections::BinaryHeap;
 
 use super::cut::CutMesh;
+use super::graph::CANCEL_EVERY;
+use crate::control::{Control, Stage};
+use crate::error::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Entry {
@@ -54,7 +57,9 @@ impl DistanceField {
     }
 
     /// Makes `sources` distance 0 and lowers every distance they shorten.
-    pub fn add_sources(&mut self, sources: impl IntoIterator<Item = u32>) {
+    /// Stops early once `control` is cancelled (the caller's next
+    /// checkpoint then returns, so the partial field is never used).
+    pub fn add_sources(&mut self, sources: impl IntoIterator<Item = u32>, control: &Control) {
         let mut heap = BinaryHeap::new();
         for s in sources {
             if self.dist[s as usize] > 0.0 {
@@ -62,7 +67,12 @@ impl DistanceField {
                 heap.push(Entry { dist: 0.0, v: s });
             }
         }
+        let mut pops = 0u32;
         while let Some(Entry { dist, v }) = heap.pop() {
+            pops = pops.wrapping_add(1);
+            if pops % CANCEL_EVERY == 0 && control.is_cancelled() {
+                return;
+            }
             if dist > self.dist[v as usize] {
                 continue;
             }
@@ -82,15 +92,21 @@ impl DistanceField {
 /// Up to `count` vertices for which `eligible` holds, spread out: the first
 /// is the lowest eligible id, each next one the eligible vertex farthest from
 /// those chosen (ties: lower id; unreachable vertices count as farthest).
-pub fn farthest_points(cut: &CutMesh, eligible: &dyn Fn(u32) -> bool, count: usize) -> Vec<u32> {
+pub fn farthest_points(
+    cut: &CutMesh,
+    eligible: &dyn Fn(u32) -> bool,
+    count: usize,
+    control: &Control,
+) -> Result<Vec<u32>, Error> {
     let candidates: Vec<u32> = (0..cut.vertex_count() as u32).filter(|&v| eligible(v)).collect();
     let mut chosen = Vec::with_capacity(count.min(candidates.len()));
-    let Some(&first) = candidates.first() else { return chosen };
+    let Some(&first) = candidates.first() else { return Ok(chosen) };
     let mut field = DistanceField::new(cut);
     let mut next = first;
     while chosen.len() < count {
+        control.checkpoint(Stage::Trace)?;
         chosen.push(next);
-        field.add_sources([next]);
+        field.add_sources([next], control);
         let best =
             candidates.iter().copied().max_by(|&a, &b| field.get(a).total_cmp(&field.get(b)).then(b.cmp(&a)));
         match best {
@@ -98,7 +114,7 @@ pub fn farthest_points(cut: &CutMesh, eligible: &dyn Fn(u32) -> bool, count: usi
             _ => break,
         }
     }
-    chosen
+    Ok(chosen)
 }
 
 #[cfg(test)]
@@ -111,13 +127,13 @@ mod tests {
         let (p, t) = grid(10, 10);
         let cut = CutMesh::new(&p, &t, &[]);
         let interior = |v: u32| !cut.boundary[v as usize];
-        let a = farthest_points(&cut, &interior, 4);
-        assert_eq!(a, farthest_points(&cut, &interior, 4));
+        let a = farthest_points(&cut, &interior, 4, &Control::default()).unwrap();
+        assert_eq!(a, farthest_points(&cut, &interior, 4, &Control::default()).unwrap());
         assert_eq!(a.len(), 4);
         assert_eq!(a[0], 12, "lowest interior id first");
         // The second seed is the far interior corner.
         assert_eq!(cut.positions[a[1] as usize], glam::DVec3::new(9.0, 9.0, 0.0));
-        let all = farthest_points(&cut, &interior, 1000);
+        let all = farthest_points(&cut, &interior, 1000, &Control::default()).unwrap();
         assert_eq!(all.len(), 81, "stops once every eligible vertex is chosen");
     }
 
@@ -126,9 +142,9 @@ mod tests {
         let (p, t) = grid(4, 1);
         let cut = CutMesh::new(&p, &t, &[]);
         let mut field = DistanceField::new(&cut);
-        field.add_sources([0]);
+        field.add_sources([0], &Control::default());
         assert_eq!(field.get(4), 4.0);
-        field.add_sources([4]);
+        field.add_sources([4], &Control::default());
         assert_eq!(field.get(3), 1.0);
         assert_eq!(field.get(1), 1.0);
     }

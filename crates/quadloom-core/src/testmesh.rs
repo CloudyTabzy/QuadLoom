@@ -178,3 +178,66 @@ pub(crate) fn icosphere(level: u32) -> (Vec<DVec3>, Vec<[u32; 3]>) {
     }
     (p, t)
 }
+
+/// A closed genus-2 slab: a `9 × 5` plate of unit cells with two holes
+/// (cells x ∈ {2, 6}, y = 2), thickness 1, each square split in two.
+pub(crate) fn double_torus() -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let (nx, ny) = (9u32, 5u32);
+    let hole = |i: u32, j: u32| j == 2 && (i == 2 || i == 6);
+    let mut p: Vec<DVec3> = Vec::new();
+    let mut index: HashMap<[i64; 3], u32> = HashMap::new();
+    let mut id = |q: DVec3, p: &mut Vec<DVec3>| {
+        *index.entry((q * 2.0).round().as_i64vec3().to_array()).or_insert_with(|| {
+            p.push(q);
+            (p.len() - 1) as u32
+        })
+    };
+    let mut t = Vec::new();
+    let mut quad = |a: DVec3, b: DVec3, c: DVec3, d: DVec3, p: &mut Vec<DVec3>, t: &mut Vec<[u32; 3]>| {
+        let [a, b, c, d] = [a, b, c, d].map(|q| id(q, p));
+        t.extend([[a, b, c], [a, c, d]]);
+    };
+    let v = |x: u32, y: u32, z: f64| DVec3::new(f64::from(x), f64::from(y), z);
+    for j in 0..ny {
+        for i in 0..nx {
+            if hole(i, j) {
+                continue;
+            }
+            // Top faces up (+z), bottom faces down.
+            quad(v(i, j, 1.0), v(i + 1, j, 1.0), v(i + 1, j + 1, 1.0), v(i, j + 1, 1.0), &mut p, &mut t);
+            quad(v(i, j, 0.0), v(i, j + 1, 0.0), v(i + 1, j + 1, 0.0), v(i + 1, j, 0.0), &mut p, &mut t);
+            // Walls where the neighbour is outside or a hole, facing out of this cell.
+            let solid = |a: i64, b: i64| {
+                a >= 0 && b >= 0 && a < nx as i64 && b < ny as i64 && !hole(a as u32, b as u32)
+            };
+            let (ii, jj) = (i64::from(i), i64::from(j));
+            if !solid(ii, jj - 1) {
+                quad(v(i, j, 0.0), v(i + 1, j, 0.0), v(i + 1, j, 1.0), v(i, j, 1.0), &mut p, &mut t);
+            }
+            if !solid(ii, jj + 1) {
+                quad(
+                    v(i + 1, j + 1, 0.0),
+                    v(i, j + 1, 0.0),
+                    v(i, j + 1, 1.0),
+                    v(i + 1, j + 1, 1.0),
+                    &mut p,
+                    &mut t,
+                );
+            }
+            if !solid(ii - 1, jj) {
+                quad(v(i, j + 1, 0.0), v(i, j, 0.0), v(i, j, 1.0), v(i, j + 1, 1.0), &mut p, &mut t);
+            }
+            if !solid(ii + 1, jj) {
+                quad(
+                    v(i + 1, j, 0.0),
+                    v(i + 1, j + 1, 0.0),
+                    v(i + 1, j + 1, 1.0),
+                    v(i + 1, j, 1.0),
+                    &mut p,
+                    &mut t,
+                );
+            }
+        }
+    }
+    (p, t)
+}

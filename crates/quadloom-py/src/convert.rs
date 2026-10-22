@@ -213,6 +213,7 @@ fn trace<'py>(py: Python<'py>, t: &TraceOutput) -> PyResult<Bound<'py, PyDict>> 
         ("sub_passes_run", r.sub_passes_run),
         ("relaxed_patches", r.relaxed_patches),
         ("seams", r.seams),
+        ("redeclared", r.redeclared),
         ("unsolved", r.unsolved),
     ] {
         report.set_item(key, value)?;
