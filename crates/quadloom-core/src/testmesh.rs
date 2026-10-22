@@ -118,3 +118,63 @@ pub(crate) fn cube(n: u32) -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
     features.sort_unstable();
     (p, t, features)
 }
+
+/// A unit icosphere: an icosahedron with each face split `level` times into four.
+pub(crate) fn icosphere(level: u32) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let g = (1.0 + 5f64.sqrt()) / 2.0;
+    let mut p: Vec<DVec3> = [
+        [-1.0, g, 0.0],
+        [1.0, g, 0.0],
+        [-1.0, -g, 0.0],
+        [1.0, -g, 0.0],
+        [0.0, -1.0, g],
+        [0.0, 1.0, g],
+        [0.0, -1.0, -g],
+        [0.0, 1.0, -g],
+        [g, 0.0, -1.0],
+        [g, 0.0, 1.0],
+        [-g, 0.0, -1.0],
+        [-g, 0.0, 1.0],
+    ]
+    .iter()
+    .map(|&c| DVec3::from_array(c).normalize())
+    .collect();
+    let mut t: Vec<[u32; 3]> = vec![
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
+    ];
+    for _ in 0..level {
+        let mut mid: HashMap<(u32, u32), u32> = HashMap::new();
+        let mut half = |a: u32, b: u32, p: &mut Vec<DVec3>| {
+            *mid.entry((a.min(b), a.max(b))).or_insert_with(|| {
+                p.push((p[a as usize] + p[b as usize]).normalize());
+                (p.len() - 1) as u32
+            })
+        };
+        let mut next = Vec::with_capacity(4 * t.len());
+        for &[a, b, c] in &t {
+            let (ab, bc, ca) = (half(a, b, &mut p), half(b, c, &mut p), half(c, a, &mut p));
+            next.extend([[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]]);
+        }
+        t = next;
+    }
+    (p, t)
+}

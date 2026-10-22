@@ -117,10 +117,13 @@ pub struct Turn {
 
 /// The turn at the head of boundary half-edge `incoming` (its face is on the
 /// patch). `is_cut(h)` says whether half-edge `h` is on a boundary, and
-/// `label(h)` gives a boundary half-edge's travel direction.
+/// `label(h)` gives a boundary half-edge's travel direction. Where
+/// `geometric[v]` holds (the field is singular at v, so carrying it around v
+/// is meaningless) the geometric angle decides instead.
 pub fn turn_at(
     cut: &CutMesh,
     crosses: &FaceCrosses,
+    geometric: &[bool],
     incoming: u32,
     is_cut: &dyn Fn(u32) -> bool,
     label: &dyn Fn(u32) -> DVec3,
@@ -153,13 +156,18 @@ pub fn turn_at(
             (x - p).angle_between(y - p)
         })
         .sum();
-    let geometric = || ((angle / FRAC_PI_2).round().clamp(0.0, 4.0)) as u8;
-    let class = match field_turn(crosses, &faces, label(incoming), label(outgoing)) {
+    let by_angle = || ((angle / FRAC_PI_2).round().clamp(0.0, 4.0)) as u8;
+    let by_field = if geometric.get(b as usize).copied().unwrap_or(false) {
+        None
+    } else {
+        field_turn(crosses, &faces, label(incoming), label(outgoing))
+    };
+    let class = match by_field {
         Some(t) => {
             let r = (2 + 4 - t) % 4;
             VertexClass::from_quarters(if r == 0 { if angle > PI { 4 } else { 0 } } else { r })
         }
-        None => VertexClass::from_quarters(geometric()),
+        None => VertexClass::from_quarters(by_angle()),
     };
     Turn { class, outgoing, faces, angle }
 }
@@ -196,6 +204,7 @@ fn field_turn(crosses: &FaceCrosses, faces: &[u32], din: DVec3, dout: DVec3) -> 
 pub fn classify_boundary(
     cut: &CutMesh,
     crosses: &FaceCrosses,
+    geometric: &[bool],
     label: &dyn Fn(u32) -> DVec3,
 ) -> Vec<Option<VertexClass>> {
     let is_cut = |h: u32| cut.twin(h).is_none();
@@ -205,7 +214,7 @@ pub fn classify_boundary(
                 return None;
             }
             let last = *cut.fan(v).last()?;
-            Some(turn_at(cut, crosses, CutMesh::prev(last), &is_cut, label).class)
+            Some(turn_at(cut, crosses, geometric, CutMesh::prev(last), &is_cut, label).class)
         })
         .collect()
 }
@@ -223,7 +232,7 @@ mod tests {
     fn classes(p: &[DVec3], t: &[[u32; 3]], barrier: &[[u32; 2]]) -> (CutMesh, Vec<Option<VertexClass>>) {
         let cut = CutMesh::new(p, t, barrier);
         let crosses = FaceCrosses::new(&cut, &vec![DVec3::X; t.len()]);
-        let classes = classify_boundary(&cut, &crosses, &edge_label(&cut));
+        let classes = classify_boundary(&cut, &crosses, &[], &edge_label(&cut));
         (cut, classes)
     }
 

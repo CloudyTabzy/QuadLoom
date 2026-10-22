@@ -74,6 +74,7 @@ pub const MAX_GRAPH_BYTES: usize = 1_500_000_000;
 #[derive(Clone, Debug)]
 pub struct FieldGraph {
     positions: Vec<DVec3>,
+    boundary: Vec<bool>,
     normal: Vec<DVec3>,
     /// Direction 0 of each vertex's cross, or zero where it has none.
     dir0: Vec<DVec3>,
@@ -115,6 +116,7 @@ impl FieldGraph {
         let (normal, dir0) = vertex_crosses(cut, directions, singular);
         let mut graph = Self {
             positions: cut.positions.clone(),
+            boundary: cut.boundary.clone(),
             normal,
             dir0,
             offsets: Vec::with_capacity(4 * n + 1),
@@ -209,6 +211,11 @@ impl FieldGraph {
 
     pub fn node_count(&self) -> usize {
         4 * self.positions.len()
+    }
+
+    /// Whether `v` lies on a boundary of the cut mesh.
+    pub fn is_boundary(&self, v: u32) -> bool {
+        self.boundary[v as usize]
     }
 
     pub fn has_cross(&self, v: u32) -> bool {

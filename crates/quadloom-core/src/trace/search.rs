@@ -84,6 +84,10 @@ pub struct Search<'g> {
     via: Vec<u32>,
     touched: Vec<u32>,
     heap: BinaryHeap<Entry>,
+    /// Per vertex: the stamp of the corridor it is in (when `restrict`).
+    corridor: Vec<u32>,
+    stamp: u32,
+    restrict: bool,
 }
 
 impl<'g> Search<'g> {
@@ -96,7 +100,102 @@ impl<'g> Search<'g> {
             via: vec![DIRECT; n],
             touched: Vec::new(),
             heap: BinaryHeap::new(),
+            corridor: vec![0; graph.vertex_count()],
+            stamp: 0,
+            restrict: false,
         }
+    }
+
+    fn allowed(&self, v: u32) -> bool {
+        !self.restrict || self.corridor[v as usize] == self.stamp
+    }
+
+    /// A loop through `start`, searched only near the field line: first the
+    /// streamline from `start` (always the cheapest arc) is followed until it
+    /// comes back next to `start`; then [`Self::closed_loop`] runs inside
+    /// the vertices within `rings` edges of it. Seeds whose streamline
+    /// doesn't close (it spirals, or runs into a boundary) give no loop.
+    /// This costs about the loop's length instead of the surface's area.
+    pub fn guided_loop(
+        &mut self,
+        cut: &CutMesh,
+        start: Node,
+        max_cost: f64,
+        rings: usize,
+        control: &Control,
+    ) -> Result<Option<TracePath>, Error> {
+        let g = self.graph;
+        if !g.active(start) {
+            return Ok(None);
+        }
+        let origin = start.vertex();
+        let near_origin: Vec<u32> = cut.neighbours(origin);
+        self.stamp = self.stamp.wrapping_add(1);
+        if self.stamp == 0 {
+            self.corridor.fill(0);
+            self.stamp = 1;
+        }
+        let stamp = self.stamp;
+        let mut line: Vec<u32> = vec![origin];
+        self.corridor[origin as usize] = stamp;
+        let (mut here, mut cost, mut closed) = (start, 0.0, false);
+        for step in 0..g.vertex_count() {
+            let ends = step > 0 && g.is_boundary(here.vertex());
+            let Some(arc) = g.arcs(here).find(|a| g.active(a.to) && (!ends || a.via == TWIN)) else { break };
+            if arc.to == start {
+                closed = true;
+                break;
+            }
+            cost += f64::from(arc.cost);
+            if cost > max_cost {
+                break;
+            }
+            for v in [arc.via, arc.to.vertex()] {
+                if v == DIRECT || v == TWIN {
+                    continue;
+                }
+                if self.corridor[v as usize] == stamp {
+                    if step >= 3 && (v == origin || near_origin.contains(&v)) {
+                        closed = true;
+                    } else if v != origin {
+                        // A revisit away from the start: a spiral.
+                        return Ok(None);
+                    }
+                } else {
+                    self.corridor[v as usize] = stamp;
+                    line.push(v);
+                }
+            }
+            if closed {
+                break;
+            }
+            if step >= 3 && near_origin.contains(&arc.to.vertex()) {
+                closed = true;
+                break;
+            }
+            here = arc.to;
+        }
+        if !closed {
+            return Ok(None);
+        }
+        // Widen the line into a corridor.
+        let mut frontier = line;
+        for _ in 0..rings {
+            let mut next = Vec::new();
+            for &v in &frontier {
+                for w in cut.neighbours(v).into_iter().chain(cut.twins[v as usize].iter().copied()) {
+                    if self.corridor[w as usize] != stamp {
+                        self.corridor[w as usize] = stamp;
+                        next.push(w);
+                    }
+                }
+            }
+            frontier = next;
+        }
+        self.restrict = true;
+        let found = self.closed_loop(start, max_cost, control);
+        self.restrict = false;
+        found
     }
 
     fn reset(&mut self) {
@@ -144,7 +243,8 @@ impl<'g> Search<'g> {
             if self.parent[node as usize] != node && target(here) {
                 return Ok(Some(self.path_to(here, false)));
             }
-            self.relax(here, cost, max_cost);
+            let twins_only = self.ends_here(node);
+            self.relax(here, cost, max_cost, twins_only);
         }
         control.checkpoint(Stage::Trace)?;
         Ok(None)
@@ -173,7 +273,11 @@ impl<'g> Search<'g> {
                 control.checkpoint(Stage::Trace)?;
             }
             let here = Node(node);
+            let twins_only = self.ends_here(node);
             for arc in self.graph.arcs(here) {
+                if twins_only {
+                    break;
+                }
                 if arc.to == start && arc.via != TWIN {
                     let total = cost + f64::from(arc.cost);
                     if total < best_cost && self.parent[node as usize] != node {
@@ -182,7 +286,7 @@ impl<'g> Search<'g> {
                     }
                 }
             }
-            self.relax(here, cost, best_cost);
+            self.relax(here, cost, best_cost, twins_only);
         }
         control.checkpoint(Stage::Trace)?;
         Ok(best.map(|(last, via)| {
@@ -195,10 +299,25 @@ impl<'g> Search<'g> {
         }))
     }
 
-    fn relax(&mut self, here: Node, cost: f64, max_cost: f64) {
+    /// A path can't run along or through a boundary: a boundary node it
+    /// reached over a mesh edge is an end (it may only cross a cut, by a twin
+    /// arc, after arriving by one... or start there).
+    fn ends_here(&self, node: u32) -> bool {
+        let start = self.parent[node as usize] == node;
+        let by_twin = self.via[node as usize] == TWIN;
+        self.graph.is_boundary(Node(node).vertex()) && !start && !by_twin
+    }
+
+    fn relax(&mut self, here: Node, cost: f64, max_cost: f64, twins_only: bool) {
         let graph = self.graph;
         for arc in graph.arcs(here) {
-            if !graph.active(arc.to) {
+            if twins_only && arc.via != TWIN {
+                continue;
+            }
+            if !graph.active(arc.to) || !self.allowed(arc.to.vertex()) {
+                continue;
+            }
+            if arc.via != DIRECT && arc.via != TWIN && !self.allowed(arc.via) {
                 continue;
             }
             let next = cost + f64::from(arc.cost);
@@ -254,8 +373,10 @@ impl<'g> Search<'g> {
         let mut visited: HashMap<u32, ()> = HashMap::new();
         visited.insert(start.vertex(), ());
         let (mut here, mut cost) = (start, 0.0);
-        for _ in 0..max_steps {
-            let arc = g.arcs(here).find(|a| g.active(a.to))?;
+        for step in 0..max_steps {
+            let ends =
+                step > 0 && g.is_boundary(here.vertex()) && !g.is_boundary(nodes[nodes.len() - 2].vertex());
+            let arc = g.arcs(here).find(|a| g.active(a.to) && (!ends || a.via == TWIN))?;
             if arc.via != DIRECT && arc.via != TWIN {
                 let mid = self.via_node(here, arc.via);
                 if visited.insert(mid.vertex(), ()).is_some() {

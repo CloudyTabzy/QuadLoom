@@ -21,11 +21,42 @@ use super::turns::{FaceCrosses, VertexClass, turn_at};
 #[derive(Clone, Debug, Default)]
 pub struct PathEdges {
     map: HashMap<(u32, u32), DVec3>,
+    /// Path edges at each vertex.
+    degree: HashMap<u32, u32>,
+    /// Per half-edge of the mesh given to [`Self::for_mesh`]: on a path.
+    half: Vec<bool>,
 }
 
 impl PathEdges {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Path edges that also answer "is this half-edge on a path" in O(1).
+    pub fn for_mesh(cut: &CutMesh) -> Self {
+        Self { half: vec![false; 3 * cut.face_count()], ..Self::default() }
+    }
+
+    fn mark(&mut self, cut: &CutMesh, a: u32, b: u32, on: bool) {
+        if !self.half.is_empty() {
+            for h in [cut.half_edge(a, b), cut.half_edge(b, a)].into_iter().flatten() {
+                self.half[h as usize] = on;
+            }
+        }
+    }
+
+    /// Whether half-edge `h` of `cut` runs along a path.
+    pub fn cuts(&self, cut: &CutMesh, h: u32) -> bool {
+        match self.half.get(h as usize) {
+            Some(&on) => on,
+            None => self.contains(cut.tail(h), cut.head(h)),
+        }
+    }
+
+    /// Adds edge `a → b` of `cut` travelling along `d`.
+    pub fn insert_edge_on(&mut self, cut: &CutMesh, a: u32, b: u32, d: DVec3) {
+        self.insert_edge(a, b, d);
+        self.mark(cut, a, b, true);
     }
 
     /// Adds `path`'s mesh edges (not its twin steps), labelled with the
@@ -38,14 +69,37 @@ impl PathEdges {
             }
             let d =
                 graph.direction(x, a.dir()).unwrap_or(cut.positions[y as usize] - cut.positions[x as usize]);
-            self.map.insert((x, y), d);
+            self.insert_edge_on(cut, x, y, d);
         }
     }
 
-    pub fn remove(&mut self, path: &TracePath) {
-        for (a, b) in path.steps() {
-            self.map.remove(&(a.vertex(), b.vertex()));
+    /// Adds edge `a → b` travelling along `d`.
+    pub fn insert_edge(&mut self, a: u32, b: u32, d: DVec3) {
+        if self.map.insert((a, b), d).is_none() {
+            *self.degree.entry(a).or_default() += 1;
+            *self.degree.entry(b).or_default() += 1;
         }
+    }
+
+    pub fn remove(&mut self, path: &TracePath, cut: &CutMesh) {
+        for (a, b) in path.steps() {
+            let (x, y) = (a.vertex(), b.vertex());
+            if self.map.remove(&(x, y)).is_some() {
+                if !self.contains(x, y) {
+                    self.mark(cut, x, y, false);
+                }
+                for v in [x, y] {
+                    if let Some(d) = self.degree.get_mut(&v) {
+                        *d = d.saturating_sub(1);
+                    }
+                }
+            }
+        }
+    }
+
+    /// How many path edges meet at `v`.
+    pub fn degree(&self, v: u32) -> u32 {
+        self.degree.get(&v).copied().unwrap_or(0)
     }
 
     /// Whether `a`–`b` (either way round) is a path edge.
@@ -120,6 +174,8 @@ pub struct PatchInfo {
     /// Ascending.
     pub faces: Vec<u32>,
     pub loops: usize,
+    /// Each boundary loop's vertices, in order (patch on the left).
+    pub loop_vertices: Vec<Vec<u32>>,
     /// Convex corners in loop order (counter-clockwise around the patch).
     pub corners: Vec<u32>,
     pub sides: Vec<SideInfo>,
@@ -130,6 +186,17 @@ pub struct PatchInfo {
     pub kind: PatchKind,
     /// [`cc_margin`] of the side lengths.
     pub cc_margin: f64,
+    /// Whether the side lengths pass the CC-ability test (always, for 4
+    /// sides when matching valence; never, outside 3–6 sides).
+    pub cc_able: bool,
+}
+
+impl PatchInfo {
+    /// A non-quad patch whose one singularity matches its side count.
+    pub fn matches_singularity(&self) -> bool {
+        let n = self.sides.len();
+        expected_sides(&self.singularities).is_some_and(|e| e != 4 && e == n)
+    }
 }
 
 /// What the patch conditions depend on.
@@ -139,6 +206,8 @@ pub struct PatchContext<'a> {
     pub crosses: &'a FaceCrosses,
     /// Index in quarters per cut vertex (0 for regular vertices).
     pub singular: &'a [i32],
+    /// Vertices whose boundary turns are measured geometrically (see [`turn_at`]).
+    pub geometric_turns: &'a [bool],
     pub max_sides: usize,
     pub match_valence: bool,
     /// Added to the shortest side when testing CC-ability.
@@ -185,6 +254,13 @@ pub fn expected_sides(singularities: &[(u32, i32)]) -> Option<usize> {
 pub struct Partition {
     patch_of_face: Vec<u32>,
     infos: Vec<Option<PatchInfo>>,
+    scratch: Scratch,
+}
+
+/// Reusable marks for [`describe`] (all zero between calls).
+#[derive(Clone, Debug, Default)]
+struct Scratch {
+    vertex: Vec<u8>,
 }
 
 /// What an update changed.
@@ -198,7 +274,11 @@ const UNSET: u32 = u32::MAX;
 
 impl Partition {
     pub fn new(ctx: &PatchContext, paths: &PathEdges) -> Self {
-        let mut partition = Self { patch_of_face: vec![UNSET; ctx.cut.face_count()], infos: Vec::new() };
+        let mut partition = Self {
+            patch_of_face: vec![UNSET; ctx.cut.face_count()],
+            infos: Vec::new(),
+            scratch: Scratch::default(),
+        };
         let all: Vec<u32> = (0..ctx.cut.face_count() as u32).collect();
         partition.flood(ctx, paths, &all);
         partition
@@ -270,7 +350,7 @@ impl Partition {
                 }
             }
             members.sort_unstable();
-            self.infos[id as usize] = Some(describe(ctx, paths, members));
+            self.infos[id as usize] = Some(describe(ctx, paths, members, &mut self.scratch));
             added.push(id);
         }
         added
@@ -278,11 +358,11 @@ impl Partition {
 }
 
 fn is_cut(cut: &CutMesh, paths: &PathEdges, h: u32) -> bool {
-    cut.twin(h).is_none() || paths.contains(cut.tail(h), cut.head(h))
+    cut.twin(h).is_none() || paths.cuts(cut, h)
 }
 
 /// The loops, corners, sides, singularities and kind of the patch made of `faces`.
-fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>) -> PatchInfo {
+fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mut Scratch) -> PatchInfo {
     let cut = ctx.cut;
     let cut_at = |h: u32| is_cut(cut, paths, h);
     let label = |h: u32| {
@@ -290,35 +370,49 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>) -> PatchInfo
         paths.label(a, b).unwrap_or(cut.positions[b as usize] - cut.positions[a as usize])
     };
     let boundary: Vec<u32> = faces.iter().flat_map(|&f| 3 * f..3 * f + 3).filter(|&h| cut_at(h)).collect();
-    let mut vertices: Vec<u32> = faces.iter().flat_map(|&f| cut.triangles[f as usize]).collect();
-    vertices.sort_unstable();
-    vertices.dedup();
-    let mut on_boundary: Vec<u32> = boundary.iter().map(|&h| cut.tail(h)).collect();
-    on_boundary.sort_unstable();
-    on_boundary.dedup();
-    let interior = vertices.len() - on_boundary.len();
+    // Marks: 1 = a vertex of the patch, 2 = on its boundary.
+    let mark = &mut scratch.vertex;
+    mark.resize(cut.vertex_count(), 0);
+    let mut vertices = Vec::new();
+    for &f in &faces {
+        for v in cut.triangles[f as usize] {
+            if mark[v as usize] == 0 {
+                mark[v as usize] = 1;
+                vertices.push(v);
+            }
+        }
+    }
+    let mut boundary_count = 0;
+    for &h in &boundary {
+        let v = cut.tail(h);
+        if mark[v as usize] == 1 {
+            mark[v as usize] = 2;
+            boundary_count += 1;
+        }
+    }
+    let interior = vertices.len() - boundary_count;
     // χ = V − E + F of the patch cut along its boundary (see the module notes).
     let chi2 = 2 * interior as i64 + boundary.len() as i64 - faces.len() as i64;
 
     // Walk the loops; each step is (half-edge, class at its head).
-    let mut seen: HashMap<u32, ()> = HashMap::with_capacity(boundary.len());
+    let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::with_capacity(boundary.len());
     let mut loops: Vec<Vec<(u32, VertexClass)>> = Vec::new();
     let mut broken = false;
     for &start in &boundary {
-        if seen.contains_key(&start) {
+        if seen.contains(&start) {
             continue;
         }
         let mut steps = Vec::new();
         let mut h = start;
         loop {
-            seen.insert(h, ());
-            let turn = turn_at(cut, ctx.crosses, h, &cut_at, &label);
+            seen.insert(h);
+            let turn = turn_at(cut, ctx.crosses, ctx.geometric_turns, h, &cut_at, &label);
             steps.push((h, turn.class));
             h = turn.outgoing;
             if h == start {
                 break;
             }
-            if seen.contains_key(&h) || steps.len() > boundary.len() {
+            if seen.contains(&h) || steps.len() > boundary.len() {
                 broken = true;
                 break;
             }
@@ -333,13 +427,19 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>) -> PatchInfo
     };
     let mut singularities: Vec<(u32, i32)> = vertices
         .iter()
-        .filter(|v| on_boundary.binary_search(v).is_err())
+        .filter(|&&v| mark[v as usize] == 1)
         .filter_map(|&v| ctx.singular.get(v as usize).filter(|&&k| k != 0).map(|&k| (v, k)))
         .collect();
     singularities.sort_unstable();
+    for &v in &vertices {
+        mark[v as usize] = 0;
+    }
     let lengths: Vec<f64> = sides.iter().map(|s| s.length).collect();
     let margin = cc_margin(&lengths);
     let n = sides.len();
+    let shortest = lengths.iter().copied().fold(f64::INFINITY, f64::min);
+    let cc_able =
+        (n == 4 && ctx.match_valence) || ((3..=6).contains(&n) && margin + shortest + ctx.tolerance > 0.0);
     let kind = if broken || loops.len() != 1 || chi2 != 2 {
         PatchKind::NonDisk
     } else if !not_convex.is_empty() {
@@ -348,10 +448,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>) -> PatchInfo
         PatchKind::LowSides
     } else if n > ctx.max_sides {
         PatchKind::HighSides
-    } else if !(n == 4 && ctx.match_valence) && {
-        let shortest = lengths.iter().copied().fold(f64::INFINITY, f64::min);
-        margin + shortest + ctx.tolerance <= 0.0
-    } {
+    } else if !cc_able {
         PatchKind::NotCcAble
     } else if ctx.match_valence && expected_sides(&singularities) != Some(n) {
         PatchKind::ValenceMismatch
@@ -361,12 +458,14 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>) -> PatchInfo
     PatchInfo {
         faces,
         loops: loops.len(),
+        loop_vertices: loops.iter().map(|steps| steps.iter().map(|&(h, _)| cut.head(h)).collect()).collect(),
         corners,
         sides,
         not_convex,
         singularities,
         kind,
         cc_margin: margin,
+        cc_able,
     }
 }
 
@@ -427,6 +526,7 @@ mod tests {
                 cut: &self.cut,
                 crosses: &self.crosses,
                 singular: &self.singular,
+                geometric_turns: &[],
                 max_sides: 5,
                 match_valence: true,
                 tolerance: 1.0,
@@ -438,7 +538,7 @@ mod tests {
     fn path_edges(vertices: &[u32], d: DVec3) -> PathEdges {
         let mut paths = PathEdges::new();
         for w in vertices.windows(2) {
-            paths.map.insert((w[0], w[1]), d);
+            paths.insert_edge(w[0], w[1], d);
         }
         paths
     }
@@ -598,11 +698,11 @@ mod tests {
                     .collect();
                 if let Some(k) = present.iter().position(|&x| x == op) {
                     present.remove(k);
-                    paths.remove(&path);
+                    paths.remove(&path, &fx.cut);
                 } else {
                     present.push(op);
                     for w in vertices.windows(2) {
-                        paths.map.insert((w[0], w[1]), d);
+                        paths.insert_edge(w[0], w[1], d);
                     }
                 }
                 part.update(&ctx, &paths, &touched);
