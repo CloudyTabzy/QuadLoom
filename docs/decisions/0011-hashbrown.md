@@ -1,6 +1,6 @@
 # 0011 — hashbrown maps, and a HashTable for the remesher's edges
 
-**Status:** accepted 2026-10-24.
+**Status:** accepted 2026-10-23.
 
 ## Context
 
