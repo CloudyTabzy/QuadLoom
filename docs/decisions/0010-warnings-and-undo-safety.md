@@ -18,7 +18,7 @@ The owner asked for fallbacks and warnings for edge cases ("symmetrizing a mesh 
 | Nothing on the kept side, or no plane detected | "symmetry skipped: …" (Keep Negative Side, or Tolerance) |
 | Symmetry asked but no quads built | "the result is one side only" |
 | Quad stage failed | "the quads could not be built (…); the result shows the patch layout" |
-| Fallback or kept patches above 2% | "N of M patches used a fallback pattern" (smaller Quad Size, more Adaptivity) |
+| Fallback or kept patches above 2% | "N of M patches used a fallback pattern" (higher Density, more Adaptive Detail) |
 | Quad Shape fell back | "kept the regular field on N part(s)" |
 | Several objects selected *(add-on)* | "only the active object is remeshed" |
 | Symmetry on a negatively or non-uniformly scaled object *(add-on)* | "symmetry uses its own (local) axes" (apply the scale) |

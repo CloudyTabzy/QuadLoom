@@ -6,6 +6,7 @@ runs on a worker thread (the backend releases the GIL), and the result is
 turned into a new object back on the main thread. At most one job runs at a time.
 """
 
+import array
 import threading
 import time
 
@@ -73,6 +74,7 @@ def start_job(context):
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
+    last.quads_out = 0
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
     last.symmetry_summary = ""
@@ -102,6 +104,9 @@ def finish_job(context, job):
         else:
             last.status, last.message = "OK", f"Created {obj.name}"
             last.faces_out = len(obj.data.polygons)
+            sides = array.array("i", [0]) * len(obj.data.polygons)
+            obj.data.polygons.foreach_get("loop_total", sides)
+            last.quads_out = sides.count(4)
             last.report_json = obj["quadloom_report"]
             last.repair_summary = repair_summary(job.result["repair"])
             last.feature_summary = feature_summary(job.result["features"])

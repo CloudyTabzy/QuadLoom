@@ -255,7 +255,7 @@ pub fn run(
                             "the quads could not be built ({}); the result shows the patch layout",
                             e.message
                         ),
-                        "try another Quad Size, or turn Prep Remesh on if it is off",
+                        "try another Density, or turn Prep Remesh on (Advanced) if it is off",
                     ));
                     quad_error = Some(e.message.clone());
                     None
@@ -276,7 +276,7 @@ pub fn run(
             warnings.push(Warning::new(
                 Stage::Patterns,
                 format!("{rough} of {patches} patches used a fallback pattern, which can look uneven"),
-                "a smaller Quad Size or more Adaptivity gives the patterns more room",
+                "a higher Density or more Adaptive Detail gives the patterns more room",
             ));
         }
     }

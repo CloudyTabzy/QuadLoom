@@ -6,8 +6,69 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, Po
 
 DEFAULT_MAX_FACES = 2_000_000
 
+# Presets: what each sets. Symmetry is never touched by a preset.
+PRESETS = {
+    "BALANCED": {"density": 1.0, "quad_adaptivity": 0.5, "use_angle": True, "angle_deg": 35.0, "quad_smoothing": 20},
+    "ORGANIC": {"density": 1.0, "quad_adaptivity": 0.6, "use_angle": False, "angle_deg": 35.0, "quad_smoothing": 25},
+    "HARD_SURFACE": {"density": 1.0, "quad_adaptivity": 0.3, "use_angle": True, "angle_deg": 30.0, "quad_smoothing": 12},
+    "LOW_POLY": {"density": 0.5, "quad_adaptivity": 0.3, "use_angle": True, "angle_deg": 40.0, "quad_smoothing": 20},
+    "HIGH_DETAIL": {"density": 2.0, "quad_adaptivity": 0.7, "use_angle": True, "angle_deg": 35.0, "quad_smoothing": 20},
+}
+# Quad edge length at Density 1, as a multiple of the prep remesh's edge.
+BASE_EDGE_SCALE = 0.75
+
+_applying_preset = False
+
+
+def _apply_preset(settings, _context):
+    global _applying_preset
+    values = PRESETS.get(settings.preset)
+    if values is None:
+        return
+    _applying_preset = True
+    try:
+        for name, value in values.items():
+            setattr(settings, name, value)
+    finally:
+        _applying_preset = False
+
+
+def _mark_custom(settings, _context):
+    """A preset-controlled setting changed by hand: the preset becomes Custom."""
+    if _applying_preset or settings.preset == "CUSTOM":
+        return
+    values = PRESETS.get(settings.preset, {})
+    if any(getattr(settings, name) != value for name, value in values.items()):
+        settings.preset = "CUSTOM"
+
 
 class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
+    # --- The main panel ----------------------------------------------------------
+    preset: EnumProperty(
+        name="Preset",
+        description="Starting points for common kinds of models",
+        items=[
+            ("BALANCED", "Balanced", "Good all-round settings"),
+            ("ORGANIC", "Organic / Sculpt", "Characters, sculpts and scans: no creases from surface noise, more detail where needed"),
+            ("HARD_SURFACE", "Hard Surface", "Mechanical and modelled objects: keeps sharp edges crisp"),
+            ("LOW_POLY", "Low Poly", "Fewer, larger quads"),
+            ("HIGH_DETAIL", "High Detail", "More quads, concentrated on detail"),
+            ("CUSTOM", "Custom", "Your own settings"),
+        ],
+        default="BALANCED",
+        update=_apply_preset,
+    )
+    density: FloatProperty(
+        name="Density",
+        description="How many quads: 2 gives about four times as many as 1, 0.5 about a quarter",
+        default=1.0,
+        min=0.2,
+        max=5.0,
+        soft_min=0.25,
+        soft_max=3.0,
+        precision=2,
+        update=_mark_custom,
+    )
     # --- Cleanup (stage 0) ---------------------------------------------------
     weld_distance_rel: FloatProperty(
         name="Weld Distance",
@@ -229,21 +290,21 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         default=True,
     )
     quad_adaptivity: FloatProperty(
-        name="Adaptivity",
-        description="How much quads shrink in detailed areas: 0 keeps them all the same size, 1 follows the detail fully",
+        name="Adaptive Detail",
+        description="Smaller quads where the shape is detailed, larger where it's plain: 0 keeps every quad the same size",
         default=0.5,
         min=0.0,
         max=1.0,
         precision=2,
+        update=_mark_custom,
     )
-    quad_size: FloatProperty(
-        name="Quad Size",
-        description="Quad edge length relative to the prep remesh's triangles (smaller makes more quads)",
-        default=0.75,
-        min=0.25,
-        max=20.0,
-        soft_max=4.0,
-        precision=2,
+    quad_smoothing: IntProperty(
+        name="Smoothing",
+        description="Rounds of relaxing the quads on the surface (more is smoother, 0 is none)",
+        default=20,
+        min=0,
+        max=100,
+        update=_mark_custom,
     )
 
     # --- Symmetry -----------------------------------------------------------------
@@ -274,6 +335,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         name="By Angle",
         description="Edges where the surface bends more than the angle threshold become features",
         default=True,
+        update=_mark_custom,
     )
     angle_deg: FloatProperty(
         name="Angle Threshold",
@@ -283,6 +345,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         min=0.0,
         max=180.0,
         precision=1,
+        update=_mark_custom,
     )
     use_marked_sharp: BoolProperty(
         name="Marked Sharp",
@@ -350,6 +413,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     hint: StringProperty(name="Hint")
     faces_in: IntProperty(name="Faces In")
     faces_out: IntProperty(name="Faces Out")
+    quads_out: IntProperty(name="Quads Out")
     elapsed_ms: FloatProperty(name="Time (ms)")
     report_json: StringProperty(name="Report")
     repair_summary: StringProperty(name="Cleanup")
@@ -431,8 +495,9 @@ def run_params(settings):
         },
         "quad": {
             "enabled": settings.quad_enabled,
-            "edge_scale": settings.quad_size,
+            "edge_scale": BASE_EDGE_SCALE / max(settings.density, 1e-3),
             "adaptivity": settings.quad_adaptivity,
+            "smoothing": settings.quad_smoothing,
         },
         "symmetry": {
             "x": settings.symmetry_x,

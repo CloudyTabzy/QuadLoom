@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-cli"
-version = "0.1.5"
+version = "0.1.7"
 dependencies = [
  "quadloom-core",
  "serde_json",
@@ -926,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-core"
-version = "0.1.5"
+version = "0.1.7"
 dependencies = [
  "faer",
  "glam",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-py"
-version = "0.1.5"
+version = "0.1.7"
 dependencies = [
  "pyo3",
  "quadloom-core",
