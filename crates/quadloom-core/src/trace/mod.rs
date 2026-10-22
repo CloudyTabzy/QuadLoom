@@ -167,6 +167,8 @@ pub struct TraceReport {
     pub relaxed_patches: usize,
     /// Non-field-aligned paths added to make a patch a disk.
     pub seams: usize,
+    /// Patches whose corners were re-declared to bring their side count in range.
+    pub redeclared: usize,
     /// Patches that are still invalid (non-disk, not convex, or a side count out of range).
     pub unsolved: usize,
 }
@@ -312,6 +314,7 @@ fn layout_part(
             singular: &singular,
             labels: &labels,
             tolerance: settings.cc_tolerance * mean_edge,
+            merge_id: None,
         },
         settings,
     )?;
@@ -406,4 +409,5 @@ fn merge(out: &mut TraceOutput, part: PartLayout) {
     r.sub_passes_run += part.tally.sub_passes_run;
     r.relaxed_patches += part.tally.relaxed_patches;
     r.seams += part.tally.seams;
+    r.redeclared += part.tally.redeclared;
 }

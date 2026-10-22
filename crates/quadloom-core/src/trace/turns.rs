@@ -17,6 +17,10 @@ use glam::DVec3;
 use super::cut::CutMesh;
 use super::graph::transport;
 
+/// A geometric angle within this of a multiple of 90° (radians) overrides a
+/// field turn that disagrees with it.
+const DECISIVE: f64 = 25.0 * std::f64::consts::PI / 180.0;
+
 /// A boundary vertex's interior angle in quarter turns of the field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum VertexClass {
@@ -43,8 +47,16 @@ impl VertexClass {
     }
 
     /// Allowed on a valid patch's boundary (the paper's convexity condition).
+    /// A cusp (two features meeting at a very acute angle) can't be split by
+    /// any path, so like the oracle it counts as a (sharp) convex corner: the
+    /// paper keeps such features even at the cost of very acute quads.
     pub fn is_convex(self) -> bool {
-        matches!(self, Self::Convex | Self::Flat)
+        matches!(self, Self::Cusp | Self::Convex | Self::Flat)
+    }
+
+    /// A corner of the patch: one more side.
+    pub fn is_corner(self) -> bool {
+        matches!(self, Self::Cusp | Self::Convex)
     }
 }
 
@@ -162,13 +174,21 @@ pub fn turn_at(
     } else {
         field_turn(crosses, &faces, label(incoming), label(outgoing))
     };
-    let class = match by_field {
+    let q = match by_field {
         Some(t) => {
             let r = (2 + 4 - t) % 4;
-            VertexClass::from_quarters(if r == 0 { if angle > PI { 4 } else { 0 } } else { r })
+            let q = if r == 0 { if angle > PI { 4 } else { 0 } } else { r };
+            // Near singular corners the field can turn a quarter within one
+            // fan: a concave or narrow reading where the geometry is clearly
+            // flatter is overruled. (Never the other way: a jagged path's
+            // steps are geometrically 90° and 270° but follow one field line.)
+            let geometric = by_angle();
+            let decisive = (angle - f64::from(geometric) * FRAC_PI_2).abs() <= DECISIVE;
+            if decisive && q >= 3 && geometric < q && geometric >= 1 { geometric } else { q }
         }
-        None => VertexClass::from_quarters(by_angle()),
+        None => by_angle(),
     };
+    let class = VertexClass::from_quarters(q);
     Turn { class, outgoing, faces, angle }
 }
 

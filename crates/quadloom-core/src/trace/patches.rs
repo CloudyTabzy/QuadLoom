@@ -189,6 +189,25 @@ pub struct PatchInfo {
     /// Whether the side lengths pass the CC-ability test (always, for 4
     /// sides when matching valence; never, outside 3–6 sides).
     pub cc_able: bool,
+    /// For a single loop: each boundary step, in loop order.
+    pub steps: Vec<BoundaryStep>,
+    /// A disk as cut open (along features and paths).
+    pub cut_disk: bool,
+    /// How far the cut-open patch is from a disk: 1 − χ (+2 if closed).
+    pub excess: i64,
+    /// Boundary half-edges whose other side is this same patch.
+    pub glued: usize,
+}
+
+/// One vertex along a patch's boundary loop.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoundaryStep {
+    pub vertex: u32,
+    pub class: VertexClass,
+    /// The patch's interior angle there (radians).
+    pub angle: f64,
+    /// Field length of the edge arriving at `vertex`.
+    pub length: f64,
 }
 
 impl PatchInfo {
@@ -208,6 +227,9 @@ pub struct PatchContext<'a> {
     pub singular: &'a [i32],
     /// Vertices whose boundary turns are measured geometrically (see [`turn_at`]).
     pub geometric_turns: &'a [bool],
+    /// Each cut vertex's id in the uncut mesh (empty: the cut ids themselves).
+    /// A patch must be a disk with features glued back, as in the final mesh.
+    pub merge_id: &'a [u32],
     pub max_sides: usize,
     pub match_valence: bool,
     /// Added to the shortest side when testing CC-ability.
@@ -290,6 +312,16 @@ impl Partition {
 
     pub fn info(&self, p: u32) -> Option<&PatchInfo> {
         self.infos.get(p as usize).and_then(|i| i.as_ref())
+    }
+
+    /// Re-declares corners of every convex disk with too few or too many
+    /// sides (see [`redeclare_corners`]); returns how many changed.
+    pub fn redeclare_corners(&mut self, ctx: &PatchContext) -> usize {
+        let mut changed = 0;
+        for info in self.infos.iter_mut().flatten() {
+            changed += usize::from(redeclare_corners(info, ctx));
+        }
+        changed
     }
 
     /// Live patches, by id.
@@ -396,7 +428,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
 
     // Walk the loops; each step is (half-edge, class at its head).
     let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::with_capacity(boundary.len());
-    let mut loops: Vec<Vec<(u32, VertexClass)>> = Vec::new();
+    let mut loops: Vec<Vec<(u32, VertexClass, f64)>> = Vec::new();
     let mut broken = false;
     for &start in &boundary {
         if seen.contains(&start) {
@@ -407,7 +439,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
         loop {
             seen.insert(h);
             let turn = turn_at(cut, ctx.crosses, ctx.geometric_turns, h, &cut_at, &label);
-            steps.push((h, turn.class));
+            steps.push((h, turn.class, turn.angle));
             h = turn.outgoing;
             if h == start {
                 break;
@@ -419,12 +451,25 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
         }
         loops.push(steps);
     }
-    let not_convex: Vec<(u32, VertexClass)> =
-        loops.iter().flatten().filter(|(_, c)| !c.is_convex()).map(|&(h, c)| (cut.head(h), c)).collect();
-    let (corners, sides) = match loops.as_slice() {
-        [steps] => corners_and_sides(ctx, &label, steps),
-        _ => (Vec::new(), Vec::new()),
+    let not_convex: Vec<(u32, VertexClass)> = loops
+        .iter()
+        .flatten()
+        .filter(|(_, c, _)| !c.is_convex())
+        .map(|&(h, c, _)| (cut.head(h), c))
+        .collect();
+    // A single loop keeps its steps, each with its edge's field length.
+    let steps: Vec<BoundaryStep> = match loops.as_slice() {
+        [steps] => steps
+            .iter()
+            .map(|&(h, class, angle)| {
+                let e = cut.positions[cut.head(h) as usize] - cut.positions[cut.tail(h) as usize];
+                let length = ctx.crosses.closest(h / 3, label(h)).map_or(e.length(), |(_, d)| e.dot(d).abs());
+                BoundaryStep { vertex: cut.head(h), class, angle, length }
+            })
+            .collect(),
+        _ => Vec::new(),
     };
+    let (corners, sides) = sides_between(&steps, &|k| steps[k].class.is_corner());
     let mut singularities: Vec<(u32, i32)> = vertices
         .iter()
         .filter(|&&v| mark[v as usize] == 1)
@@ -434,15 +479,71 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
     for &v in &vertices {
         mark[v as usize] = 0;
     }
-    let lengths: Vec<f64> = sides.iter().map(|s| s.length).collect();
+    let mut info = PatchInfo {
+        faces,
+        loops: loops.len(),
+        loop_vertices: loops
+            .iter()
+            .map(|steps| steps.iter().map(|&(h, _, _)| cut.head(h)).collect())
+            .collect(),
+        corners,
+        sides,
+        not_convex,
+        singularities,
+        kind: PatchKind::Ok,
+        cc_margin: 0.0,
+        cc_able: false,
+        steps,
+        cut_disk: !broken && loops.len() == 1 && chi2 == 2,
+        // 1 − χ, plus 2 for a closed piece (so a sphere needs a loop too).
+        excess: 1 - chi2 / 2 + if loops.is_empty() { 2 } else { 0 },
+        glued: 0,
+    };
+    // Boundary edges glued to the same patch on their other side (a feature
+    // or path with this patch on both sides), as merged edges.
+    let merged_of = |v: u32| ctx.merge_id.get(v as usize).copied().unwrap_or(v);
+    let directed: std::collections::HashSet<(u32, u32)> =
+        boundary.iter().map(|&h| (merged_of(cut.tail(h)), merged_of(cut.head(h)))).collect();
+    info.glued = boundary
+        .iter()
+        .filter(|&&h| directed.contains(&(merged_of(cut.head(h)), merged_of(cut.tail(h)))))
+        .count();
+    // χ with feature copies merged: a patch on both sides of a feature line
+    // (an annulus joined by it, say) is a disk cut open but not in the mesh.
+    let merged = |v: u32| ctx.merge_id.get(v as usize).copied().unwrap_or(v);
+    let mut merged_vertices: Vec<u32> =
+        info.faces.iter().flat_map(|&f| cut.triangles[f as usize]).map(merged).collect();
+    merged_vertices.sort_unstable();
+    merged_vertices.dedup();
+    let mut merged_edges: Vec<(u32, u32)> = info
+        .faces
+        .iter()
+        .flat_map(|&f| {
+            let t = cut.triangles[f as usize].map(merged);
+            (0..3).map(move |i| (t[i].min(t[(i + 1) % 3]), t[i].max(t[(i + 1) % 3])))
+        })
+        .collect();
+    merged_edges.sort_unstable();
+    merged_edges.dedup();
+    let merged_chi = merged_vertices.len() as i64 - merged_edges.len() as i64 + info.faces.len() as i64;
+    let disk = info.cut_disk && merged_chi == 1;
+    classify(&mut info, ctx, disk);
+    info
+}
+
+/// Sets `info`'s CC margin, CC-ability and kind from its sides.
+fn classify(info: &mut PatchInfo, ctx: &PatchContext, disk: bool) {
+    let lengths: Vec<f64> = info.sides.iter().map(|s| s.length).collect();
     let margin = cc_margin(&lengths);
-    let n = sides.len();
+    let n = info.sides.len();
     let shortest = lengths.iter().copied().fold(f64::INFINITY, f64::min);
     let cc_able =
         (n == 4 && ctx.match_valence) || ((3..=6).contains(&n) && margin + shortest + ctx.tolerance > 0.0);
-    let kind = if broken || loops.len() != 1 || chi2 != 2 {
+    info.cc_margin = margin;
+    info.cc_able = cc_able;
+    info.kind = if !disk {
         PatchKind::NonDisk
-    } else if !not_convex.is_empty() {
+    } else if !info.not_convex.is_empty() {
         PatchKind::NotConvex
     } else if n < 3 {
         PatchKind::LowSides
@@ -450,49 +551,106 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
         PatchKind::HighSides
     } else if !cc_able {
         PatchKind::NotCcAble
-    } else if ctx.match_valence && expected_sides(&singularities) != Some(n) {
+    } else if ctx.match_valence && expected_sides(&info.singularities) != Some(n) {
         PatchKind::ValenceMismatch
     } else {
         PatchKind::Ok
     };
-    PatchInfo {
-        faces,
-        loops: loops.len(),
-        loop_vertices: loops.iter().map(|steps| steps.iter().map(|&(h, _)| cut.head(h)).collect()).collect(),
-        corners,
-        sides,
-        not_convex,
-        singularities,
-        kind,
-        cc_margin: margin,
-        cc_able,
-    }
 }
 
-/// Corners (convex vertices) of a single loop and the sides between them.
-/// A side's length sums its edges along one field direction, carried from
-/// edge to edge, so the zig-zags of a traced path don't count.
-fn corners_and_sides(
-    ctx: &PatchContext,
-    label: &dyn Fn(u32) -> DVec3,
-    steps: &[(u32, VertexClass)],
-) -> (Vec<u32>, Vec<SideInfo>) {
-    let cut = ctx.cut;
-    let Some(first) = steps.iter().position(|(_, c)| *c == VertexClass::Convex) else {
+/// Interior angles below this (radians) make a vertex a natural extra corner.
+const SHARP_ENOUGH: f64 = 150.0 * std::f64::consts::PI / 180.0;
+
+/// The oracle's last resort (`FixValences`): a convex disk with too few or
+/// too many sides gets corners re-declared, with no geometry changed. Too
+/// few: the sharpest non-corner vertex becomes a corner, or, where the
+/// boundary is smooth, the middle of the longest side. Too many: the
+/// flattest corners stop being corners. Returns whether `info` changed.
+pub fn redeclare_corners(info: &mut PatchInfo, ctx: &PatchContext) -> bool {
+    let n_sides = info.sides.len();
+    let out_of_range = n_sides < 3 || n_sides > ctx.max_sides;
+    let eligible = matches!(info.kind, PatchKind::LowSides | PatchKind::HighSides)
+        || (info.kind == PatchKind::NotConvex && out_of_range);
+    if !eligible || info.steps.len() < 3 {
+        return false;
+    }
+    let n = info.steps.len();
+    let mut corner: Vec<bool> = info.steps.iter().map(|s| s.class.is_corner()).collect();
+    let count = |c: &[bool]| c.iter().filter(|&&x| x).count();
+    while count(&corner) < 3 {
+        let sharpest = (0..n)
+            .filter(|&k| !corner[k])
+            .min_by(|&a, &b| info.steps[a].angle.total_cmp(&info.steps[b].angle).then(a.cmp(&b)));
+        let Some(sharpest) = sharpest else { break };
+        let pick = if info.steps[sharpest].angle < SHARP_ENOUGH || count(&corner) == 0 {
+            sharpest
+        } else {
+            middle_of_longest_side(&info.steps, &corner).unwrap_or(sharpest)
+        };
+        corner[pick] = true;
+    }
+    while count(&corner) > ctx.max_sides {
+        let flattest = (0..n)
+            .filter(|&k| corner[k])
+            .max_by(|&a, &b| info.steps[a].angle.total_cmp(&info.steps[b].angle).then(b.cmp(&a)));
+        let Some(flattest) = flattest else { break };
+        corner[flattest] = false;
+    }
+    let (corners, sides) = sides_between(&info.steps, &|k| corner[k]);
+    info.corners = corners;
+    info.sides = sides;
+    classify(info, ctx, true);
+    true
+}
+
+/// The step halfway (by length) along the longest side between corners.
+fn middle_of_longest_side(steps: &[BoundaryStep], corner: &[bool]) -> Option<usize> {
+    let n = steps.len();
+    let first = (0..n).find(|&k| corner[k])?;
+    let (mut best, mut best_len) = (None, -1.0);
+    let mut k = first;
+    for _ in 0..n {
+        // The side from corner k to the next corner.
+        let mut members = Vec::new();
+        let mut length = 0.0;
+        let mut j = (k + 1) % n;
+        while !corner[j] {
+            length += steps[j].length;
+            members.push((j, length));
+            j = (j + 1) % n;
+        }
+        length += steps[j].length;
+        if length > best_len && !members.is_empty() {
+            let half = length / 2.0;
+            best =
+                members.iter().min_by(|a, b| (a.1 - half).abs().total_cmp(&(b.1 - half).abs())).map(|m| m.0);
+            best_len = length;
+        }
+        k = j;
+        if k == first {
+            break;
+        }
+    }
+    best
+}
+
+/// The corners (steps where `is_corner` holds) of a single loop and the
+/// sides between them. A side's length sums its edges along one field
+/// direction, so the zig-zags of a traced path don't count.
+fn sides_between(steps: &[BoundaryStep], is_corner: &dyn Fn(usize) -> bool) -> (Vec<u32>, Vec<SideInfo>) {
+    let n = steps.len();
+    let Some(first) = (0..n).find(|&k| is_corner(k)) else {
         return (Vec::new(), Vec::new());
     };
-    let n = steps.len();
     let (mut corners, mut sides) = (Vec::new(), Vec::new());
-    let mut side = SideInfo { vertices: vec![cut.head(steps[first].0)], length: 0.0 };
+    let mut side = SideInfo { vertices: vec![steps[first].vertex], length: 0.0 };
     for k in 1..=n {
-        let (h, class) = steps[(first + k) % n];
-        let e = cut.positions[cut.head(h) as usize] - cut.positions[cut.tail(h) as usize];
-        let along = ctx.crosses.closest(h / 3, label(h)).map_or(e.length(), |(_, d)| e.dot(d).abs());
-        side.length += along;
-        side.vertices.push(cut.head(h));
-        if class == VertexClass::Convex {
-            corners.push(cut.head(h));
-            let next = SideInfo { vertices: vec![cut.head(h)], length: 0.0 };
+        let step = &steps[(first + k) % n];
+        side.length += step.length;
+        side.vertices.push(step.vertex);
+        if is_corner((first + k) % n) {
+            corners.push(step.vertex);
+            let next = SideInfo { vertices: vec![step.vertex], length: 0.0 };
             sides.push(std::mem::replace(&mut side, next));
         }
     }
@@ -527,6 +685,7 @@ mod tests {
                 crosses: &self.crosses,
                 singular: &self.singular,
                 geometric_turns: &[],
+                merge_id: &[],
                 max_sides: 5,
                 match_valence: true,
                 tolerance: 1.0,

@@ -2,6 +2,8 @@
 
 use glam::DVec3;
 
+use std::collections::HashMap;
+
 use super::*;
 use crate::field::{FieldParams, compute as field_compute};
 use crate::remesh::tests::sphere_mesh;
@@ -158,4 +160,130 @@ fn perf_layout_200k_faces() {
     let seconds = started.elapsed().as_secs_f64();
     eprintln!("{} faces, {seconds:.1} s, {}", t.len(), summary(&out));
     assert!(seconds < 20.0);
+}
+
+/// Positions, triangles, per-face directions and feature edges.
+type OracleCase = (Vec<DVec3>, Vec<[u32; 3]>, Vec<DVec3>, Vec<[u32; 2]>);
+
+/// Loads QuadWild's `_rem` stage files (`<prefix>.obj`, `.rosy`, `.sharp`).
+fn load_oracle_case(prefix: &str) -> OracleCase {
+    let text = std::fs::read_to_string(format!("{prefix}.obj")).unwrap();
+    let (mut p, mut t) = (Vec::new(), Vec::new());
+    for line in text.lines() {
+        let mut f = line.split_whitespace();
+        match f.next() {
+            Some("v") => {
+                let c: Vec<f64> = f.take(3).map(|x| x.parse().unwrap()).collect();
+                p.push(DVec3::new(c[0], c[1], c[2]));
+            }
+            Some("f") => {
+                let ids: Vec<u32> =
+                    f.map(|x| x.split('/').next().unwrap().parse::<u32>().unwrap() - 1).collect();
+                for k in 1..ids.len() - 1 {
+                    t.push([ids[0], ids[k], ids[k + 1]]);
+                }
+            }
+            _ => {}
+        }
+    }
+    let rosy = std::fs::read_to_string(format!("{prefix}.rosy")).unwrap();
+    let nums: Vec<f64> = rosy.split_whitespace().skip(2).map(|x| x.parse().unwrap()).collect();
+    let d: Vec<DVec3> = nums.chunks(3).map(|c| DVec3::new(c[0], c[1], c[2])).collect();
+    let sharp = std::fs::read_to_string(format!("{prefix}.sharp")).unwrap();
+    let mut features: Vec<[u32; 2]> = sharp
+        .lines()
+        .skip(1)
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            let v: Vec<usize> = l.split(',').map(|x| x.trim().parse().unwrap()).collect();
+            let tri = t[v[1]];
+            let (a, b) = (tri[v[2]], tri[(v[2] + 1) % 3]);
+            [a.min(b), a.max(b)]
+        })
+        .collect();
+    features.sort_unstable();
+    features.dedup();
+    (p, t, d, features)
+}
+
+#[test]
+#[ignore = "diagnostic: QL_CASE=<prefix of QuadWild _rem files>"]
+fn diagnose_oracle_case() {
+    let Some(prefix) = std::env::var_os("QL_CASE") else { return };
+    let (p, t, d, features) = load_oracle_case(prefix.to_str().unwrap());
+    let frames = FaceFrames::new(&p, &t);
+    let powers: Vec<_> = (0..t.len() as u32).map(|f| frames.power(f, d[f as usize], ROSY)).collect();
+    let singularities: Vec<(u32, i32)> = vertex_indices(&p, &t, &powers)
+        .into_iter()
+        .enumerate()
+        .filter(|&(_, k)| k != 0)
+        .map(|(v, k)| (v as u32, k))
+        .collect();
+    let part =
+        TraceMesh { positions: p, triangles: t, feature_edges: features, directions: d, singularities };
+    let mesh = refine::for_tracing(&part);
+    let mut singular = vec![0i32; mesh.positions.len()];
+    for &(v, k) in &mesh.singularities {
+        singular[v as usize] = k;
+    }
+    let settings = TraceParams::default().settings();
+    let labels = HashMap::new();
+    let region = select::Region::new(
+        select::RegionMesh {
+            positions: &mesh.positions,
+            triangles: &mesh.triangles,
+            barrier: &mesh.feature_edges,
+            directions: mesh.directions.clone(),
+            singular: &singular,
+            labels: &labels,
+            tolerance: 1.5,
+            merge_id: None,
+        },
+        &settings,
+    )
+    .unwrap();
+    let mut class_counts: std::collections::BTreeMap<String, usize> = Default::default();
+    for c in region.classes.iter().flatten() {
+        *class_counts.entry(format!("{c:?}")).or_default() += 1;
+    }
+    eprintln!("boundary classes {class_counts:?}");
+    let mut layout = select::Layout::new(region, &settings);
+    layout.run(&Control::default()).unwrap();
+    let mut ends: HashMap<u32, usize> = HashMap::new();
+    let mut through: HashMap<u32, usize> = HashMap::new();
+    for c in layout.chosen.iter().filter(|c| !c.removed) {
+        let n = c.path.nodes.len();
+        for (i, node) in c.path.nodes.iter().enumerate() {
+            if !c.path.closed && (i == 0 || i + 1 == n) {
+                *ends.entry(node.vertex()).or_default() += 1;
+            } else {
+                *through.entry(node.vertex()).or_default() += 1;
+            }
+        }
+    }
+    let partition = layout.partition().clone();
+    let region = &layout.region;
+    let mut cats: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut kinds: std::collections::BTreeMap<String, usize> = Default::default();
+    for (_, info) in partition.patches() {
+        *kinds.entry(format!("{:?}/{}", info.kind, info.sides.len())).or_default() += 1;
+        if info.kind != PatchKind::NotConvex {
+            continue;
+        }
+        for &(v, class) in &info.not_convex {
+            let key = format!(
+                "{class:?} region_class={:?} ends={} through={} singular={}",
+                region.classes[v as usize],
+                ends.get(&v).copied().unwrap_or(0),
+                through.get(&v).copied().unwrap_or(0),
+                region.geometric_turns[v as usize]
+            );
+            *cats.entry(key).or_default() += 1;
+        }
+    }
+    eprintln!("kinds {kinds:?}");
+    for (k, n) in &cats {
+        eprintln!("{n:5}  {k}");
+    }
+    eprintln!("tally {:?}", layout.tally);
 }

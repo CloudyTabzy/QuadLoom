@@ -6,7 +6,7 @@
 //!                                       run the pipeline and write the result
 //!                                       (and its cross field and patch layout,
 //!                                       in QuadWild's formats)
-//! quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix>
+//! quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]
 //!                                       trace a given mesh, field and features
 //!                                       (e.g. QuadWild's `_rem` files); writes
 //!                                       `<prefix>_p0.*` and prints the report
@@ -31,7 +31,7 @@ use std::process::ExitCode;
 use quadloom_core::{Control, Error, ErrorKind, Params, RunOutput};
 use serde_json::json;
 
-const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix>\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
+const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
 
 enum Failure {
     Usage,
@@ -133,8 +133,13 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             Ok(())
         }
         ["field-index", mesh, rosy] => field_index(Path::new(mesh), Path::new(rosy)),
-        ["layout", mesh, rosy, sharp, prefix] => {
-            layout(Path::new(mesh), Path::new(rosy), Path::new(sharp), Path::new(prefix))
+        ["layout", mesh, rosy, sharp, prefix, rest @ ..] => {
+            let params = match rest {
+                [] => quadloom_core::TraceParams::default(),
+                ["--params", json] => trace_params(json)?,
+                _ => return Err(Failure::Usage),
+            };
+            layout(Path::new(mesh), Path::new(rosy), Path::new(sharp), Path::new(prefix), &params)
         }
         ["layout-stats", mesh, patch, corners] => {
             layout_stats(Path::new(mesh), Path::new(patch), Path::new(corners))
@@ -198,7 +203,43 @@ fn load_triangles(mesh: &Path) -> Result<Triangles, Failure> {
 
 /// Traces a mesh with a given field and features, as the pipeline's stage 4
 /// would, and writes the layout in QuadWild's formats.
-fn layout(mesh: &Path, rosy: &Path, sharp: &Path, prefix: &Path) -> Result<(), Failure> {
+/// Trace settings from a JSON object of `TraceParams` fields (for sweeps).
+fn trace_params(text: &str) -> Result<quadloom_core::TraceParams, Failure> {
+    let bad = |what: String| Failure::Io(io::IoError::Invalid(format!("--params: {what}")));
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| bad(e.to_string()))?;
+    let object = value.as_object().ok_or_else(|| bad("expected a JSON object".into()))?;
+    let mut params = quadloom_core::TraceParams::default();
+    for (key, v) in object {
+        let number = || v.as_f64().ok_or_else(|| bad(format!("{key} must be a number")));
+        let count = || v.as_u64().map(|n| n as usize).ok_or_else(|| bad(format!("{key} must be a count")));
+        match key.as_str() {
+            "max_sides" => params.max_sides = count()?,
+            "sub_passes" => params.sub_passes = count()?,
+            "drift" => params.drift = number()?,
+            "cc_tolerance" => params.cc_tolerance = number()?,
+            "loop_density" => params.loop_density = number()?,
+            "match_valence" => {
+                params.match_valence = v.as_bool().ok_or_else(|| bad(format!("{key} must be a bool")))?
+            }
+            "cost" => {
+                params.cost = v
+                    .as_str()
+                    .and_then(quadloom_core::TraceCost::from_name)
+                    .ok_or_else(|| bad("cost must be \"anisotropic\" or \"angle_penalty\"".into()))?
+            }
+            other => return Err(bad(format!("unknown setting {other}"))),
+        }
+    }
+    Ok(params)
+}
+
+fn layout(
+    mesh: &Path,
+    rosy: &Path,
+    sharp: &Path,
+    prefix: &Path,
+    params: &quadloom_core::TraceParams,
+) -> Result<(), Failure> {
     let (positions, triangles) = load_triangles(mesh)?;
     let directions = io::read_rosy(rosy, triangles.len())?;
     let features = io::read_sharp(sharp, &triangles)?;
@@ -219,7 +260,7 @@ fn layout(mesh: &Path, rosy: &Path, sharp: &Path, prefix: &Path) -> Result<(), F
         &triangles,
         &features,
         &field,
-        &quadloom_core::TraceParams::default(),
+        params,
         &Control::default(),
     )?;
     let ms = started.elapsed().as_secs_f64() * 1000.0;

@@ -17,7 +17,7 @@ use rayon::prelude::*;
 
 use super::TraceCost;
 use super::cut::CutMesh;
-use super::graph::{FieldGraph, Node};
+use super::graph::{FieldGraph, Node, transport};
 use super::patches::{Partition, PatchContext, PatchInfo, PatchKind, PathEdges};
 use super::sample::{DistanceField, farthest_points};
 use super::search::{Occupancy, Search, TracePath, cut_ears, self_intersects};
@@ -69,6 +69,7 @@ pub struct Tally {
     pub sub_passes_run: usize,
     pub relaxed_patches: usize,
     pub seams: usize,
+    pub redeclared: usize,
 }
 
 /// A path that was chosen.
@@ -101,6 +102,8 @@ pub struct Region {
     /// Vertices where the field is singular but which are not on a barrier
     /// (so they may lie on a region boundary): turns there are geometric.
     pub geometric_turns: Vec<bool>,
+    /// Each cut vertex's id in the top-level uncut mesh.
+    pub merge_id: Vec<u32>,
     /// Labels of boundary half-edges that don't run along their own edge
     /// (in a sub-region, the parent's path edges), by directed cut-vertex pair.
     labels: HashMap<(u32, u32), DVec3>,
@@ -124,11 +127,15 @@ pub struct RegionMesh<'a> {
     pub labels: &'a HashMap<(u32, u32), DVec3>,
     /// The CC-ability tolerance (a parent's, for a sub-region).
     pub tolerance: f64,
+    /// Each input vertex's id in the top-level uncut mesh (None: the input
+    /// ids themselves).
+    pub merge_id: Option<&'a [u32]>,
 }
 
 impl Region {
     pub fn new(mesh: RegionMesh<'_>, settings: &Settings) -> Result<Self, Error> {
-        let RegionMesh { positions, triangles, barrier, directions, singular, labels, tolerance } = mesh;
+        let RegionMesh { positions, triangles, barrier, directions, singular, labels, tolerance, merge_id } =
+            mesh;
         let cut = CutMesh::new(positions, triangles, barrier);
         let singular: Vec<i32> = (0..cut.vertex_count())
             .map(|v| {
@@ -178,11 +185,18 @@ impl Region {
             classes: Vec::new(),
             singular,
             geometric_turns,
+            merge_id: Vec::new(),
             labels: cut_labels,
             ports: Vec::new(),
             area,
             tolerance,
         };
+        region.merge_id = region
+            .cut
+            .original
+            .iter()
+            .map(|&o| merge_id.and_then(|m| m.get(o as usize).copied()).unwrap_or(o))
+            .collect();
         region.classes =
             classify_boundary(&region.cut, &region.crosses, &region.geometric_turns, &|h| region.label(h));
         region.init_ports();
@@ -303,6 +317,7 @@ impl Region {
             crosses: &self.crosses,
             singular: &self.singular,
             geometric_turns: &self.geometric_turns,
+            merge_id: &self.merge_id,
             max_sides: settings.max_sides,
             match_valence: settings.match_valence,
             tolerance: self.tolerance,
@@ -436,7 +451,18 @@ impl<'s> Layout<'s> {
     /// Adds `path` if that leaves the patches it splits no worse (see
     /// [`Self::no_worse`]): a loop that only turns one annulus into two, say,
     /// is refused.
-    fn try_accept(&mut self, mut path: TracePath) -> bool {
+    fn try_accept(&mut self, path: TracePath) -> bool {
+        self.try_accept_if(path, false, std::cmp::Ordering::is_le)
+    }
+
+    /// Adds `path` if comparing the patches it splits, after against before,
+    /// passes `keep` (see [`Self::compare`]).
+    fn try_accept_if(
+        &mut self,
+        mut path: TracePath,
+        anchored: bool,
+        keep: fn(std::cmp::Ordering) -> bool,
+    ) -> bool {
         if self.settings.cut_ears {
             let (occupancy, edges, cut) = (&self.occupancy, &self.edges, &self.region.cut);
             cut_ears(&mut path, cut, &|a, b| occupancy.has_edge(a, b) || edges.contains(a, b));
@@ -448,12 +474,12 @@ impl<'s> Layout<'s> {
         self.edges.insert(&path, &self.region.cut, &self.region.graph);
         let change = partition.update(&ctx, &self.edges, &touched);
         let after: Vec<&PatchInfo> = change.added.iter().filter_map(|&p| partition.info(p)).collect();
-        if self.no_worse(&change.removed, &after) {
+        if keep(self.compare(&change.removed, &after)) {
             self.partition = Some(partition);
             self.edges.remove(&path, &self.region.cut);
             // The partition already has the path: accept without updating it again.
             let saved = self.partition.take();
-            self.accept_with(path, false, false);
+            self.accept_with(path, anchored, false);
             self.partition = saved;
             true
         } else {
@@ -462,6 +488,11 @@ impl<'s> Layout<'s> {
             self.partition = Some(partition);
             false
         }
+    }
+
+    /// Whether `v` is a concave or narrow vertex (one that paths fix).
+    fn needs_path(&self, v: u32) -> bool {
+        matches!(self.region.ports[v as usize].class, Some(VertexClass::Concave | VertexClass::Narrow))
     }
 
     fn anchored(&self, path: &TracePath) -> bool {
@@ -592,7 +623,10 @@ impl<'s> Layout<'s> {
         for path in candidates {
             control.checkpoint(Stage::Trace)?;
             let (s, e) = (path.nodes[0].vertex(), path.nodes[path.nodes.len() - 1].vertex());
-            if self.needs[s as usize] == 0 && self.needs[e as usize] == 0 {
+            // The start must still need a path, and a path may only end at a
+            // concave or narrow vertex that still needs one: candidates were
+            // traced together, so an earlier one may have satisfied it.
+            if self.needs[s as usize] == 0 || (self.needs_path(e) && self.needs[e as usize] == 0) {
                 continue;
             }
             if self.occupancy.collides(&path, &self.region.cut) {
@@ -906,6 +940,7 @@ impl<'s> Layout<'s> {
                 }
             }
         }
+        let merge: Vec<u32> = back.iter().map(|&v| self.region.merge_id[v as usize]).collect();
         let mesh = RegionMesh {
             positions: &positions,
             triangles: &triangles,
@@ -914,6 +949,7 @@ impl<'s> Layout<'s> {
             singular: &singular,
             labels: &labels,
             tolerance: self.region.tolerance,
+            merge_id: Some(&merge),
         };
         let sub = Region::new(mesh, self.settings)?;
         let mut layout = Layout::new(sub, self.settings);
@@ -946,27 +982,35 @@ impl<'s> Layout<'s> {
     /// patches (as the oracle does) makes splitting a 0-sided patch into two
     /// 2-sided ones count as progress, and merging two back as a loss.
     fn no_worse(&self, before: &[PatchInfo], after: &[&PatchInfo]) -> bool {
+        self.compare(before, after).is_le()
+    }
+
+    /// How `after` compares with `before` (less is better; see [`Self::no_worse`]).
+    fn compare(&self, before: &[PatchInfo], after: &[&PatchInfo]) -> std::cmp::Ordering {
         let max = self.settings.max_sides;
         let score = |infos: &mut dyn Iterator<Item = &PatchInfo>| {
-            let mut s = [0i64; 6];
+            let mut s = [0i64; 7];
             let mut max_sing = 1i64;
+            // Topology first (cut open, then glued edges, which falls as a
+            // self-glued band is cut into disks), then the paper's conditions.
             for i in infos {
                 let n = i.sides.len();
-                s[0] += i64::from(i.kind == PatchKind::NonDisk);
-                s[1] += i.not_convex.len() as i64;
+                s[0] += i.excess.max(0);
+                s[1] += i.glued as i64;
+                s[2] += i.not_convex.len() as i64;
                 if i.kind != PatchKind::NonDisk {
-                    s[2] += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max) as i64;
+                    s[3] += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max) as i64;
                 }
                 max_sing = max_sing.max(i.singularities.len() as i64);
-                s[4] -= i64::from(i.matches_singularity());
-                s[5] += i64::from(!i.cc_able && (3..=6).contains(&n));
+                s[5] -= i64::from(i.matches_singularity());
+                s[6] += i64::from(!i.cc_able && (3..=6).contains(&n));
             }
-            s[3] = max_sing;
+            s[4] = max_sing;
             s
         };
         let b = score(&mut before.iter());
         let a = score(&mut after.iter().copied());
-        a <= b
+        a.cmp(&b)
     }
 
     /// Whether removing chosen path `k` would leave another path dangling.
@@ -1067,11 +1111,14 @@ impl<'s> Layout<'s> {
             let mut added = 0;
             for info in &invalid {
                 // A seam runs through the patch's interior, so it can only meet
-                // other paths at its ends: no collision test.
-                if let Some(seam) = self.repair_seam(info) {
-                    self.accept(seam, true);
-                    self.tally.seams += 1;
-                    added += 1;
+                // other paths at its ends: no collision test. It must strictly
+                // improve the patch, or seams could cut lenses into lenses forever.
+                let seam_found = self.repair_seam(info);
+                if let Some(seam) = seam_found {
+                    if self.try_accept_if(seam, true, std::cmp::Ordering::is_lt) {
+                        self.tally.seams += 1;
+                        added += 1;
+                    }
                 }
             }
             if added == 0 {
@@ -1083,38 +1130,67 @@ impl<'s> Layout<'s> {
 
     /// The last resort for an invalid patch: a cut that is not field-aligned
     /// (and may pass through singular vertices) but always brings it closer
-    /// to valid. A non-disk patch is cut between two of its boundary loops;
-    /// a patch with too few sides across, from the middle of its longest
-    /// side to the far third of its boundary; one with too many sides from a
-    /// corner to the opposite corner; a non-convex one from the offending
-    /// vertex to the far half of its boundary.
+    /// to valid. A non-disk patch is cut between two of its boundary loops
+    /// (merged loops, if it is a disk only cut open along a feature); a
+    /// non-convex one from the offending vertex to the far half of its
+    /// boundary. Side counts out of range are fixed by re-declaring corners
+    /// instead, which moves no geometry.
     fn repair_seam(&self, info: &PatchInfo) -> Option<TracePath> {
         let loops = &info.loop_vertices;
         let (sources, targets): (Vec<u32>, Vec<u32>) = match info.kind {
-            PatchKind::NonDisk => {
+            PatchKind::NonDisk if loops.len() >= 2 => {
                 let (first, rest) = loops.split_first()?;
                 (first.clone(), rest.iter().flatten().copied().collect())
             }
+            PatchKind::NonDisk => self.merged_loops(info)?,
             PatchKind::NotConvex => return self.concave_seam(info),
-            PatchKind::LowSides => {
-                let ring = loops.first()?;
-                let start = info
-                    .sides
-                    .iter()
-                    .max_by(|a, b| a.length.total_cmp(&b.length))
-                    .map_or(*ring.first()?, |s| s.vertices[s.vertices.len() / 2]);
-                (vec![start], far_side(ring, start, 3))
-            }
-            PatchKind::HighSides => {
-                let n = info.corners.len();
-                (vec![*info.corners.first()?], vec![*info.corners.get(n / 2)?])
-            }
             _ => return None,
         };
         if sources.is_empty() || targets.is_empty() {
             return None;
         }
         self.seam_path(&info.faces, &sources, &targets)
+    }
+
+    /// For a patch that is a disk only cut open along a feature: its boundary
+    /// vertices on the first merged boundary loop, and those on the others.
+    fn merged_loops(&self, info: &PatchInfo) -> Option<(Vec<u32>, Vec<u32>)> {
+        let cut = &self.region.cut;
+        let merged = |v: u32| self.region.merge_id[v as usize];
+        let key = |a: u32, b: u32| (merged(a).min(merged(b)), merged(a).max(merged(b)));
+        let mut uses: HashMap<(u32, u32), u32> = HashMap::new();
+        for &f in &info.faces {
+            for h in 3 * f..3 * f + 3 {
+                *uses.entry(key(cut.tail(h), cut.head(h))).or_default() += 1;
+            }
+        }
+        // Merged boundary edges are used once; group their vertices into loops.
+        let mut sets = crate::unionfind::UnionFind::new(cut.vertex_count());
+        let mut on: Vec<u32> = Vec::new();
+        let mut by_merged: HashMap<u32, u32> = HashMap::new();
+        for &f in &info.faces {
+            for h in 3 * f..3 * f + 3 {
+                let (a, b) = (cut.tail(h), cut.head(h));
+                if uses.get(&key(a, b)) == Some(&1) {
+                    sets.union(a, b);
+                    on.extend([a, b]);
+                }
+            }
+        }
+        // Copies of one vertex are on the same merged loop.
+        for &v in &on {
+            match by_merged.get(&merged(v)) {
+                Some(&w) => sets.union(v, w),
+                None => {
+                    by_merged.insert(merged(v), v);
+                }
+            }
+        }
+        on.sort_unstable();
+        on.dedup();
+        let root = sets.find(*on.first()?);
+        let (first, rest): (Vec<u32>, Vec<u32>) = on.iter().partition(|&&v| sets.find(v) == root);
+        (!rest.is_empty()).then_some((first, rest))
     }
 
     /// A seam out of a non-convex boundary vertex, leaving along the
@@ -1145,24 +1221,39 @@ impl<'s> Layout<'s> {
                 d(x).total_cmp(&d(y)).then(y.cmp(&x))
             })?;
         let targets = far_side(ring, v, 4);
-        let g = &self.region.graph;
         let along = |x: u32, y: u32| cut.positions[y as usize] - cut.positions[x as usize];
-        let head = Node::new(v, g.closest_dir(v, along(v, first)));
         if cut.boundary[first as usize] || ring.contains(&first) {
             if !targets.contains(&first) {
                 return None;
             }
-            let tail = Node::new(first, g.closest_dir(first, along(v, first)));
-            return Some(TracePath {
-                nodes: vec![head, tail],
-                closed: false,
-                cost: along(v, first).length(),
-            });
+            let nodes = self.axis_nodes(&[v, first], ahead);
+            return Some(TracePath { nodes, closed: false, cost: along(v, first).length() });
         }
         let rest = self.seam_path(&info.faces, &[first], &targets)?;
-        let mut nodes = vec![head];
-        nodes.extend(rest.nodes);
+        // The whole seam follows the continued boundary edge's field axis.
+        let chain: Vec<u32> = std::iter::once(v).chain(rest.vertices()).collect();
+        let nodes = self.axis_nodes(&chain, ahead);
         Some(TracePath { nodes, closed: false, cost: rest.cost })
+    }
+
+    /// Nodes along `chain` that all follow one field axis: `first` snapped
+    /// at the first vertex, then carried from vertex to vertex like a traced
+    /// path's direction, so the chain has no corners of its own.
+    fn axis_nodes(&self, chain: &[u32], first: DVec3) -> Vec<Node> {
+        let g = &self.region.graph;
+        let mut nodes = Vec::with_capacity(chain.len());
+        let mut d = first;
+        for (i, &v) in chain.iter().enumerate() {
+            if i > 0 {
+                d = transport(d, g.normal(chain[i - 1]), g.normal(v));
+            }
+            let k = g.closest_dir(v, d);
+            if let Some(snapped) = g.direction(v, k) {
+                d = snapped;
+            }
+            nodes.push(Node::new(v, k));
+        }
+        nodes
     }
 
     /// The shortest path from `sources` to `targets` over edges with both
@@ -1240,11 +1331,20 @@ impl<'s> Layout<'s> {
         if chain.len() < 2 {
             return None;
         }
-        let along = |a: u32, b: u32| cut.positions[b as usize] - cut.positions[a as usize];
-        let mut nodes: Vec<Node> =
-            chain.windows(2).map(|w| Node::new(w[0], g.closest_dir(w[0], along(w[0], w[1])))).collect();
-        let prev = chain[chain.len() - 2];
-        nodes.push(Node::new(last, g.closest_dir(last, along(prev, last))));
+        // One field axis along the whole seam (no corners of its own), starting
+        // orthogonal to the boundary it leaves, so its ends are corners of the
+        // patches it makes however it runs.
+        let start_vertex = chain[0];
+        let leaving = faces
+            .iter()
+            .flat_map(|&f| 3 * f..3 * f + 3)
+            .find(|&h| is_cut(h) && cut.tail(h) == start_vertex)
+            .map(|h| self.edges.label(start_vertex, cut.head(h)).unwrap_or_else(|| self.region.label(h)));
+        let first_dir = match leaving {
+            Some(label) => g.normal(start_vertex).cross(label),
+            None => cut.positions[chain[1] as usize] - cut.positions[start_vertex as usize],
+        };
+        let nodes = self.axis_nodes(&chain, first_dir);
         Some(TracePath { nodes, closed: false, cost: dist.get(&last).copied().unwrap_or(0.0) })
     }
 
@@ -1258,6 +1358,11 @@ impl<'s> Layout<'s> {
         self.clean_up(control)?;
         self.recover(control)?;
         self.partition();
+        if let Some(mut partition) = self.partition.take() {
+            let ctx = self.region.ctx(self.settings);
+            self.tally.redeclared += partition.redeclare_corners(&ctx);
+            self.partition = Some(partition);
+        }
         Ok(())
     }
 }
