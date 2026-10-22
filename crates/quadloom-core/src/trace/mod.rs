@@ -8,8 +8,10 @@
 
 pub mod cut;
 pub mod graph;
+pub mod patches;
 pub mod refine;
 pub mod search;
+pub mod turns;
 
 use glam::DVec3;
 
