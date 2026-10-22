@@ -20,6 +20,9 @@ pub mod pipeline;
 pub mod remesh;
 pub mod repair;
 pub mod spatial;
+#[cfg(test)]
+mod testmesh;
+pub mod trace;
 mod unionfind;
 pub mod validate;
 
