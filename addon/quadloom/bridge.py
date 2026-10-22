@@ -32,6 +32,10 @@ class InternalError(QuadLoomError):
 native = None
 unavailable_reason = None
 
+# Must equal the backend's build_info()["api"]. Blender can't unload a native
+# module, so after an update the old backend stays loaded until a restart.
+API_VERSION = 3
+
 
 def _load(import_module=importlib.import_module):
     """(Re)loads the backend. `import_module` is injectable for tests."""
@@ -42,6 +46,17 @@ def _load(import_module=importlib.import_module):
     except Exception as e:  # ImportError, OSError (DLL load), anything else
         native = None
         unavailable_reason = f"{type(e).__name__}: {e}"
+        return
+    try:
+        api = module.build_info().get("api")
+    except Exception:
+        api = None
+    if api != API_VERSION:
+        native = None
+        unavailable_reason = (
+            "QuadLoom was updated while Blender was running: restart Blender to load the new backend "
+            f"(add-on API {API_VERSION}, loaded backend API {api})"
+        )
         return
     native = module
     unavailable_reason = None

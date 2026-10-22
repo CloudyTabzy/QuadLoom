@@ -14,6 +14,10 @@ mod settings;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
+/// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
+/// Bump it whenever either side changes.
+pub const API_VERSION: u32 = 3;
+
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -67,6 +71,8 @@ mod quadloom_native {
     fn build_info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("version", env!("CARGO_PKG_VERSION"))?;
+        // The add-on refuses a backend with another API (a stale one Blender kept loaded).
+        dict.set_item("api", crate::API_VERSION)?;
         dict.set_item("fault_injection", cfg!(feature = "fault-injection"))?;
         dict.set_item("profile", if cfg!(debug_assertions) { "debug" } else { "release" })?;
         Ok(dict)
