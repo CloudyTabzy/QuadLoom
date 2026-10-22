@@ -10,6 +10,7 @@ use crate::error::Error;
 use crate::fault;
 use crate::features::{self, FeatureInput, FeatureReport};
 use crate::field::{self, FieldOutput};
+use crate::frame::{self, FrameOutput};
 use crate::mesh::{InputMesh, PolyMesh};
 use crate::params::Params;
 use crate::remesh::{self, RemeshReport};
@@ -33,6 +34,8 @@ pub struct RunOutput {
     pub remesh: RemeshReport,
     /// The cross field on `mesh` (one direction per triangle), if enabled.
     pub field: Option<FieldOutput>,
+    /// The rectangular frame, if the frame stage ran (it refines `field`'s directions).
+    pub frame: Option<FrameOutput>,
     /// The patch layout, if the field and tracing ran. It lives on its own
     /// copy of `mesh`, refined around singularities.
     pub trace: Option<TraceOutput>,
@@ -115,7 +118,30 @@ pub fn run(
         None
     };
 
-    let trace = match &field {
+    let frame = match &field {
+        Some(field) if params.frame.enabled => {
+            let started = Instant::now();
+            control.checkpoint(Stage::Frame)?;
+            fault::inject(params, Stage::Frame, control)?;
+            let computed =
+                frame::compute(&positions, &triangles, &feature_edges, field, &params.frame, control)?;
+            timings_ms.push((Stage::Frame, elapsed_ms(started)));
+            Some(computed)
+        }
+        _ => None,
+    };
+    // Tracing follows the frame's directions when it ran. The singularities are
+    // the field's: the rotation θ is a 0-form, so they do not change.
+    let frame_field = match (&field, &frame) {
+        (Some(field), Some(frame)) => Some(FieldOutput {
+            directions: frame.directions.clone(),
+            singularities: field.singularities.clone(),
+            report: field.report.clone(),
+        }),
+        _ => None,
+    };
+
+    let trace = match frame_field.as_ref().or(field.as_ref()) {
         Some(field) if params.trace.enabled => {
             let started = Instant::now();
             control.checkpoint(Stage::Trace)?;
@@ -149,6 +175,7 @@ pub fn run(
         components: components.len(),
         remesh: remesh_report,
         field,
+        frame,
         trace,
         timings_ms,
     })
@@ -307,4 +334,59 @@ pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) ->
 
 fn elapsed_ms(started: Instant) -> f64 {
     started.elapsed().as_secs_f64() * 1000.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testmesh::torus;
+
+    /// A torus as flat buffers, with the remesh off so only the quad stages run.
+    fn torus_run(params: &Params) -> RunOutput {
+        let (p, t) = torus(24, 16);
+        let positions: Vec<f32> = p.iter().flat_map(|v| [v.x as f32, v.y as f32, v.z as f32]).collect();
+        let indices: Vec<u32> = t.iter().flatten().copied().collect();
+        run(&positions, &indices, &FeatureInput::default(), params, &Control::default()).unwrap()
+    }
+
+    fn no_remesh() -> Params {
+        let mut params = Params::default();
+        params.remesh.enabled = false;
+        params
+    }
+
+    fn ran(out: &RunOutput, stage: Stage) -> bool {
+        out.timings_ms.iter().any(|(s, _)| *s == stage)
+    }
+
+    #[test]
+    fn pipeline_runs_frame_when_enabled() {
+        let mut params = no_remesh();
+        params.frame.enabled = true;
+        let out = torus_run(&params);
+        let frame = out.frame.as_ref().expect("the frame stage ran");
+        assert_eq!(frame.report.solved_parts, 1, "{:?}", frame.report);
+        assert!(ran(&out, Stage::Frame));
+        assert!(out.trace.is_some());
+    }
+
+    #[test]
+    fn pipeline_without_frame_is_unchanged() {
+        let base = torus_run(&no_remesh());
+        let mut edited = no_remesh();
+        edited.frame.balance = 0.9;
+        edited.frame.curvature_stretch = true;
+        edited.frame.max_stretch = 5.0;
+        let other = torus_run(&edited);
+        for out in [&base, &other] {
+            assert!(out.frame.is_none());
+            assert!(!ran(out, Stage::Frame));
+        }
+        let (a, b) = (base.trace.as_ref().unwrap(), other.trace.as_ref().unwrap());
+        assert_eq!(base.mesh, other.mesh);
+        assert_eq!(a.patch_of_face, b.patch_of_face);
+        assert_eq!(a.paths, b.paths);
+        assert_eq!(a.report, b.report);
+        assert_eq!(a.source_face, b.source_face);
+    }
 }

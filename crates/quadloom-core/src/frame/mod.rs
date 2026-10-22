@@ -565,4 +565,15 @@ mod tests {
         assert!(out.theta.iter().all(|th| th.abs() < 1e-9));
         assert!(out.scales.iter().all(|s| (s[0] - 1.0).abs() < 1e-9 && (s[1] - 1.0).abs() < 1e-9));
     }
+
+    #[test]
+    fn large_part_is_skipped() {
+        let (p, t) = testmesh::icosphere(3);
+        let field = field_of(&p, &t, &[], &FieldParams::default());
+        let params = FrameParams { max_part_faces: 1000, ..on() };
+        let out = compute(&p, &t, &[], &field, &params, &Control::default()).unwrap();
+        assert_eq!(out.report.skipped_parts, 1, "{:?}", out.report);
+        assert_eq!(out.report.solved_parts, 0);
+        assert_eq!(out.directions, field.directions);
+    }
 }

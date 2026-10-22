@@ -221,7 +221,7 @@ fn diagnose_oracle_case() {
         .collect();
     let part =
         TraceMesh { positions: p, triangles: t, feature_edges: features, directions: d, singularities };
-    let mesh = refine::for_tracing(&part, &Control::default()).unwrap();
+    let (mesh, _) = refine::for_tracing(&part, &Control::default()).unwrap();
     let mut singular = vec![0i32; mesh.positions.len()];
     for &(v, k) in &mesh.singularities {
         singular[v as usize] = k;
@@ -376,4 +376,23 @@ fn double_torus_layout_is_all_disks() {
     let out = layout(&p, &t, &[]);
     assert_eq!(out.report.non_disk, 0, "{}", summary(&out));
     assert!(out.patches.iter().all(|patch| (3..=5).contains(&patch.sides.len())), "{}", summary(&out));
+}
+
+#[test]
+fn source_face_maps_children_to_parents() {
+    let (p, t) = icosphere(2);
+    let out = layout(&p, &t, &[]);
+    assert_eq!(out.source_face.len(), out.mesh.triangles.len());
+    assert!(out.source_face.iter().all(|&f| (f as usize) < t.len()));
+    let centroid = |c: [DVec3; 3]| (c[0] + c[1] + c[2]) / 3.0;
+    for (k, tri) in out.mesh.triangles.iter().enumerate() {
+        let parent = t[out.source_face[k] as usize];
+        let corners = parent.map(|v| p[v as usize]);
+        let center = centroid(corners);
+        // A child lies inside its parent, so its centroid is within the parent's
+        // largest corner distance from the parent's centroid.
+        let radius = corners.iter().map(|c| (*c - center).length()).fold(0.0, f64::max);
+        let child = centroid(tri.map(|v| out.mesh.positions[v as usize]));
+        assert!((child - center).length() <= radius + 1e-9, "trace triangle {k} escapes its parent");
+    }
 }

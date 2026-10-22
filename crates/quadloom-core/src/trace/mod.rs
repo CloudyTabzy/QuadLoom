@@ -180,6 +180,9 @@ pub struct TraceOutput {
     pub mesh: TraceMesh,
     /// One patch id per triangle of `mesh`.
     pub patch_of_face: Vec<u32>,
+    /// For each triangle of `mesh`, the input triangle (index into the `triangles`
+    /// given to [`compute`]) it was split from.
+    pub source_face: Vec<u32>,
     pub patches: Vec<Patch>,
     /// Each traced path as a chain of `mesh` vertices (a loop repeats its first vertex).
     pub paths: Vec<Vec<u32>>,
@@ -252,6 +255,8 @@ struct PartLayout {
     global: Vec<u32>,
     mesh: TraceMesh,
     patch_of_face: Vec<u32>,
+    /// Per triangle of `mesh`, the input triangle it came from.
+    source_face: Vec<u32>,
     patches: Vec<Patch>,
     paths: Vec<Vec<u32>>,
     tally: select::Tally,
@@ -284,7 +289,9 @@ fn layout_part(
     // the part's own (the field sums parts that only touch at a vertex).
     part.singularities = field.singularities.iter().filter_map(|&(v, k)| Some((local(v)?, k))).collect();
     control.checkpoint(Stage::Trace)?;
-    let mesh = refine::for_tracing(&part, control)?;
+    let (mesh, parents) = refine::for_tracing(&part, control)?;
+    let source_face: Vec<u32> =
+        parents.iter().map(|&p| faces.get(p as usize).copied().unwrap_or(0)).collect();
     let mut singular = vec![0i32; mesh.positions.len()];
     for &(v, k) in &mesh.singularities {
         singular[v as usize] = k;
@@ -364,7 +371,7 @@ fn layout_part(
         })
         .collect();
     let tally = layout.tally.clone();
-    Ok(PartLayout { global, mesh, patch_of_face, patches, paths, tally })
+    Ok(PartLayout { global, mesh, patch_of_face, source_face, patches, paths, tally })
 }
 
 /// Appends a part's layout to `out`, renumbering vertices and patches.
@@ -384,6 +391,7 @@ fn merge(out: &mut TraceOutput, part: PartLayout) {
     out.mesh.singularities.extend(part.mesh.singularities.iter().map(|&(v, k)| (map(v), k)));
     let patch_base = out.patches.len() as u32;
     out.patch_of_face.extend(part.patch_of_face.iter().map(|&p| p + patch_base));
+    out.source_face.extend_from_slice(&part.source_face);
     out.patches.extend(part.patches.into_iter().map(|p| {
         Patch {
             corners: p.corners.into_iter().map(map).collect(),

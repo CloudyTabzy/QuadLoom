@@ -22,8 +22,9 @@ use crate::field::{FaceFrames, ROSY, vertex_indices};
 /// face, so the result stays conforming). Child faces keep their parent's
 /// direction, split feature edges stay features, and singularities are
 /// recomputed (they stay on the same vertices: children of one face share its
-/// direction, so no turn appears across the new edges).
-pub fn for_tracing(mesh: &TraceMesh, control: &Control) -> Result<TraceMesh, Error> {
+/// direction, so no turn appears across the new edges). Also returns each
+/// output triangle's parent, as an index into `mesh.triangles`.
+pub fn for_tracing(mesh: &TraceMesh, control: &Control) -> Result<(TraceMesh, Vec<u32>), Error> {
     let n = mesh.positions.len();
     let mut singular = vec![false; n];
     for &(v, k) in &mesh.singularities {
@@ -57,12 +58,13 @@ pub fn for_tracing(mesh: &TraceMesh, control: &Control) -> Result<TraceMesh, Err
 
 /// `mesh` with every edge `(a, b)` for which `split(a, b)` holds split at its
 /// midpoint. New vertices are numbered after the existing ones, in order of
-/// first use (faces in order, then corners).
+/// first use (faces in order, then corners). Also returns each output
+/// triangle's parent face.
 pub(crate) fn split_edges(
     mesh: &TraceMesh,
     split: impl Fn(u32, u32) -> bool,
     control: &Control,
-) -> Result<TraceMesh, Error> {
+) -> Result<(TraceMesh, Vec<u32>), Error> {
     let mut positions = mesh.positions.clone();
     let mut mid: HashMap<(u32, u32), u32> = HashMap::new();
     let mut midpoint = |a: u32, b: u32, positions: &mut Vec<DVec3>| -> u32 {
@@ -73,6 +75,7 @@ pub(crate) fn split_edges(
     };
     let mut triangles = Vec::with_capacity(mesh.triangles.len());
     let mut directions = Vec::with_capacity(mesh.triangles.len());
+    let mut parents = Vec::with_capacity(mesh.triangles.len());
     for (f, &t) in mesh.triangles.iter().enumerate() {
         if f as u32 % CANCEL_EVERY == 0 {
             control.checkpoint(Stage::Trace)?;
@@ -112,6 +115,7 @@ pub(crate) fn split_edges(
         };
         let direction = mesh.directions.get(f).copied().unwrap_or(DVec3::ZERO);
         directions.extend(std::iter::repeat_n(direction, children.len()));
+        parents.extend(std::iter::repeat_n(f as u32, children.len()));
         triangles.extend(children);
     }
     let mut feature_edges: Vec<[u32; 2]> = Vec::with_capacity(mesh.feature_edges.len());
@@ -134,7 +138,7 @@ pub(crate) fn split_edges(
         .map(|(v, k)| (v as u32, k))
         .collect();
     control.checkpoint(Stage::Trace)?;
-    Ok(TraceMesh { positions, triangles, feature_edges, directions, singularities })
+    Ok((TraceMesh { positions, triangles, feature_edges, directions, singularities }, parents))
 }
 
 #[cfg(test)]
@@ -161,7 +165,7 @@ mod tests {
     fn refine_splits_edges_at_singular_vertices() {
         let mesh = sphere_with_field();
         assert_eq!(mesh.singularities.iter().map(|s| s.1).sum::<i32>(), 8);
-        let refined = for_tracing(&mesh, &Control::default()).unwrap();
+        let refined = for_tracing(&mesh, &Control::default()).unwrap().0;
         let old = mesh.positions.len() as u32;
         assert!(refined.positions.len() > mesh.positions.len());
         assert_eq!(refined.singularities.iter().map(|s| s.1).sum::<i32>(), 8);
@@ -177,7 +181,7 @@ mod tests {
 
     #[test]
     fn refine_is_conforming() {
-        let refined = for_tracing(&sphere_with_field(), &Control::default()).unwrap();
+        let refined = for_tracing(&sphere_with_field(), &Control::default()).unwrap().0;
         let he = HalfEdges::build(&refined.triangles, refined.positions.len());
         assert_eq!(he.boundary_edge_count(), 0);
         assert_eq!(he.non_manifold_edge_count(), 0);
@@ -196,7 +200,7 @@ mod tests {
             directions,
             ..TraceMesh::default()
         };
-        let refined = for_tracing(&mesh, &Control::default()).unwrap();
+        let refined = for_tracing(&mesh, &Control::default()).unwrap().0;
         assert_eq!(refined.feature_edges, vec![[12, 25], [13, 25]]);
         assert_eq!(refined.positions[25], DVec3::new(2.5, 2.0, 0.0));
     }

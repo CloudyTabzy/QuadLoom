@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::fault::Fault;
 use crate::features::FeatureParams;
 use crate::field::FieldParams;
+use crate::frame::FrameParams;
 use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
 use crate::trace::TraceParams;
@@ -32,6 +33,8 @@ pub struct Params {
     pub remesh: RemeshParams,
     /// Stage 3: cross field.
     pub field: FieldParams,
+    /// Stage 3b: rectangular frame (off by default).
+    pub frame: FrameParams,
     /// Stage 4: field tracing and patch layout.
     pub trace: TraceParams,
     /// Test-only fault to inject (see [`crate::fault`]).
@@ -47,6 +50,7 @@ impl Default for Params {
             features: FeatureParams::default(),
             remesh: RemeshParams::default(),
             field: FieldParams::default(),
+            frame: FrameParams::default(),
             trace: TraceParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
@@ -100,6 +104,37 @@ impl Params {
         if !(0.0..=1000.0).contains(&f.sharp_factor) {
             return bad(format!("field.sharp_factor must be between 0 and 1000 (got {})", f.sharp_factor));
         }
+        let fr = &self.frame;
+        if !(0.0..=1.0).contains(&fr.balance) {
+            return bad(format!("frame.balance must be between 0 and 1 (got {})", fr.balance));
+        }
+        if !(1.0..=20.0).contains(&fr.max_stretch) {
+            return bad(format!("frame.max_stretch must be between 1 and 20 (got {})", fr.max_stretch));
+        }
+        if !(0.0..=100.0).contains(&fr.stretch_weight) {
+            return bad(format!(
+                "frame.stretch_weight must be between 0 and 100 (got {})",
+                fr.stretch_weight
+            ));
+        }
+        if !(0.0..=100.0).contains(&fr.align_weight) {
+            return bad(format!("frame.align_weight must be between 0 and 100 (got {})", fr.align_weight));
+        }
+        if !(1e-6..=10.0).contains(&fr.smoothness) {
+            return bad(format!("frame.smoothness must be between 1e-6 and 10 (got {})", fr.smoothness));
+        }
+        if !(1..=500).contains(&fr.max_iterations) {
+            return bad(format!(
+                "frame.max_iterations must be between 1 and 500 (got {})",
+                fr.max_iterations
+            ));
+        }
+        if !(1_000..=2_000_000).contains(&fr.max_part_faces) {
+            return bad(format!(
+                "frame.max_part_faces must be between 1000 and 2000000 (got {})",
+                fr.max_part_faces
+            ));
+        }
         let t = &self.trace;
         if !(4..=6).contains(&t.max_sides) {
             return bad(format!("trace.max_sides must be between 4 and 6 (got {})", t.max_sides));
@@ -117,5 +152,45 @@ impl Params {
             return bad(format!("trace.sub_passes must be at most 10 (got {})", t.sub_passes));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Default params with one frame setting edited.
+    fn with(edit: impl FnOnce(&mut FrameParams)) -> Params {
+        let mut params = Params::default();
+        edit(&mut params.frame);
+        params
+    }
+
+    #[test]
+    fn defaults_pass_the_check() {
+        assert!(Params::default().check().is_ok());
+    }
+
+    #[test]
+    fn frame_params_are_range_checked() {
+        let bad: Vec<(&str, Params)> = vec![
+            ("balance", with(|f| f.balance = 1.5)),
+            ("balance", with(|f| f.balance = f64::NAN)),
+            ("max_stretch", with(|f| f.max_stretch = 0.5)),
+            ("max_stretch", with(|f| f.max_stretch = 25.0)),
+            ("stretch_weight", with(|f| f.stretch_weight = -1.0)),
+            ("align_weight", with(|f| f.align_weight = 101.0)),
+            ("align_weight", with(|f| f.align_weight = f64::INFINITY)),
+            ("smoothness", with(|f| f.smoothness = 0.0)),
+            ("smoothness", with(|f| f.smoothness = 11.0)),
+            ("max_iterations", with(|f| f.max_iterations = 0)),
+            ("max_iterations", with(|f| f.max_iterations = 501)),
+            ("max_part_faces", with(|f| f.max_part_faces = 999)),
+            ("max_part_faces", with(|f| f.max_part_faces = 2_000_001)),
+        ];
+        for (name, params) in bad {
+            let err = params.check().expect_err(name);
+            assert!(err.message.contains(&format!("frame.{name}")), "{name}: {}", err.message);
+        }
     }
 }
