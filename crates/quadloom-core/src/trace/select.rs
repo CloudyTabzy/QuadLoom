@@ -770,6 +770,20 @@ impl<'s> Layout<'s> {
             .map_init(|| Search::new(g), |search, &s| search.guided_loop(cut, s, reach, LOOP_RINGS, control))
             .collect::<Result<_, _>>()?;
         let candidates = self.keep_valid(found);
+        let added = self.choose_farthest(candidates, control)?;
+        // A small closed part can have no seed whose streamline closes; with
+        // no boundary, nothing else can cut it, so search loops in full there.
+        let closed = !self.region.cut.boundary.iter().any(|&b| b);
+        if added > 0 || !closed || self.chosen.iter().any(|c| !c.removed) {
+            return Ok(added);
+        }
+        let g = &self.region.graph;
+        let found: Vec<Option<TracePath>> = starts
+            .par_iter()
+            .with_min_len(8)
+            .map_init(|| Search::new(g), |search, &s| search.closed_loop(s, reach, control))
+            .collect::<Result<_, _>>()?;
+        let candidates = self.keep_valid(found);
         self.choose_farthest(candidates, control)
     }
 
@@ -869,10 +883,13 @@ impl<'s> Layout<'s> {
                     if !self.occupancy.collides(&path, &self.region.cut)
                         && !self_intersects(&path, &self.region.cut)
                     {
+                        // Judged again here: a path that is fine inside its
+                        // patch can still pinch the patch's surroundings.
                         let anchored = self.anchored(&path);
-                        self.accept(path, anchored);
-                        any = true;
-                        added += 1;
+                        if self.try_accept_if(path, anchored, std::cmp::Ordering::is_le) {
+                            any = true;
+                            added += 1;
+                        }
                     }
                 }
                 if !any {
@@ -989,23 +1006,25 @@ impl<'s> Layout<'s> {
     fn compare(&self, before: &[PatchInfo], after: &[&PatchInfo]) -> std::cmp::Ordering {
         let max = self.settings.max_sides;
         let score = |infos: &mut dyn Iterator<Item = &PatchInfo>| {
-            let mut s = [0i64; 7];
+            let mut s = [0i64; 8];
             let mut max_sing = 1i64;
-            // Topology first (cut open, then glued edges, which falls as a
-            // self-glued band is cut into disks), then the paper's conditions.
+            // Topology first (cut open; glued edges, which fall as a
+            // self-glued band is cut into disks; then with features glued
+            // back, which catches pinches), then the paper's conditions.
             for i in infos {
                 let n = i.sides.len();
                 s[0] += i.excess.max(0);
                 s[1] += i.glued as i64;
-                s[2] += i.not_convex.len() as i64;
+                s[2] += i.merged_excess.max(0);
+                s[3] += i.not_convex.len() as i64;
                 if i.kind != PatchKind::NonDisk {
-                    s[3] += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max) as i64;
+                    s[4] += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max) as i64;
                 }
                 max_sing = max_sing.max(i.singularities.len() as i64);
-                s[5] -= i64::from(i.matches_singularity());
-                s[6] += i64::from(!i.cc_able && (3..=6).contains(&n));
+                s[6] -= i64::from(i.matches_singularity());
+                s[7] += i64::from(!i.cc_able && (3..=6).contains(&n));
             }
-            s[4] = max_sing;
+            s[5] = max_sing;
             s
         };
         let b = score(&mut before.iter());
@@ -1090,8 +1109,9 @@ impl<'s> Layout<'s> {
                         if !self.occupancy.collides(&path, &self.region.cut)
                             && !self_intersects(&path, &self.region.cut)
                         {
-                            self.accept(path, true);
-                            added += 1;
+                            if self.try_accept_if(path, true, std::cmp::Ordering::is_le) {
+                                added += 1;
+                            }
                         }
                     }
                 }
@@ -1142,7 +1162,26 @@ impl<'s> Layout<'s> {
                 let (first, rest) = loops.split_first()?;
                 (first.clone(), rest.iter().flatten().copied().collect())
             }
-            PatchKind::NonDisk => self.merged_loops(info)?,
+            PatchKind::NonDisk => match self.merged_loops(info) {
+                Some(split) => split,
+                None => {
+                    // Pinched at a vertex P its loop passes twice: like an
+                    // annulus whose two borders touch at P. A cut from the
+                    // loop's arc on one side of P to the arc on the other,
+                    // with the contact at P, splits it into two disks.
+                    let ring = loops.first()?;
+                    let merged = |v: u32| self.region.merge_id[v as usize];
+                    let m = ring.len();
+                    let (i, j) = (0..m).find_map(|i| {
+                        ((i + 1)..m).find(|&j| merged(ring[j]) == merged(ring[i])).map(|j| (i, j))
+                    })?;
+                    let pinch = merged(ring[i]);
+                    let arc = |from: usize, to: usize| -> Vec<u32> {
+                        (from + 1..to).map(|k| ring[k % m]).filter(|&v| merged(v) != pinch).collect()
+                    };
+                    (arc(i, j), arc(j, i + m))
+                }
+            },
             PatchKind::NotConvex => return self.concave_seam(info),
             _ => return None,
         };
@@ -1349,7 +1388,8 @@ impl<'s> Layout<'s> {
     }
 
     /// The full schedule for a part: rounds, sub-patch passes (failing, then
-    /// non-disk, then non-disk relaxed), clean-up, recovery.
+    /// non-disk, then non-disk relaxed), clean-up, recovery, and the final
+    /// re-declaration of corners.
     pub fn run(&mut self, control: &Control) -> Result<(), Error> {
         self.run_rounds(false, false, control)?;
         self.sub_patch_passes(false, false, control)?;

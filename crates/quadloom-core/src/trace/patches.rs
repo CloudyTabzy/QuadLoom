@@ -195,6 +195,8 @@ pub struct PatchInfo {
     pub cut_disk: bool,
     /// How far the cut-open patch is from a disk: 1 − χ (+2 if closed).
     pub excess: i64,
+    /// 1 − χ with features glued back (pinches and self-gluing show here).
+    pub merged_excess: i64,
     /// Boundary half-edges whose other side is this same patch.
     pub glued: usize,
 }
@@ -497,6 +499,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
         cut_disk: !broken && loops.len() == 1 && chi2 == 2,
         // 1 − χ, plus 2 for a closed piece (so a sphere needs a loop too).
         excess: 1 - chi2 / 2 + if loops.is_empty() { 2 } else { 0 },
+        merged_excess: 0,
         glued: 0,
     };
     // Boundary edges glued to the same patch on their other side (a feature
@@ -526,6 +529,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
     merged_edges.sort_unstable();
     merged_edges.dedup();
     let merged_chi = merged_vertices.len() as i64 - merged_edges.len() as i64 + info.faces.len() as i64;
+    info.merged_excess = 1 - merged_chi;
     let disk = info.cut_disk && merged_chi == 1;
     classify(&mut info, ctx, disk);
     info
@@ -822,6 +826,75 @@ mod tests {
         fx.singular[12] = -1;
         let part = Partition::new(&fx.ctx(), &PathEdges::new());
         assert_eq!(part.info(0).unwrap().kind, PatchKind::ValenceMismatch);
+    }
+
+    #[test]
+    fn a_patch_glued_to_itself_along_a_feature_is_non_disk() {
+        // An annulus whose two borders are joined by a feature line: a disk
+        // once cut open along it, but not in the final mesh.
+        let (p, t) = grid(6, 6);
+        let hole = |q: DVec3| (2.0..=4.0).contains(&q.x) && (2.0..=4.0).contains(&q.y);
+        let t: Vec<[u32; 3]> =
+            t.into_iter().filter(|tri| !tri.iter().all(|&v| hole(p[v as usize]))).collect();
+        let id = |i: u32, j: u32| j * 7 + i;
+        let feature = [[id(0, 3), id(1, 3)], [id(1, 3), id(2, 3)]];
+        let fx = Fixture::new(&p, &t, &feature);
+        let merge = fx.cut.original.clone();
+        let ctx = PatchContext { merge_id: &merge, ..fx.ctx() };
+        let part = Partition::new(&ctx, &PathEdges::new());
+        let info = part.info(0).unwrap();
+        assert!(info.cut_disk, "a disk cut open");
+        assert!(info.glued > 0);
+        assert_eq!(info.kind, PatchKind::NonDisk);
+    }
+
+    #[test]
+    fn redeclaring_corners_fixes_a_lens() {
+        let (p, t) = grid(4, 4);
+        let fx = Fixture::new(&p, &t, &[]);
+        let ctx = fx.ctx();
+        let step = |vertex: u32, class: VertexClass| BoundaryStep {
+            vertex,
+            class,
+            angle: if class.is_corner() { 0.5 } else { std::f64::consts::PI },
+            length: 1.0,
+        };
+        let steps: Vec<BoundaryStep> = (0..8)
+            .map(|k| step(k, if k % 4 == 0 { VertexClass::Convex } else { VertexClass::Flat }))
+            .collect();
+        let (corners, sides) = sides_between(&steps, &|k| steps[k].class.is_corner());
+        let mut info = PatchInfo {
+            faces: vec![0],
+            loops: 1,
+            loop_vertices: vec![(0..8).collect()],
+            corners,
+            sides,
+            not_convex: Vec::new(),
+            singularities: Vec::new(),
+            kind: PatchKind::LowSides,
+            cc_margin: 0.0,
+            cc_able: false,
+            steps,
+            cut_disk: true,
+            excess: 0,
+            merged_excess: 0,
+            glued: 0,
+        };
+        assert!(redeclare_corners(&mut info, &ctx));
+        assert_eq!(info.corners.len(), 3);
+        assert!(
+            info.corners.contains(&2) || info.corners.contains(&6),
+            "the middle of a side: {:?}",
+            info.corners
+        );
+        assert!(info.kind.is_valid(), "{:?}", info.kind);
+    }
+
+    #[test]
+    fn a_cusp_is_a_corner() {
+        assert!(VertexClass::Cusp.is_corner() && VertexClass::Cusp.is_convex());
+        assert!(!VertexClass::Flat.is_corner() && VertexClass::Flat.is_convex());
+        assert!(!VertexClass::Concave.is_convex() && !VertexClass::Narrow.is_convex());
     }
 
     fn canonical(part: &Partition) -> Vec<(Vec<u32>, PatchKind)> {

@@ -143,6 +143,39 @@ pub fn write_rosy(path: &Path, directions: &[DVec3]) -> Result<(), IoError> {
     std::fs::write(path, text).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
 }
 
+/// Writes feature edges of a triangle mesh in QuadWild's `.sharp` format:
+/// the count, then `kind,face,edge` per feature edge side (kind 0).
+pub fn write_sharp(path: &Path, mesh: &PolyMesh, features: &[[u32; 2]]) -> Result<(), IoError> {
+    let wanted: std::collections::HashSet<[u32; 2]> =
+        features.iter().map(|&[a, b]| [a.min(b), a.max(b)]).collect();
+    let mut lines = Vec::new();
+    for (f, face) in mesh.face_offsets.windows(2).enumerate() {
+        let corners = mesh.face_indices.get(face[0] as usize..face[1] as usize).unwrap_or_default();
+        if corners.len() != 3 {
+            continue;
+        }
+        for e in 0..3 {
+            let (a, b) = (corners[e], corners[(e + 1) % 3]);
+            if wanted.contains(&[a.min(b), a.max(b)]) {
+                lines.push(format!("0,{f},{e}"));
+            }
+        }
+    }
+    let text = format!(
+        "{}
+{}",
+        lines.len(),
+        lines
+            .iter()
+            .map(|l| format!(
+                "{l}
+"
+            ))
+            .collect::<String>()
+    );
+    std::fs::write(path, text).map_err(|e| IoError::Io(format!("{}: {e}", path.display())))
+}
+
 /// Reads a `.rosy` file for a mesh with `faces` triangles: an integer face
 /// count, the symmetry (must be 4), then three finite numbers per face.
 pub fn read_rosy(path: &Path, faces: usize) -> Result<Vec<DVec3>, IoError> {

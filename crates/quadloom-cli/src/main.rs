@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! quadloom info <mesh.obj|stl>          print validation, repair and feature reports as JSON
-//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]
+//! quadloom run  <in.obj|stl> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>]
 //!                                       run the pipeline and write the result
 //!                                       (and its cross field and patch layout,
 //!                                       in QuadWild's formats)
@@ -31,7 +31,7 @@ use std::process::ExitCode;
 use quadloom_core::{Control, Error, ErrorKind, Params, RunOutput};
 use serde_json::json;
 
-const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
+const USAGE: &str = "usage: quadloom info <mesh>\n       quadloom run <in> <out.obj> [--rosy <out.rosy>] [--sharp <out.sharp>] [--layout <prefix>]\n       quadloom field-index <mesh.obj> <field.rosy>\n       quadloom layout <mesh.obj> <field.rosy> <features.sharp> <prefix> [--params <json>]\n       quadloom layout-stats <mesh.obj> <file.patch> <file.corners>";
 
 enum Failure {
     Usage,
@@ -95,12 +95,13 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             Ok(())
         }
         ["run", input, output_path, rest @ ..] => {
-            let (mut rosy, mut layout) = (None, None);
+            let (mut rosy, mut layout, mut sharp) = (None, None, None);
             let mut options = rest.chunks(2);
             for pair in &mut options {
                 match pair {
                     ["--rosy", path] => rosy = Some(Path::new(*path)),
                     ["--layout", path] => layout = Some(Path::new(*path)),
+                    ["--sharp", path] => sharp = Some(Path::new(*path)),
                     _ => return Err(Failure::Usage),
                 }
             }
@@ -108,6 +109,9 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
             io::write_obj(Path::new(output_path), &output.mesh)?;
             if let (Some(path), Some(field)) = (rosy, &output.field) {
                 io::write_rosy(path, &field.directions)?;
+            }
+            if let Some(path) = sharp {
+                io::write_sharp(path, &output.mesh, &output.feature_edges)?;
             }
             if let (Some(prefix), Some(trace)) = (layout, &output.trace) {
                 io::write_layout(prefix, trace)?;

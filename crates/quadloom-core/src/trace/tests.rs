@@ -236,7 +236,7 @@ fn diagnose_oracle_case() {
             directions: mesh.directions.clone(),
             singular: &singular,
             labels: &labels,
-            tolerance: 1.5,
+            tolerance: settings.cc_tolerance * mean_edge(&mesh),
             merge_id: None,
         },
         &settings,
@@ -286,4 +286,15 @@ fn diagnose_oracle_case() {
         eprintln!("{n:5}  {k}");
     }
     eprintln!("tally {:?}", layout.tally);
+}
+
+/// The mean edge length of a mesh (the CC-ability tolerance unit).
+fn mean_edge(mesh: &TraceMesh) -> f64 {
+    let lengths: Vec<f64> = mesh
+        .triangles
+        .iter()
+        .flat_map(|t| (0..3).map(move |i| (t[i], t[(i + 1) % 3])))
+        .map(|(a, b)| (mesh.positions[a as usize] - mesh.positions[b as usize]).length())
+        .collect();
+    lengths.iter().sum::<f64>() / lengths.len().max(1) as f64
 }

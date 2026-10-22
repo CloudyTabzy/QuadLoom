@@ -1,0 +1,8222 @@
+[
+ {
+  "case": "common3d/armadillo",
+  "oracle": {
+   "stats": {
+    "cc_able": 967,
+    "faces": 32150,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 969,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     370,
+     477,
+     122,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 969
+   },
+   "erased": 0,
+   "seconds": 10.264
+  },
+  "ours": {
+   "faces": 32140,
+   "report": {
+    "candidates": 14085,
+    "high_sides": 0,
+    "kept_paths": 784,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 3,
+    "not_convex": 17,
+    "ok": 921,
+    "parts": 1,
+    "patches": 1088,
+    "redeclared": 18,
+    "relaxed_patches": 188,
+    "removed_paths": 206,
+    "seams": 35,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     249,
+     717,
+     122,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 17,
+    "valence_mismatch": 147
+   },
+   "stats": {
+    "cc_able": 1079,
+    "faces": 32140,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1088,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     249,
+     717,
+     122,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1088
+   },
+   "trace_ms": 378.9187
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 13911,
+    "high_sides": 0,
+    "kept_paths": 419,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 3,
+    "not_convex": 7,
+    "ok": 552,
+    "parts": 1,
+    "patches": 680,
+    "redeclared": 58,
+    "relaxed_patches": 214,
+    "removed_paths": 146,
+    "seams": 11,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     212,
+     356,
+     112,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 7,
+    "valence_mismatch": 118
+   },
+   "stats": {
+    "cc_able": 665,
+    "faces": 40788,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 680,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     212,
+     356,
+     112,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 680
+   },
+   "trace_ms": 464.44849999999997
+  }
+ },
+ {
+  "case": "common3d/beetle",
+  "oracle": {
+   "stats": {
+    "cc_able": 464,
+    "faces": 15921,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 465,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     271,
+     145,
+     49,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 465
+   },
+   "erased": 0,
+   "seconds": 1.397
+  },
+  "ours": {
+   "faces": 15653,
+   "report": {
+    "candidates": 8623,
+    "high_sides": 0,
+    "kept_paths": 262,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 3,
+    "ok": 242,
+    "parts": 11,
+    "patches": 450,
+    "redeclared": 30,
+    "relaxed_patches": 99,
+    "removed_paths": 295,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     228,
+     181,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 13,
+    "unsolved": 3,
+    "valence_mismatch": 204
+   },
+   "stats": {
+    "cc_able": 444,
+    "faces": 15653,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 450,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     228,
+     181,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 450
+   },
+   "trace_ms": 199.3955
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 10536,
+    "high_sides": 0,
+    "kept_paths": 271,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 3,
+    "ok": 271,
+    "parts": 11,
+    "patches": 382,
+    "redeclared": 15,
+    "relaxed_patches": 53,
+    "removed_paths": 268,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     124,
+     208,
+     50,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 12,
+    "unsolved": 3,
+    "valence_mismatch": 107
+   },
+   "stats": {
+    "cc_able": 378,
+    "faces": 16457,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 382,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     124,
+     208,
+     50,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 382
+   },
+   "trace_ms": 218.8701
+  }
+ },
+ {
+  "case": "common3d/cheburashka",
+  "oracle": {
+   "stats": {
+    "cc_able": 162,
+    "faces": 12998,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 162,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     62,
+     62,
+     38,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 162
+   },
+   "erased": 0,
+   "seconds": 0.993
+  },
+  "ours": {
+   "faces": 12998,
+   "report": {
+    "candidates": 3760,
+    "high_sides": 0,
+    "kept_paths": 140,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 193,
+    "parts": 1,
+    "patches": 216,
+    "redeclared": 0,
+    "relaxed_patches": 17,
+    "removed_paths": 39,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     56,
+     127,
+     33,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 23
+   },
+   "stats": {
+    "cc_able": 213,
+    "faces": 12998,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 216,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     56,
+     127,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 216
+   },
+   "trace_ms": 186.7021
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 2519,
+    "high_sides": 0,
+    "kept_paths": 73,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 133,
+    "parts": 1,
+    "patches": 147,
+    "redeclared": 9,
+    "relaxed_patches": 20,
+    "removed_paths": 47,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     41,
+     73,
+     33,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 13
+   },
+   "stats": {
+    "cc_able": 143,
+    "faces": 15940,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 147,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     41,
+     73,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 147
+   },
+   "trace_ms": 198.5644
+  }
+ },
+ {
+  "case": "common3d/cow",
+  "oracle": {
+   "stats": {
+    "cc_able": 673,
+    "faces": 17244,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 673,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     237,
+     395,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 673
+   },
+   "erased": 0,
+   "seconds": 2.188
+  },
+  "ours": {
+   "faces": 17274,
+   "report": {
+    "candidates": 7043,
+    "high_sides": 0,
+    "kept_paths": 458,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 5,
+    "ok": 544,
+    "parts": 1,
+    "patches": 704,
+    "redeclared": 8,
+    "relaxed_patches": 49,
+    "removed_paths": 239,
+    "seams": 4,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     203,
+     461,
+     40,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 5,
+    "valence_mismatch": 154
+   },
+   "stats": {
+    "cc_able": 700,
+    "faces": 17274,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 704,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     203,
+     461,
+     40,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 704
+   },
+   "trace_ms": 174.8906
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 12062,
+    "high_sides": 0,
+    "kept_paths": 257,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 2,
+    "ok": 313,
+    "parts": 1,
+    "patches": 381,
+    "redeclared": 4,
+    "relaxed_patches": 28,
+    "removed_paths": 192,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     111,
+     216,
+     54,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 2,
+    "valence_mismatch": 65
+   },
+   "stats": {
+    "cc_able": 373,
+    "faces": 21776,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 381,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     111,
+     216,
+     54,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 381
+   },
+   "trace_ms": 351.1612
+  }
+ },
+ {
+  "case": "common3d/fandisk",
+  "oracle": {
+   "stats": {
+    "cc_able": 29,
+    "faces": 10464,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 29,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     6,
+     18,
+     5,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 29
+   },
+   "erased": 0,
+   "seconds": 0.414
+  },
+  "ours": {
+   "faces": 10464,
+   "report": {
+    "candidates": 5016,
+    "high_sides": 0,
+    "kept_paths": 13,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 26,
+    "parts": 1,
+    "patches": 27,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 10,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     6,
+     16,
+     5,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 27,
+    "faces": 10464,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 27,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     6,
+     16,
+     5,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 27
+   },
+   "trace_ms": 80.6078
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 5426,
+    "high_sides": 0,
+    "kept_paths": 13,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 26,
+    "parts": 1,
+    "patches": 27,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 12,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     6,
+     16,
+     5,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 27,
+    "faces": 11238,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 27,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     6,
+     16,
+     5,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 27
+   },
+   "trace_ms": 87.34219999999999
+  }
+ },
+ {
+  "case": "common3d/homer",
+  "oracle": {
+   "stats": {
+    "cc_able": 301,
+    "faces": 14770,
+    "high_sides": 1,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 303,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     122,
+     140,
+     40,
+     1,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 302
+   },
+   "erased": 0,
+   "seconds": 1.374
+  },
+  "ours": {
+   "faces": 14770,
+   "report": {
+    "candidates": 4889,
+    "high_sides": 0,
+    "kept_paths": 272,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 282,
+    "parts": 1,
+    "patches": 330,
+    "redeclared": 8,
+    "relaxed_patches": 50,
+    "removed_paths": 88,
+    "seams": 11,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     90,
+     206,
+     34,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 46
+   },
+   "stats": {
+    "cc_able": 326,
+    "faces": 14770,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 330,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     90,
+     206,
+     34,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 330
+   },
+   "trace_ms": 191.3318
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 5537,
+    "high_sides": 0,
+    "kept_paths": 113,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 184,
+    "parts": 1,
+    "patches": 204,
+    "redeclared": 8,
+    "relaxed_patches": 18,
+    "removed_paths": 63,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     72,
+     91,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 19
+   },
+   "stats": {
+    "cc_able": 199,
+    "faces": 18230,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 204,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     72,
+     91,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 204
+   },
+   "trace_ms": 300.2791
+  }
+ },
+ {
+  "case": "common3d/igea",
+  "oracle": {
+   "stats": {
+    "cc_able": 287,
+    "faces": 17948,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 290,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     120,
+     138,
+     32,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 290
+   },
+   "erased": 0,
+   "seconds": 3.516
+  },
+  "ours": {
+   "faces": 17948,
+   "report": {
+    "candidates": 6417,
+    "high_sides": 0,
+    "kept_paths": 211,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 7,
+    "ok": 241,
+    "parts": 1,
+    "patches": 323,
+    "redeclared": 7,
+    "relaxed_patches": 52,
+    "removed_paths": 62,
+    "seams": 10,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     108,
+     179,
+     36,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 7,
+    "valence_mismatch": 75
+   },
+   "stats": {
+    "cc_able": 318,
+    "faces": 17948,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 323,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     108,
+     179,
+     36,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 323
+   },
+   "trace_ms": 197.7323
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6125,
+    "high_sides": 0,
+    "kept_paths": 154,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 138,
+    "parts": 1,
+    "patches": 186,
+    "redeclared": 10,
+    "relaxed_patches": 50,
+    "removed_paths": 67,
+    "seams": 5,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     65,
+     100,
+     21,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 47
+   },
+   "stats": {
+    "cc_able": 186,
+    "faces": 22292,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 186,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     65,
+     100,
+     21,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 186
+   },
+   "trace_ms": 478.4645
+  }
+ },
+ {
+  "case": "common3d/max-planck",
+  "oracle": {
+   "stats": {
+    "cc_able": 47,
+    "faces": 13073,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 47,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     21,
+     9,
+     17,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 47
+   },
+   "erased": 0,
+   "seconds": 1.541
+  },
+  "ours": {
+   "faces": 13067,
+   "report": {
+    "candidates": 3659,
+    "high_sides": 0,
+    "kept_paths": 34,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 88,
+    "parts": 1,
+    "patches": 88,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 20,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     19,
+     52,
+     17,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 87,
+    "faces": 13067,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 88,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     19,
+     52,
+     17,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 88
+   },
+   "trace_ms": 457.6734
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 3596,
+    "high_sides": 0,
+    "kept_paths": 50,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 103,
+    "parts": 1,
+    "patches": 113,
+    "redeclared": 9,
+    "relaxed_patches": 20,
+    "removed_paths": 34,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     33,
+     60,
+     20,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 10
+   },
+   "stats": {
+    "cc_able": 112,
+    "faces": 17954,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 113,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     33,
+     60,
+     20,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 113
+   },
+   "trace_ms": 214.77579999999998
+  }
+ },
+ {
+  "case": "common3d/rocker-arm",
+  "oracle": {
+   "stats": {
+    "cc_able": 316,
+    "faces": 14922,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 316,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     112,
+     173,
+     31,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 316
+   },
+   "erased": 0,
+   "seconds": 1.486
+  },
+  "ours": {
+   "faces": 14922,
+   "report": {
+    "candidates": 5503,
+    "high_sides": 0,
+    "kept_paths": 301,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 6,
+    "ok": 361,
+    "parts": 1,
+    "patches": 408,
+    "redeclared": 9,
+    "relaxed_patches": 67,
+    "removed_paths": 78,
+    "seams": 11,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     74,
+     299,
+     35,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 6,
+    "valence_mismatch": 41
+   },
+   "stats": {
+    "cc_able": 404,
+    "faces": 14922,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 408,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     74,
+     299,
+     35,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 408
+   },
+   "trace_ms": 173.6964
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 3249,
+    "high_sides": 0,
+    "kept_paths": 105,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 155,
+    "parts": 1,
+    "patches": 165,
+    "redeclared": 2,
+    "relaxed_patches": 16,
+    "removed_paths": 39,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     30,
+     109,
+     26,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 9
+   },
+   "stats": {
+    "cc_able": 164,
+    "faces": 21788,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 165,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     30,
+     109,
+     26,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 165
+   },
+   "trace_ms": 321.2869
+  }
+ },
+ {
+  "case": "common3d/stanford-bunny",
+  "oracle": {
+   "stats": {
+    "cc_able": 528,
+    "faces": 18521,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 529,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     183,
+     288,
+     58,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 529
+   },
+   "erased": 0,
+   "seconds": 3.067
+  },
+  "ours": {
+   "faces": 18430,
+   "report": {
+    "candidates": 8735,
+    "high_sides": 0,
+    "kept_paths": 434,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 4,
+    "ok": 496,
+    "parts": 1,
+    "patches": 601,
+    "redeclared": 7,
+    "relaxed_patches": 61,
+    "removed_paths": 100,
+    "seams": 15,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     139,
+     415,
+     47,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 4,
+    "valence_mismatch": 100
+   },
+   "stats": {
+    "cc_able": 596,
+    "faces": 18430,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 601,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     139,
+     415,
+     47,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 601
+   },
+   "trace_ms": 206.48510000000002
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6226,
+    "high_sides": 0,
+    "kept_paths": 222,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 378,
+    "parts": 1,
+    "patches": 414,
+    "redeclared": 10,
+    "relaxed_patches": 46,
+    "removed_paths": 68,
+    "seams": 5,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     72,
+     301,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 35
+   },
+   "stats": {
+    "cc_able": 410,
+    "faces": 23480,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 414,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     72,
+     301,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 414
+   },
+   "trace_ms": 295.77540000000005
+  }
+ },
+ {
+  "case": "common3d/suzanne",
+  "oracle": {
+   "stats": {
+    "cc_able": 263,
+    "faces": 13096,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 263,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     42,
+     196,
+     25,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 263
+   },
+   "erased": 0,
+   "seconds": 1.943
+  },
+  "ours": {
+   "faces": 13076,
+   "report": {
+    "candidates": 8930,
+    "high_sides": 0,
+    "kept_paths": 168,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 308,
+    "parts": 3,
+    "patches": 347,
+    "redeclared": 2,
+    "relaxed_patches": 23,
+    "removed_paths": 105,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     48,
+     278,
+     21,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 38
+   },
+   "stats": {
+    "cc_able": 344,
+    "faces": 13076,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 347,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     48,
+     278,
+     21,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 347
+   },
+   "trace_ms": 143.94119999999998
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 15570,
+    "high_sides": 0,
+    "kept_paths": 153,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 285,
+    "parts": 4,
+    "patches": 313,
+    "redeclared": 1,
+    "relaxed_patches": 3,
+    "removed_paths": 109,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     51,
+     231,
+     31,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 28
+   },
+   "stats": {
+    "cc_able": 311,
+    "faces": 16688,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 313,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     51,
+     231,
+     31,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 313
+   },
+   "trace_ms": 171.71249999999998
+  }
+ },
+ {
+  "case": "common3d/teapot",
+  "oracle": {
+   "stats": {
+    "cc_able": 82,
+    "faces": 12226,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 82,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     27,
+     41,
+     14,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 82
+   },
+   "erased": 0,
+   "seconds": 0.487
+  },
+  "ours": {
+   "faces": 12226,
+   "report": {
+    "candidates": 3385,
+    "high_sides": 0,
+    "kept_paths": 40,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 61,
+    "parts": 19,
+    "patches": 65,
+    "redeclared": 2,
+    "relaxed_patches": 6,
+    "removed_paths": 32,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     25,
+     25,
+     15,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 3
+   },
+   "stats": {
+    "cc_able": 64,
+    "faces": 12226,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 65,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     25,
+     25,
+     15,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 65
+   },
+   "trace_ms": 22.3899
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 3660,
+    "high_sides": 0,
+    "kept_paths": 25,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 35,
+    "parts": 4,
+    "patches": 35,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 9,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     11,
+     21,
+     3,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 34,
+    "faces": 15133,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 35,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     11,
+     21,
+     3,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 35
+   },
+   "trace_ms": 139.4966
+  }
+ },
+ {
+  "case": "crane/blub",
+  "oracle": {
+   "stats": {
+    "cc_able": 66,
+    "faces": 10940,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 66,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     41,
+     18,
+     7,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 66
+   },
+   "erased": 0,
+   "seconds": 0.858
+  },
+  "ours": {
+   "faces": 10940,
+   "report": {
+    "candidates": 3357,
+    "high_sides": 0,
+    "kept_paths": 45,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 44,
+    "parts": 1,
+    "patches": 65,
+    "redeclared": 0,
+    "relaxed_patches": 2,
+    "removed_paths": 29,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     42,
+     16,
+     7,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 21
+   },
+   "stats": {
+    "cc_able": 65,
+    "faces": 10940,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 65,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     42,
+     16,
+     7,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 65
+   },
+   "trace_ms": 386.52930000000003
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 2884,
+    "high_sides": 0,
+    "kept_paths": 40,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 54,
+    "parts": 1,
+    "patches": 67,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 39,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     33,
+     22,
+     12,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 66,
+    "faces": 12880,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 67,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     33,
+     22,
+     12,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 67
+   },
+   "trace_ms": 489.3928
+  }
+ },
+ {
+  "case": "crane/bob",
+  "oracle": {
+   "stats": {
+    "cc_able": 23,
+    "faces": 10474,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 23,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     10,
+     3,
+     10,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 23
+   },
+   "erased": 0,
+   "seconds": 0.391
+  },
+  "ours": {
+   "faces": 10474,
+   "report": {
+    "candidates": 1747,
+    "high_sides": 0,
+    "kept_paths": 20,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 38,
+    "parts": 1,
+    "patches": 38,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 6,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     10,
+     18,
+     10,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 38,
+    "faces": 10474,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 38,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     10,
+     18,
+     10,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 38
+   },
+   "trace_ms": 186.1781
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 1515,
+    "high_sides": 0,
+    "kept_paths": 21,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 42,
+    "parts": 1,
+    "patches": 42,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 21,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     10,
+     22,
+     10,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 42,
+    "faces": 11682,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 42,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     10,
+     22,
+     10,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 42
+   },
+   "trace_ms": 169.6438
+  }
+ },
+ {
+  "case": "crane/crumpleddevelopable",
+  "oracle": {
+   "stats": {
+    "cc_able": 231,
+    "faces": 233230,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 231,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     145,
+     43,
+     43,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 231
+   },
+   "erased": 0,
+   "seconds": 359.999
+  },
+  "ours": {
+   "faces": 233108,
+   "report": {
+    "candidates": 51577,
+    "high_sides": 0,
+    "kept_paths": 120,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 163,
+    "parts": 1,
+    "patches": 257,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 927,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     144,
+     70,
+     43,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 94
+   },
+   "stats": {
+    "cc_able": 255,
+    "faces": 233108,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 257,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     144,
+     70,
+     43,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 257
+   },
+   "trace_ms": 3234.5123999999996
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 46309,
+    "high_sides": 0,
+    "kept_paths": 160,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 188,
+    "parts": 1,
+    "patches": 272,
+    "redeclared": 0,
+    "relaxed_patches": 6,
+    "removed_paths": 693,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     132,
+     99,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 83
+   },
+   "stats": {
+    "cc_able": 270,
+    "faces": 157821,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 272,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     132,
+     99,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 272
+   },
+   "trace_ms": 2373.7959
+  }
+ },
+ {
+  "case": "crane/ogre",
+  "oracle": {
+   "stats": {
+    "cc_able": 289,
+    "faces": 16856,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 292,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     118,
+     125,
+     49,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 292
+   },
+   "erased": 0,
+   "seconds": 2.249
+  },
+  "ours": {
+   "faces": 16856,
+   "report": {
+    "candidates": 6751,
+    "high_sides": 0,
+    "kept_paths": 300,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 3,
+    "not_convex": 1,
+    "ok": 370,
+    "parts": 1,
+    "patches": 435,
+    "redeclared": 11,
+    "relaxed_patches": 59,
+    "removed_paths": 136,
+    "seams": 9,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     110,
+     278,
+     47,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 61
+   },
+   "stats": {
+    "cc_able": 430,
+    "faces": 16856,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 435,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     110,
+     278,
+     47,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 435
+   },
+   "trace_ms": 355.02230000000003
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6165,
+    "high_sides": 0,
+    "kept_paths": 184,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 381,
+    "parts": 1,
+    "patches": 415,
+    "redeclared": 3,
+    "relaxed_patches": 18,
+    "removed_paths": 112,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     97,
+     251,
+     67,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 34
+   },
+   "stats": {
+    "cc_able": 414,
+    "faces": 23648,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 415,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     97,
+     251,
+     67,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 415
+   },
+   "trace_ms": 363.2564
+  }
+ },
+ {
+  "case": "crane/oloid",
+  "oracle": {
+   "stats": {
+    "cc_able": 427,
+    "faces": 13812,
+    "high_sides": 5,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 438,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     232,
+     150,
+     51,
+     5,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 433
+   },
+   "erased": 0,
+   "seconds": 2.214
+  },
+  "ours": {
+   "faces": 13084,
+   "report": {
+    "candidates": 6374,
+    "high_sides": 0,
+    "kept_paths": 324,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 3,
+    "not_convex": 7,
+    "ok": 241,
+    "parts": 16,
+    "patches": 406,
+    "redeclared": 51,
+    "relaxed_patches": 144,
+    "removed_paths": 133,
+    "seams": 19,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     161,
+     215,
+     30,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 39,
+    "unsolved": 7,
+    "valence_mismatch": 155
+   },
+   "stats": {
+    "cc_able": 398,
+    "faces": 13084,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 406,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     161,
+     215,
+     30,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 406
+   },
+   "trace_ms": 198.5414
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 1302,
+    "high_sides": 0,
+    "kept_paths": 11,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 17,
+    "parts": 1,
+    "patches": 17,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 5,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     7,
+     1,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 17,
+    "faces": 9744,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 17,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     7,
+     1,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 17
+   },
+   "trace_ms": 112.69510000000001
+  }
+ },
+ {
+  "case": "crane/pig",
+  "oracle": {
+   "stats": {
+    "cc_able": 323,
+    "faces": 15543,
+    "high_sides": 1,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 325,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     151,
+     130,
+     43,
+     1,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 324
+   },
+   "erased": 0,
+   "seconds": 1.66
+  },
+  "ours": {
+   "faces": 15543,
+   "report": {
+    "candidates": 5630,
+    "high_sides": 0,
+    "kept_paths": 288,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 373,
+    "parts": 6,
+    "patches": 443,
+    "redeclared": 15,
+    "relaxed_patches": 59,
+    "removed_paths": 86,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     136,
+     264,
+     43,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 6,
+    "unsolved": 1,
+    "valence_mismatch": 68
+   },
+   "stats": {
+    "cc_able": 438,
+    "faces": 15543,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 443,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     136,
+     264,
+     43,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 443
+   },
+   "trace_ms": 291.6996
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 4767,
+    "high_sides": 0,
+    "kept_paths": 154,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 261,
+    "parts": 4,
+    "patches": 285,
+    "redeclared": 6,
+    "relaxed_patches": 20,
+    "removed_paths": 76,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     84,
+     160,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 7,
+    "unsolved": 1,
+    "valence_mismatch": 22
+   },
+   "stats": {
+    "cc_able": 284,
+    "faces": 21540,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 285,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     84,
+     160,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 285
+   },
+   "trace_ms": 395.168
+  }
+ },
+ {
+  "case": "crane/spot",
+  "oracle": {
+   "stats": {
+    "cc_able": 116,
+    "faces": 12152,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 118,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     42,
+     49,
+     27,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 118
+   },
+   "erased": 0,
+   "seconds": 1.095
+  },
+  "ours": {
+   "faces": 12152,
+   "report": {
+    "candidates": 3353,
+    "high_sides": 0,
+    "kept_paths": 93,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 174,
+    "parts": 1,
+    "patches": 184,
+    "redeclared": 1,
+    "relaxed_patches": 15,
+    "removed_paths": 33,
+    "seams": 4,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     114,
+     26,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 10
+   },
+   "stats": {
+    "cc_able": 182,
+    "faces": 12152,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 184,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     114,
+     26,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 184
+   },
+   "trace_ms": 132.5618
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 3296,
+    "high_sides": 0,
+    "kept_paths": 66,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 1,
+    "ok": 138,
+    "parts": 1,
+    "patches": 143,
+    "redeclared": 0,
+    "relaxed_patches": 5,
+    "removed_paths": 28,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     79,
+     30,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 1,
+    "valence_mismatch": 2
+   },
+   "stats": {
+    "cc_able": 140,
+    "faces": 16214,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 143,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     79,
+     30,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 143
+   },
+   "trace_ms": 191.2783
+  }
+ },
+ {
+  "case": "khronos/AntiqueCamera",
+  "oracle": {
+   "stats": {
+    "cc_able": 1572,
+    "faces": 182086,
+    "high_sides": 2,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1578,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     466,
+     1038,
+     72,
+     2,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1576
+   },
+   "erased": 3,
+   "seconds": 34.723
+  },
+  "ours": {
+   "faces": 182092,
+   "report": {
+    "candidates": 91295,
+    "high_sides": 0,
+    "kept_paths": 817,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 15,
+    "not_convex": 12,
+    "ok": 1448,
+    "parts": 818,
+    "patches": 1688,
+    "redeclared": 41,
+    "relaxed_patches": 133,
+    "removed_paths": 738,
+    "seams": 18,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     434,
+     1181,
+     73,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 149,
+    "unsolved": 12,
+    "valence_mismatch": 213
+   },
+   "stats": {
+    "cc_able": 1664,
+    "faces": 182092,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1688,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     434,
+     1181,
+     73,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1688
+   },
+   "trace_ms": 272.8767
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 180638,
+    "high_sides": 0,
+    "kept_paths": 1626,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 11,
+    "not_convex": 19,
+    "ok": 2106,
+    "parts": 100,
+    "patches": 2537,
+    "redeclared": 39,
+    "relaxed_patches": 263,
+    "removed_paths": 1104,
+    "seams": 61,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     699,
+     1738,
+     100,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 145,
+    "unsolved": 19,
+    "valence_mismatch": 401
+   },
+   "stats": {
+    "cc_able": 2520,
+    "faces": 178010,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 2537,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     699,
+     1738,
+     100,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 2537
+   },
+   "trace_ms": 358.02
+  }
+ },
+ {
+  "case": "khronos/Avocado",
+  "oracle": {
+   "stats": {
+    "cc_able": 18,
+    "faces": 9882,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 18,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     13,
+     5,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 18
+   },
+   "erased": 0,
+   "seconds": 0.397
+  },
+  "ours": {
+   "faces": 9864,
+   "report": {
+    "candidates": 1362,
+    "high_sides": 0,
+    "kept_paths": 14,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 20,
+    "parts": 3,
+    "patches": 21,
+    "redeclared": 1,
+    "relaxed_patches": 1,
+    "removed_paths": 14,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     11,
+     10,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 21,
+    "faces": 9864,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 21,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     11,
+     10,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 21
+   },
+   "trace_ms": 45.9499
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 2122,
+    "high_sides": 0,
+    "kept_paths": 13,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 25,
+    "parts": 2,
+    "patches": 26,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 10,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     14,
+     11,
+     1,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 26,
+    "faces": 11497,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 26,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     14,
+     11,
+     1,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 26
+   },
+   "trace_ms": 126.5263
+  }
+ },
+ {
+  "case": "khronos/BarramundiFish",
+  "oracle": {
+   "stats": {
+    "cc_able": 260,
+    "faces": 13616,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 260,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     135,
+     111,
+     14,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 260
+   },
+   "erased": 0,
+   "seconds": 0.852
+  },
+  "ours": {
+   "faces": 13485,
+   "report": {
+    "candidates": 5091,
+    "high_sides": 0,
+    "kept_paths": 165,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 3,
+    "ok": 157,
+    "parts": 6,
+    "patches": 252,
+    "redeclared": 7,
+    "relaxed_patches": 14,
+    "removed_paths": 148,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     122,
+     119,
+     11,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 13,
+    "unsolved": 3,
+    "valence_mismatch": 92
+   },
+   "stats": {
+    "cc_able": 252,
+    "faces": 13485,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 252,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     122,
+     119,
+     11,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 252
+   },
+   "trace_ms": 76.3695
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 10670,
+    "high_sides": 0,
+    "kept_paths": 198,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 191,
+    "parts": 3,
+    "patches": 257,
+    "redeclared": 8,
+    "relaxed_patches": 40,
+    "removed_paths": 181,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     91,
+     154,
+     12,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 6,
+    "unsolved": 1,
+    "valence_mismatch": 64
+   },
+   "stats": {
+    "cc_able": 254,
+    "faces": 13574,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 257,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     91,
+     154,
+     12,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 257
+   },
+   "trace_ms": 727.5663
+  }
+ },
+ {
+  "case": "khronos/BoomBox",
+  "oracle": {
+   "stats": {
+    "cc_able": 276,
+    "faces": 14703,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 276,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     85,
+     188,
+     3,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 276
+   },
+   "erased": 0,
+   "seconds": 0.939
+  },
+  "ours": {
+   "faces": 14689,
+   "report": {
+    "candidates": 6418,
+    "high_sides": 0,
+    "kept_paths": 146,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 239,
+    "parts": 22,
+    "patches": 263,
+    "redeclared": 2,
+    "relaxed_patches": 15,
+    "removed_paths": 60,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     74,
+     186,
+     3,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 20,
+    "unsolved": 1,
+    "valence_mismatch": 22
+   },
+   "stats": {
+    "cc_able": 262,
+    "faces": 14689,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 263,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     74,
+     186,
+     3,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 263
+   },
+   "trace_ms": 103.77029999999999
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 5903,
+    "high_sides": 0,
+    "kept_paths": 131,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 162,
+    "parts": 14,
+    "patches": 170,
+    "redeclared": 0,
+    "relaxed_patches": 8,
+    "removed_paths": 97,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     63,
+     106,
+     1,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 10,
+    "unsolved": 1,
+    "valence_mismatch": 7
+   },
+   "stats": {
+    "cc_able": 170,
+    "faces": 15886,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 170,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     63,
+     106,
+     1,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 170
+   },
+   "trace_ms": 125.04390000000001
+  }
+ },
+ {
+  "case": "khronos/CesiumMan",
+  "oracle": {
+   "stats": {
+    "cc_able": 298,
+    "faces": 12920,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 299,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     95,
+     183,
+     21,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 299
+   },
+   "erased": 0,
+   "seconds": 0.615
+  },
+  "ours": {
+   "faces": 12390,
+   "report": {
+    "candidates": 9403,
+    "high_sides": 0,
+    "kept_paths": 223,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 6,
+    "ok": 239,
+    "parts": 9,
+    "patches": 297,
+    "redeclared": 4,
+    "relaxed_patches": 22,
+    "removed_paths": 154,
+    "seams": 5,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     81,
+     200,
+     16,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 16,
+    "unsolved": 6,
+    "valence_mismatch": 51
+   },
+   "stats": {
+    "cc_able": 297,
+    "faces": 12390,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 297,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     81,
+     200,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 297
+   },
+   "trace_ms": 45.529
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 10370,
+    "high_sides": 0,
+    "kept_paths": 84,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 180,
+    "parts": 1,
+    "patches": 182,
+    "redeclared": 0,
+    "relaxed_patches": 4,
+    "removed_paths": 50,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     23,
+     147,
+     12,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 2
+   },
+   "stats": {
+    "cc_able": 181,
+    "faces": 12716,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 182,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     23,
+     147,
+     12,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 182
+   },
+   "trace_ms": 230.8966
+  }
+ },
+ {
+  "case": "khronos/CesiumMilkTruck",
+  "oracle": {
+   "stats": {
+    "cc_able": 427,
+    "faces": 20186,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 428,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     203,
+     211,
+     14,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 428
+   },
+   "erased": 0,
+   "seconds": 1.881
+  },
+  "ours": {
+   "faces": 20034,
+   "report": {
+    "candidates": 8791,
+    "high_sides": 0,
+    "kept_paths": 142,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 234,
+    "parts": 264,
+    "patches": 420,
+    "redeclared": 19,
+    "relaxed_patches": 29,
+    "removed_paths": 388,
+    "seams": 10,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     206,
+     200,
+     14,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 139,
+    "unsolved": 0,
+    "valence_mismatch": 186
+   },
+   "stats": {
+    "cc_able": 419,
+    "faces": 20034,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 420,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     206,
+     200,
+     14,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 420
+   },
+   "trace_ms": 30.9351
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 18741,
+    "high_sides": 0,
+    "kept_paths": 273,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 3,
+    "ok": 390,
+    "parts": 20,
+    "patches": 426,
+    "redeclared": 1,
+    "relaxed_patches": 23,
+    "removed_paths": 131,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     84,
+     288,
+     54,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 13,
+    "unsolved": 3,
+    "valence_mismatch": 32
+   },
+   "stats": {
+    "cc_able": 424,
+    "faces": 23332,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 426,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     84,
+     288,
+     54,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 426
+   },
+   "trace_ms": 225.9526
+  }
+ },
+ {
+  "case": "khronos/CommercialRefrigerator",
+  "oracle": {
+   "stats": {
+    "cc_able": 1787,
+    "faces": 131799,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1787,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     570,
+     1215,
+     2,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1787
+   },
+   "erased": 0,
+   "seconds": 18.335
+  },
+  "ours": {
+   "faces": 131111,
+   "report": {
+    "candidates": 53516,
+    "high_sides": 0,
+    "kept_paths": 294,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 1539,
+    "parts": 571,
+    "patches": 1730,
+    "redeclared": 20,
+    "relaxed_patches": 46,
+    "removed_paths": 219,
+    "seams": 9,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     525,
+     1205,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 90,
+    "unsolved": 0,
+    "valence_mismatch": 190
+   },
+   "stats": {
+    "cc_able": 1730,
+    "faces": 131111,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1730,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     525,
+     1205,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1730
+   },
+   "trace_ms": 219.6739
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 89852,
+    "high_sides": 0,
+    "kept_paths": 515,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 0,
+    "ok": 1793,
+    "parts": 376,
+    "patches": 1965,
+    "redeclared": 16,
+    "relaxed_patches": 35,
+    "removed_paths": 367,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     756,
+     1200,
+     9,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 90,
+    "unsolved": 0,
+    "valence_mismatch": 170
+   },
+   "stats": {
+    "cc_able": 1963,
+    "faces": 127487,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1965,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     756,
+     1200,
+     9,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1965
+   },
+   "trace_ms": 196.37879999999998
+  }
+ },
+ {
+  "case": "khronos/Corset",
+  "oracle": {
+   "stats": {
+    "cc_able": 2164,
+    "faces": 48223,
+    "high_sides": 4,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 2170,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     417,
+     1714,
+     35,
+     4,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 2166
+   },
+   "erased": 0,
+   "seconds": 9.733
+  },
+  "ours": {
+   "faces": 47548,
+   "report": {
+    "candidates": 33197,
+    "high_sides": 0,
+    "kept_paths": 609,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 9,
+    "not_convex": 0,
+    "ok": 1899,
+    "parts": 100,
+    "patches": 2125,
+    "redeclared": 26,
+    "relaxed_patches": 161,
+    "removed_paths": 343,
+    "seams": 61,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     373,
+     1719,
+     33,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 98,
+    "unsolved": 0,
+    "valence_mismatch": 217
+   },
+   "stats": {
+    "cc_able": 2121,
+    "faces": 47548,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 2125,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     373,
+     1719,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 2125
+   },
+   "trace_ms": 93.8311
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 44355,
+    "high_sides": 0,
+    "kept_paths": 619,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 4,
+    "not_convex": 15,
+    "ok": 759,
+    "parts": 75,
+    "patches": 967,
+    "redeclared": 19,
+    "relaxed_patches": 147,
+    "removed_paths": 301,
+    "seams": 26,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     317,
+     596,
+     54,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 62,
+    "unsolved": 15,
+    "valence_mismatch": 189
+   },
+   "stats": {
+    "cc_able": 965,
+    "faces": 32836,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 967,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     317,
+     596,
+     54,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 967
+   },
+   "trace_ms": 102.3197
+  }
+ },
+ {
+  "case": "khronos/DamagedHelmet",
+  "oracle": {
+   "stats": {
+    "cc_able": 993,
+    "faces": 33838,
+    "high_sides": 2,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 995,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     240,
+     711,
+     42,
+     2,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 993
+   },
+   "erased": 0,
+   "seconds": 4.156
+  },
+  "ours": {
+   "faces": 33602,
+   "report": {
+    "candidates": 17564,
+    "high_sides": 0,
+    "kept_paths": 496,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 893,
+    "parts": 435,
+    "patches": 1064,
+    "redeclared": 10,
+    "relaxed_patches": 65,
+    "removed_paths": 346,
+    "seams": 17,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     247,
+     785,
+     32,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 189,
+    "unsolved": 0,
+    "valence_mismatch": 170
+   },
+   "stats": {
+    "cc_able": 1061,
+    "faces": 33602,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1064,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     247,
+     785,
+     32,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1064
+   },
+   "trace_ms": 208.0752
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 37234,
+    "high_sides": 0,
+    "kept_paths": 882,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 4,
+    "not_convex": 21,
+    "ok": 1020,
+    "parts": 57,
+    "patches": 1190,
+    "redeclared": 27,
+    "relaxed_patches": 198,
+    "removed_paths": 538,
+    "seams": 40,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     255,
+     830,
+     105,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 70,
+    "unsolved": 21,
+    "valence_mismatch": 145
+   },
+   "stats": {
+    "cc_able": 1177,
+    "faces": 47710,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1190,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     255,
+     830,
+     105,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1190
+   },
+   "trace_ms": 196.21730000000002
+  }
+ },
+ {
+  "case": "khronos/Duck",
+  "oracle": {
+   "stats": {
+    "cc_able": 275,
+    "faces": 12620,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 276,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     77,
+     170,
+     29,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 276
+   },
+   "erased": 0,
+   "seconds": 1.032
+  },
+  "ours": {
+   "faces": 12604,
+   "report": {
+    "candidates": 2630,
+    "high_sides": 0,
+    "kept_paths": 161,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 276,
+    "parts": 10,
+    "patches": 323,
+    "redeclared": 2,
+    "relaxed_patches": 31,
+    "removed_paths": 45,
+    "seams": 15,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     85,
+     210,
+     28,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 15,
+    "unsolved": 0,
+    "valence_mismatch": 47
+   },
+   "stats": {
+    "cc_able": 320,
+    "faces": 12604,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 323,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     85,
+     210,
+     28,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 323
+   },
+   "trace_ms": 166.3372
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 4168,
+    "high_sides": 0,
+    "kept_paths": 57,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 79,
+    "parts": 1,
+    "patches": 86,
+    "redeclared": 0,
+    "relaxed_patches": 4,
+    "removed_paths": 50,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     31,
+     35,
+     20,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 7
+   },
+   "stats": {
+    "cc_able": 86,
+    "faces": 14982,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 86,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     31,
+     35,
+     20,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 86
+   },
+   "trace_ms": 339.46720000000005
+  }
+ },
+ {
+  "case": "khronos/Fox",
+  "oracle": {
+   "stats": {
+    "cc_able": 510,
+    "faces": 16305,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 510,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     457,
+     3,
+     50,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 510
+   },
+   "erased": 0,
+   "seconds": 3.985
+  },
+  "ours": {
+   "faces": 16275,
+   "report": {
+    "candidates": 5652,
+    "high_sides": 0,
+    "kept_paths": 126,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 100,
+    "parts": 387,
+    "patches": 513,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 1590,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     459,
+     2,
+     52,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 340,
+    "unsolved": 0,
+    "valence_mismatch": 413
+   },
+   "stats": {
+    "cc_able": 513,
+    "faces": 16275,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 513,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     459,
+     2,
+     52,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 513
+   },
+   "trace_ms": 23.0049
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 9074,
+    "high_sides": 0,
+    "kept_paths": 94,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 111,
+    "parts": 1,
+    "patches": 149,
+    "redeclared": 0,
+    "relaxed_patches": 3,
+    "removed_paths": 205,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     54,
+     76,
+     19,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 38
+   },
+   "stats": {
+    "cc_able": 149,
+    "faces": 13378,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 149,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     54,
+     76,
+     19,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 149
+   },
+   "trace_ms": 179.1469
+  }
+ },
+ {
+  "case": "khronos/GlamVelvetSofa",
+  "oracle": {
+   "stats": {
+    "cc_able": 190,
+    "faces": 17603,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 190,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     142,
+     4,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 190
+   },
+   "erased": 0,
+   "seconds": 1.137
+  },
+  "ours": {
+   "faces": 17574,
+   "report": {
+    "candidates": 8756,
+    "high_sides": 0,
+    "kept_paths": 90,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 144,
+    "parts": 58,
+    "patches": 177,
+    "redeclared": 0,
+    "relaxed_patches": 7,
+    "removed_paths": 90,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     129,
+     4,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 16,
+    "unsolved": 0,
+    "valence_mismatch": 33
+   },
+   "stats": {
+    "cc_able": 177,
+    "faces": 17574,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 177,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     129,
+     4,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 177
+   },
+   "trace_ms": 54.7936
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6930,
+    "high_sides": 0,
+    "kept_paths": 122,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 6,
+    "not_convex": 0,
+    "ok": 102,
+    "parts": 10,
+    "patches": 124,
+    "redeclared": 8,
+    "relaxed_patches": 21,
+    "removed_paths": 113,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     86,
+     4,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 21,
+    "unsolved": 0,
+    "valence_mismatch": 16
+   },
+   "stats": {
+    "cc_able": 124,
+    "faces": 18428,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 124,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     86,
+     4,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 124
+   },
+   "trace_ms": 531.4624
+  }
+ },
+ {
+  "case": "khronos/Lantern",
+  "oracle": {
+   "stats": {
+    "cc_able": 443,
+    "faces": 29979,
+    "high_sides": 7,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 453,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     60,
+     323,
+     63,
+     7,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 446
+   },
+   "erased": 7,
+   "seconds": 3.832
+  },
+  "ours": {
+   "faces": 29561,
+   "report": {
+    "candidates": 12989,
+    "high_sides": 0,
+    "kept_paths": 190,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 15,
+    "not_convex": 6,
+    "ok": 359,
+    "parts": 156,
+    "patches": 449,
+    "redeclared": 36,
+    "relaxed_patches": 101,
+    "removed_paths": 80,
+    "seams": 15,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     60,
+     350,
+     39,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 26,
+    "unsolved": 6,
+    "valence_mismatch": 69
+   },
+   "stats": {
+    "cc_able": 434,
+    "faces": 29561,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 449,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     60,
+     350,
+     39,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 449
+   },
+   "trace_ms": 78.6485
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 20708,
+    "high_sides": 0,
+    "kept_paths": 358,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 4,
+    "ok": 425,
+    "parts": 17,
+    "patches": 487,
+    "redeclared": 1,
+    "relaxed_patches": 88,
+    "removed_paths": 152,
+    "seams": 11,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     71,
+     390,
+     26,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 29,
+    "unsolved": 4,
+    "valence_mismatch": 58
+   },
+   "stats": {
+    "cc_able": 483,
+    "faces": 25447,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 487,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     71,
+     390,
+     26,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 487
+   },
+   "trace_ms": 164.95399999999998
+  }
+ },
+ {
+  "case": "khronos/MaterialsVariantsShoe",
+  "oracle": {
+   "stats": {
+    "cc_able": 345,
+    "faces": 35343,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 348,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     92,
+     228,
+     28,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 348
+   },
+   "erased": 0,
+   "seconds": 4.201
+  },
+  "ours": {
+   "faces": 35274,
+   "report": {
+    "candidates": 13974,
+    "high_sides": 0,
+    "kept_paths": 275,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 271,
+    "parts": 83,
+    "patches": 310,
+    "redeclared": 1,
+    "relaxed_patches": 2,
+    "removed_paths": 175,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     85,
+     198,
+     27,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 44,
+    "unsolved": 0,
+    "valence_mismatch": 38
+   },
+   "stats": {
+    "cc_able": 308,
+    "faces": 35274,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 310,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     85,
+     198,
+     27,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 310
+   },
+   "trace_ms": 74.1605
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 15051,
+    "high_sides": 0,
+    "kept_paths": 181,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 189,
+    "parts": 25,
+    "patches": 202,
+    "redeclared": 2,
+    "relaxed_patches": 5,
+    "removed_paths": 171,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     65,
+     116,
+     21,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 20,
+    "unsolved": 1,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 200,
+    "faces": 37173,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 202,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     65,
+     116,
+     21,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 202
+   },
+   "trace_ms": 406.8544
+  }
+ },
+ {
+  "case": "khronos/SheenChair",
+  "oracle": {
+   "stats": {
+    "cc_able": 941,
+    "faces": 32288,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 947,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     559,
+     355,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 947
+   },
+   "erased": 0,
+   "seconds": 7.489
+  },
+  "ours": {
+   "faces": 31821,
+   "report": {
+    "candidates": 9037,
+    "high_sides": 0,
+    "kept_paths": 592,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 4,
+    "ok": 550,
+    "parts": 73,
+    "patches": 869,
+    "redeclared": 133,
+    "relaxed_patches": 260,
+    "removed_paths": 262,
+    "seams": 19,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     465,
+     378,
+     26,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 94,
+    "unsolved": 4,
+    "valence_mismatch": 315
+   },
+   "stats": {
+    "cc_able": 862,
+    "faces": 31821,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 869,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     465,
+     378,
+     26,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 869
+   },
+   "trace_ms": 56.1462
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 21732,
+    "high_sides": 0,
+    "kept_paths": 1500,
+    "low_sides": 0,
+    "non_disk": 1,
+    "not_cc_able": 1,
+    "not_convex": 17,
+    "ok": 1357,
+    "parts": 45,
+    "patches": 1681,
+    "redeclared": 127,
+    "relaxed_patches": 597,
+    "removed_paths": 206,
+    "seams": 98,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     482,
+     1172,
+     27,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 32,
+    "unsolved": 18,
+    "valence_mismatch": 305
+   },
+   "stats": {
+    "cc_able": 1673,
+    "faces": 46980,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 1,
+    "patches": 1681,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     482,
+     1172,
+     27,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1680
+   },
+   "trace_ms": 243.7568
+  }
+ },
+ {
+  "case": "khronos/SheenCloth",
+  "oracle": {
+   "stats": {
+    "cc_able": 93,
+    "faces": 16310,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 94,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     16,
+     71,
+     7,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 94
+   },
+   "erased": 0,
+   "seconds": 1.571
+  },
+  "ours": {
+   "faces": 16310,
+   "report": {
+    "candidates": 3559,
+    "high_sides": 0,
+    "kept_paths": 109,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 152,
+    "parts": 1,
+    "patches": 154,
+    "redeclared": 0,
+    "relaxed_patches": 4,
+    "removed_paths": 26,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     139,
+     6,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 2
+   },
+   "stats": {
+    "cc_able": 154,
+    "faces": 16310,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 154,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     139,
+     6,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 154
+   },
+   "trace_ms": 397.51550000000003
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 3348,
+    "high_sides": 0,
+    "kept_paths": 70,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 105,
+    "parts": 1,
+    "patches": 105,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 11,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1,
+     103,
+     1,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 105,
+    "faces": 29250,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 105,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1,
+     103,
+     1,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 105
+   },
+   "trace_ms": 301.59639999999996
+  }
+ },
+ {
+  "case": "khronos/SpecularSilkPouf",
+  "oracle": {
+   "stats": {
+    "cc_able": 3961,
+    "faces": 76612,
+    "high_sides": 1,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 3965,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2409,
+     1465,
+     90,
+     1,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 3964
+   },
+   "erased": 0,
+   "seconds": 91.613
+  },
+  "ours": {
+   "faces": 74664,
+   "report": {
+    "candidates": 52669,
+    "high_sides": 0,
+    "kept_paths": 2909,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 24,
+    "ok": 1409,
+    "parts": 7,
+    "patches": 3568,
+    "redeclared": 262,
+    "relaxed_patches": 1004,
+    "removed_paths": 2508,
+    "seams": 67,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2269,
+     1247,
+     52,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 14,
+    "unsolved": 24,
+    "valence_mismatch": 2133
+   },
+   "stats": {
+    "cc_able": 3552,
+    "faces": 74664,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 3568,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2269,
+     1247,
+     52,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 3568
+   },
+   "trace_ms": 814.8688
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 73335,
+    "high_sides": 0,
+    "kept_paths": 2945,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 41,
+    "ok": 1656,
+    "parts": 2,
+    "patches": 2696,
+    "redeclared": 218,
+    "relaxed_patches": 884,
+    "removed_paths": 3251,
+    "seams": 55,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1029,
+     1603,
+     64,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 41,
+    "valence_mismatch": 997
+   },
+   "stats": {
+    "cc_able": 2680,
+    "faces": 67131,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 2696,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1029,
+     1603,
+     64,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 2696
+   },
+   "trace_ms": 2315.3864
+  }
+ },
+ {
+  "case": "khronos/SunglassesKhronos",
+  "oracle": {
+   "stats": {
+    "cc_able": 485,
+    "faces": 28093,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 486,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     227,
+     239,
+     20,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 486
+   },
+   "erased": 0,
+   "seconds": 4.145
+  },
+  "ours": {
+   "faces": 28048,
+   "report": {
+    "candidates": 19423,
+    "high_sides": 0,
+    "kept_paths": 323,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 396,
+    "parts": 36,
+    "patches": 513,
+    "redeclared": 3,
+    "relaxed_patches": 13,
+    "removed_paths": 142,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     226,
+     271,
+     16,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 27,
+    "unsolved": 1,
+    "valence_mismatch": 116
+   },
+   "stats": {
+    "cc_able": 512,
+    "faces": 28048,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 513,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     226,
+     271,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 513
+   },
+   "trace_ms": 75.563
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 89640,
+    "high_sides": 0,
+    "kept_paths": 385,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 5,
+    "ok": 426,
+    "parts": 26,
+    "patches": 564,
+    "redeclared": 11,
+    "relaxed_patches": 36,
+    "removed_paths": 544,
+    "seams": 8,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     202,
+     352,
+     10,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 36,
+    "unsolved": 5,
+    "valence_mismatch": 133
+   },
+   "stats": {
+    "cc_able": 559,
+    "faces": 163618,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 564,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     202,
+     352,
+     10,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 564
+   },
+   "trace_ms": 521.3188
+  }
+ },
+ {
+  "case": "khronos/WaterBottle",
+  "oracle": {
+   "stats": {
+    "cc_able": 51,
+    "faces": 14965,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 51,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     27,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 51
+   },
+   "erased": 0,
+   "seconds": 0.454
+  },
+  "ours": {
+   "faces": 14965,
+   "report": {
+    "candidates": 5100,
+    "high_sides": 0,
+    "kept_paths": 65,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 74,
+    "parts": 6,
+    "patches": 75,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 22,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     51,
+     16,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 73,
+    "faces": 14965,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 75,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     51,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 75
+   },
+   "trace_ms": 58.047599999999996
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 12693,
+    "high_sides": 0,
+    "kept_paths": 156,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 5,
+    "ok": 180,
+    "parts": 3,
+    "patches": 203,
+    "redeclared": 5,
+    "relaxed_patches": 41,
+    "removed_paths": 97,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     18,
+     172,
+     13,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 5,
+    "valence_mismatch": 16
+   },
+   "stats": {
+    "cc_able": 201,
+    "faces": 16562,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 203,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     18,
+     172,
+     13,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 203
+   },
+   "trace_ms": 155.30540000000002
+  }
+ },
+ {
+  "case": "thingi10k/105762",
+  "oracle": {
+   "stats": {
+    "cc_able": 381,
+    "faces": 32018,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 381,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     117,
+     253,
+     11,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 381
+   },
+   "erased": 0,
+   "seconds": 2.444
+  },
+  "ours": {
+   "faces": 32018,
+   "report": {
+    "candidates": 28324,
+    "high_sides": 0,
+    "kept_paths": 418,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 4,
+    "ok": 476,
+    "parts": 1,
+    "patches": 522,
+    "redeclared": 3,
+    "relaxed_patches": 42,
+    "removed_paths": 1954,
+    "seams": 13,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     52,
+     454,
+     16,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 4,
+    "valence_mismatch": 41
+   },
+   "stats": {
+    "cc_able": 519,
+    "faces": 32018,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 522,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     52,
+     454,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 522
+   },
+   "trace_ms": 533.125
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 40476,
+    "high_sides": 0,
+    "kept_paths": 369,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 484,
+    "parts": 1,
+    "patches": 494,
+    "redeclared": 1,
+    "relaxed_patches": 12,
+    "removed_paths": 3270,
+    "seams": 6,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     28,
+     462,
+     4,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 9
+   },
+   "stats": {
+    "cc_able": 494,
+    "faces": 20704,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 494,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     28,
+     462,
+     4,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 494
+   },
+   "trace_ms": 562.4852999999999
+  }
+ },
+ {
+  "case": "thingi10k/124040",
+  "oracle": {
+   "stats": {
+    "cc_able": 67,
+    "faces": 12320,
+    "high_sides": 1,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 68,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     35,
+     8,
+     24,
+     1,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 67
+   },
+   "erased": 0,
+   "seconds": 0.632
+  },
+  "ours": {
+   "faces": 12320,
+   "report": {
+    "candidates": 5655,
+    "high_sides": 0,
+    "kept_paths": 49,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 96,
+    "parts": 1,
+    "patches": 98,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 34,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     35,
+     38,
+     25,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 95,
+    "faces": 12320,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 98,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     35,
+     38,
+     25,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 98
+   },
+   "trace_ms": 417.24440000000004
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 9303,
+    "high_sides": 0,
+    "kept_paths": 45,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 93,
+    "parts": 1,
+    "patches": 93,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 37,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     37,
+     22,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 93,
+    "faces": 13396,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 93,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     37,
+     22,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 93
+   },
+   "trace_ms": 369.9148
+  }
+ },
+ {
+  "case": "thingi10k/1458674",
+  "oracle": {
+   "stats": {
+    "cc_able": 256,
+    "faces": 19942,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 260,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     112,
+     114,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 260
+   },
+   "erased": 0,
+   "seconds": 2.833
+  },
+  "ours": {
+   "faces": 19974,
+   "report": {
+    "candidates": 10835,
+    "high_sides": 0,
+    "kept_paths": 170,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 318,
+    "parts": 1,
+    "patches": 334,
+    "redeclared": 4,
+    "relaxed_patches": 6,
+    "removed_paths": 137,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     32,
+     187,
+     115,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 15
+   },
+   "stats": {
+    "cc_able": 327,
+    "faces": 19974,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 334,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     32,
+     187,
+     115,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 334
+   },
+   "trace_ms": 256.1037
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 20199,
+    "high_sides": 0,
+    "kept_paths": 178,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 318,
+    "parts": 1,
+    "patches": 330,
+    "redeclared": 1,
+    "relaxed_patches": 4,
+    "removed_paths": 147,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     37,
+     178,
+     115,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 320,
+    "faces": 26700,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 330,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     37,
+     178,
+     115,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 330
+   },
+   "trace_ms": 803.9955
+  }
+ },
+ {
+  "case": "thingi10k/1492345",
+  "oracle": {
+   "stats": {
+    "cc_able": 84,
+    "faces": 20522,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 84,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     33,
+     34,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 84
+   },
+   "erased": 0,
+   "seconds": 1.433
+  },
+  "ours": {
+   "faces": 20522,
+   "report": {
+    "candidates": 5263,
+    "high_sides": 0,
+    "kept_paths": 74,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 93,
+    "parts": 2,
+    "patches": 110,
+    "redeclared": 2,
+    "relaxed_patches": 4,
+    "removed_paths": 68,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     15,
+     62,
+     33,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 6,
+    "unsolved": 0,
+    "valence_mismatch": 17
+   },
+   "stats": {
+    "cc_able": 108,
+    "faces": 20522,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 110,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     15,
+     62,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 110
+   },
+   "trace_ms": 234.2997
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 5635,
+    "high_sides": 0,
+    "kept_paths": 79,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 105,
+    "parts": 1,
+    "patches": 111,
+    "redeclared": 0,
+    "relaxed_patches": 7,
+    "removed_paths": 45,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     7,
+     72,
+     32,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 5
+   },
+   "stats": {
+    "cc_able": 111,
+    "faces": 22280,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 111,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     7,
+     72,
+     32,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 111
+   },
+   "trace_ms": 314.0435
+  }
+ },
+ {
+  "case": "thingi10k/1505036",
+  "oracle": {
+   "stats": {
+    "cc_able": 292,
+    "faces": 18414,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 292,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     37,
+     218,
+     37,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 292
+   },
+   "erased": 0,
+   "seconds": 1.244
+  },
+  "ours": {
+   "faces": 18414,
+   "report": {
+    "candidates": 16879,
+    "high_sides": 0,
+    "kept_paths": 118,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 291,
+    "parts": 1,
+    "patches": 295,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 41,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     228,
+     33,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 4
+   },
+   "stats": {
+    "cc_able": 295,
+    "faces": 18414,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 295,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     34,
+     228,
+     33,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 295
+   },
+   "trace_ms": 190.8335
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 17852,
+    "high_sides": 0,
+    "kept_paths": 208,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 357,
+    "parts": 1,
+    "patches": 398,
+    "redeclared": 28,
+    "relaxed_patches": 101,
+    "removed_paths": 52,
+    "seams": 5,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     78,
+     285,
+     35,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 41
+   },
+   "stats": {
+    "cc_able": 398,
+    "faces": 18826,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 398,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     78,
+     285,
+     35,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 398
+   },
+   "trace_ms": 262.6136
+  }
+ },
+ {
+  "case": "thingi10k/1514900",
+  "oracle": {
+   "stats": {
+    "cc_able": 954,
+    "faces": 159360,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 955,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     552,
+     371,
+     32,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 955
+   },
+   "erased": 0,
+   "seconds": 202.553
+  },
+  "ours": {
+   "faces": 159784,
+   "report": {
+    "candidates": 61373,
+    "high_sides": 0,
+    "kept_paths": 770,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 3,
+    "ok": 334,
+    "parts": 1,
+    "patches": 810,
+    "redeclared": 64,
+    "relaxed_patches": 208,
+    "removed_paths": 1599,
+    "seams": 11,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     506,
+     273,
+     31,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 3,
+    "valence_mismatch": 472
+   },
+   "stats": {
+    "cc_able": 803,
+    "faces": 159784,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 810,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     506,
+     273,
+     31,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 810
+   },
+   "trace_ms": 4812.5109999999995
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 47698,
+    "high_sides": 0,
+    "kept_paths": 351,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 1006,
+    "parts": 1,
+    "patches": 1059,
+    "redeclared": 18,
+    "relaxed_patches": 54,
+    "removed_paths": 362,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     216,
+     705,
+     138,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 52
+   },
+   "stats": {
+    "cc_able": 1055,
+    "faces": 154222,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 1059,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     216,
+     705,
+     138,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 1059
+   },
+   "trace_ms": 3498.0355
+  }
+ },
+ {
+  "case": "thingi10k/1706457",
+  "oracle": {
+   "stats": {
+    "cc_able": 106,
+    "faces": 12732,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 106,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     19,
+     29,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 106
+   },
+   "erased": 0,
+   "seconds": 1.372
+  },
+  "ours": {
+   "faces": 12732,
+   "report": {
+    "candidates": 3516,
+    "high_sides": 0,
+    "kept_paths": 68,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 67,
+    "parts": 1,
+    "patches": 99,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 135,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     12,
+     29,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 32
+   },
+   "stats": {
+    "cc_able": 97,
+    "faces": 12732,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 99,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     12,
+     29,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 99
+   },
+   "trace_ms": 145.626
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6778,
+    "high_sides": 0,
+    "kept_paths": 60,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 75,
+    "parts": 1,
+    "patches": 97,
+    "redeclared": 5,
+    "relaxed_patches": 5,
+    "removed_paths": 82,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     36,
+     17,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 22
+   },
+   "stats": {
+    "cc_able": 94,
+    "faces": 17272,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 97,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     44,
+     36,
+     17,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 97
+   },
+   "trace_ms": 377.1696
+  }
+ },
+ {
+  "case": "thingi10k/250397",
+  "oracle": {
+   "stats": {
+    "cc_able": 38,
+    "faces": 45838,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 38,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2,
+     34,
+     2,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 38
+   },
+   "erased": 0,
+   "seconds": 3.823
+  },
+  "ours": {
+   "faces": 45838,
+   "report": {
+    "candidates": 4631,
+    "high_sides": 0,
+    "kept_paths": 13,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 27,
+    "parts": 1,
+    "patches": 29,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 7,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2,
+     25,
+     2,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 2
+   },
+   "stats": {
+    "cc_able": 29,
+    "faces": 45838,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 29,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     2,
+     25,
+     2,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 29
+   },
+   "trace_ms": 1607.4938
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 77464,
+    "high_sides": 0,
+    "kept_paths": 3237,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 116,
+    "not_convex": 40,
+    "ok": 3133,
+    "parts": 1,
+    "patches": 4609,
+    "redeclared": 55,
+    "relaxed_patches": 349,
+    "removed_paths": 1328,
+    "seams": 42,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1325,
+     1881,
+     1403,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 40,
+    "valence_mismatch": 1320
+   },
+   "stats": {
+    "cc_able": 4463,
+    "faces": 118744,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 4609,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     1325,
+     1881,
+     1403,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 4609
+   },
+   "trace_ms": 45945.8793
+  }
+ },
+ {
+  "case": "thingi10k/271869",
+  "oracle": {
+   "stats": {
+    "cc_able": 609,
+    "faces": 45704,
+    "high_sides": 1,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 611,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     78,
+     474,
+     58,
+     1,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 610
+   },
+   "erased": 0,
+   "seconds": 9.281
+  },
+  "ours": {
+   "faces": 45614,
+   "report": {
+    "candidates": 31462,
+    "high_sides": 0,
+    "kept_paths": 273,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 2,
+    "ok": 578,
+    "parts": 1,
+    "patches": 639,
+    "redeclared": 2,
+    "relaxed_patches": 17,
+    "removed_paths": 220,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     73,
+     508,
+     58,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 2,
+    "valence_mismatch": 59
+   },
+   "stats": {
+    "cc_able": 631,
+    "faces": 45614,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 639,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     73,
+     508,
+     58,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 639
+   },
+   "trace_ms": 882.4543
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 52700,
+    "high_sides": 0,
+    "kept_paths": 616,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 15,
+    "ok": 789,
+    "parts": 1,
+    "patches": 918,
+    "redeclared": 18,
+    "relaxed_patches": 173,
+    "removed_paths": 351,
+    "seams": 30,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     122,
+     716,
+     80,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 15,
+    "valence_mismatch": 112
+   },
+   "stats": {
+    "cc_able": 908,
+    "faces": 41178,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 918,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     122,
+     716,
+     80,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 918
+   },
+   "trace_ms": 683.7712
+  }
+ },
+ {
+  "case": "thingi10k/37883",
+  "oracle": {
+   "stats": {
+    "cc_able": 142,
+    "faces": 12484,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 142,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     39,
+     64,
+     39,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 142
+   },
+   "erased": 0,
+   "seconds": 1.235
+  },
+  "ours": {
+   "faces": 12484,
+   "report": {
+    "candidates": 8189,
+    "high_sides": 0,
+    "kept_paths": 83,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 159,
+    "parts": 1,
+    "patches": 160,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 58,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     39,
+     82,
+     39,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 160,
+    "faces": 12484,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 160,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     39,
+     82,
+     39,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 160
+   },
+   "trace_ms": 146.34349999999998
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 9421,
+    "high_sides": 0,
+    "kept_paths": 88,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 158,
+    "parts": 1,
+    "patches": 164,
+    "redeclared": 6,
+    "relaxed_patches": 6,
+    "removed_paths": 86,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     49,
+     81,
+     34,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 6
+   },
+   "stats": {
+    "cc_able": 162,
+    "faces": 20168,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 164,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     49,
+     81,
+     34,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 164
+   },
+   "trace_ms": 259.7682
+  }
+ },
+ {
+  "case": "thingi10k/40994",
+  "oracle": {
+   "stats": {
+    "cc_able": 60,
+    "faces": 10976,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 60,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     30,
+     17,
+     13,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 60
+   },
+   "erased": 0,
+   "seconds": 0.654
+  },
+  "ours": {
+   "faces": 10976,
+   "report": {
+    "candidates": 3663,
+    "high_sides": 0,
+    "kept_paths": 44,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 1,
+    "ok": 85,
+    "parts": 1,
+    "patches": 88,
+    "redeclared": 2,
+    "relaxed_patches": 6,
+    "removed_paths": 36,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     27,
+     48,
+     13,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 1
+   },
+   "stats": {
+    "cc_able": 86,
+    "faces": 10976,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 88,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     27,
+     48,
+     13,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 88
+   },
+   "trace_ms": 157.6
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 4166,
+    "high_sides": 0,
+    "kept_paths": 36,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 53,
+    "parts": 1,
+    "patches": 56,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 47,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     27,
+     19,
+     10,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 3
+   },
+   "stats": {
+    "cc_able": 55,
+    "faces": 11770,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 56,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     27,
+     19,
+     10,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 56
+   },
+   "trace_ms": 278.9466
+  }
+ },
+ {
+  "case": "thingi10k/472206",
+  "oracle": {
+   "stats": {
+    "cc_able": 58,
+    "faces": 12532,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 58,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     12,
+     46,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 58
+   },
+   "erased": 0,
+   "seconds": 0.513
+  },
+  "ours": {
+   "faces": 12532,
+   "report": {
+    "candidates": 5105,
+    "high_sides": 0,
+    "kept_paths": 42,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 42,
+    "parts": 1,
+    "patches": 54,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 34,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     12,
+     42,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 54,
+    "faces": 12532,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 54,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     12,
+     42,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 54
+   },
+   "trace_ms": 157.4482
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 7354,
+    "high_sides": 0,
+    "kept_paths": 41,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 41,
+    "parts": 1,
+    "patches": 53,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 35,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     12,
+     41,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 53,
+    "faces": 15630,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 53,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     12,
+     41,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 53
+   },
+   "trace_ms": 238.756
+  }
+ },
+ {
+  "case": "thingi10k/49382",
+  "oracle": {
+   "stats": {
+    "cc_able": 12,
+    "faces": 14070,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 12,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     4,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 12
+   },
+   "erased": 0,
+   "seconds": 0.696
+  },
+  "ours": {
+   "faces": 14070,
+   "report": {
+    "candidates": 1715,
+    "high_sides": 0,
+    "kept_paths": 8,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 12,
+    "parts": 1,
+    "patches": 12,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 0,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     4,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 0,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 12,
+    "faces": 14070,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 12,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     8,
+     4,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 12
+   },
+   "trace_ms": 235.7371
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 1809,
+    "high_sides": 0,
+    "kept_paths": 10,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 16,
+    "parts": 1,
+    "patches": 16,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 0,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     6,
+     1,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 0,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 16,
+    "faces": 15034,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 16,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     9,
+     6,
+     1,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 16
+   },
+   "trace_ms": 258.88129999999995
+  }
+ },
+ {
+  "case": "thingi10k/62287",
+  "oracle": {
+   "stats": {
+    "cc_able": 170,
+    "faces": 15810,
+    "high_sides": 2,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 173,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     63,
+     66,
+     42,
+     2,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 171
+   },
+   "erased": 0,
+   "seconds": 1.503
+  },
+  "ours": {
+   "faces": 15720,
+   "report": {
+    "candidates": 9995,
+    "high_sides": 0,
+    "kept_paths": 109,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 169,
+    "parts": 1,
+    "patches": 187,
+    "redeclared": 6,
+    "relaxed_patches": 21,
+    "removed_paths": 67,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     46,
+     94,
+     47,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 18
+   },
+   "stats": {
+    "cc_able": 182,
+    "faces": 15720,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 187,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     46,
+     94,
+     47,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 187
+   },
+   "trace_ms": 197.7328
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 12667,
+    "high_sides": 0,
+    "kept_paths": 124,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 224,
+    "parts": 1,
+    "patches": 233,
+    "redeclared": 0,
+    "relaxed_patches": 7,
+    "removed_paths": 69,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     134,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 8
+   },
+   "stats": {
+    "cc_able": 232,
+    "faces": 20210,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 233,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     134,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 233
+   },
+   "trace_ms": 257.6917
+  }
+ },
+ {
+  "case": "thingi10k/650187",
+  "oracle": {
+   "stats": {
+    "cc_able": 8,
+    "faces": 121054,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 8,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     0,
+     8,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 8
+   },
+   "erased": 0,
+   "seconds": 16.709
+  },
+  "ours": {
+   "faces": 121054,
+   "report": {
+    "candidates": 12885,
+    "high_sides": 0,
+    "kept_paths": 8,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 8,
+    "parts": 1,
+    "patches": 8,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 0,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     0,
+     8,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 0,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 8,
+    "faces": 121054,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 8,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     0,
+     8,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 8
+   },
+   "trace_ms": 4649.5635
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 14224,
+    "high_sides": 0,
+    "kept_paths": 8,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 8,
+    "parts": 1,
+    "patches": 8,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 0,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     0,
+     8,
+     0,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 0,
+    "unsolved": 0,
+    "valence_mismatch": 0
+   },
+   "stats": {
+    "cc_able": 8,
+    "faces": 125880,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 8,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     0,
+     8,
+     0,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 8
+   },
+   "trace_ms": 5945.6595
+  }
+ },
+ {
+  "case": "thingi10k/71712",
+  "oracle": {
+   "stats": {
+    "cc_able": 382,
+    "faces": 44608,
+    "high_sides": 2,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 384,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     61,
+     229,
+     92,
+     2,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 382
+   },
+   "erased": 0,
+   "seconds": 4.33
+  },
+  "ours": {
+   "faces": 44512,
+   "report": {
+    "candidates": 30831,
+    "high_sides": 0,
+    "kept_paths": 199,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 2,
+    "not_convex": 0,
+    "ok": 413,
+    "parts": 6,
+    "patches": 433,
+    "redeclared": 4,
+    "relaxed_patches": 9,
+    "removed_paths": 78,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     38,
+     304,
+     91,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 9,
+    "unsolved": 0,
+    "valence_mismatch": 18
+   },
+   "stats": {
+    "cc_able": 428,
+    "faces": 44512,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 433,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     38,
+     304,
+     91,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 433
+   },
+   "trace_ms": 921.7978
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 48746,
+    "high_sides": 0,
+    "kept_paths": 168,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 403,
+    "parts": 1,
+    "patches": 409,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 89,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     25,
+     299,
+     85,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 6
+   },
+   "stats": {
+    "cc_able": 407,
+    "faces": 46306,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 409,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     25,
+     299,
+     85,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 409
+   },
+   "trace_ms": 911.6141
+  }
+ },
+ {
+  "case": "thingi10k/75117",
+  "oracle": {
+   "stats": {
+    "cc_able": 55,
+    "faces": 10874,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 55,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     26,
+     12,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 55
+   },
+   "erased": 0,
+   "seconds": 0.942
+  },
+  "ours": {
+   "faces": 10812,
+   "report": {
+    "candidates": 5802,
+    "high_sides": 0,
+    "kept_paths": 34,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 61,
+    "parts": 1,
+    "patches": 70,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 61,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     37,
+     16,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 9
+   },
+   "stats": {
+    "cc_able": 70,
+    "faces": 10812,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 70,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     37,
+     16,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 70
+   },
+   "trace_ms": 131.6512
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 7232,
+    "high_sides": 0,
+    "kept_paths": 33,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 52,
+    "parts": 1,
+    "patches": 57,
+    "redeclared": 0,
+    "relaxed_patches": 0,
+    "removed_paths": 51,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     27,
+     13,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 1,
+    "unsolved": 0,
+    "valence_mismatch": 5
+   },
+   "stats": {
+    "cc_able": 56,
+    "faces": 11398,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 57,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     17,
+     27,
+     13,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 57
+   },
+   "trace_ms": 139.03650000000002
+  }
+ },
+ {
+  "case": "thingi10k/87355",
+  "oracle": {
+   "stats": {
+    "cc_able": 395,
+    "faces": 17614,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 397,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     151,
+     200,
+     46,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 397
+   },
+   "erased": 0,
+   "seconds": 3.199
+  },
+  "ours": {
+   "faces": 17608,
+   "report": {
+    "candidates": 6940,
+    "high_sides": 0,
+    "kept_paths": 412,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 4,
+    "ok": 498,
+    "parts": 1,
+    "patches": 579,
+    "redeclared": 9,
+    "relaxed_patches": 90,
+    "removed_paths": 142,
+    "seams": 13,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     119,
+     419,
+     41,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 4,
+    "valence_mismatch": 77
+   },
+   "stats": {
+    "cc_able": 576,
+    "faces": 17608,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 579,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     119,
+     419,
+     41,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 579
+   },
+   "trace_ms": 216.0594
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6150,
+    "high_sides": 0,
+    "kept_paths": 126,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 198,
+    "parts": 1,
+    "patches": 220,
+    "redeclared": 5,
+    "relaxed_patches": 26,
+    "removed_paths": 65,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     130,
+     32,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 21
+   },
+   "stats": {
+    "cc_able": 215,
+    "faces": 22052,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 220,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     58,
+     130,
+     32,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 220
+   },
+   "trace_ms": 424.15639999999996
+  }
+ },
+ {
+  "case": "thingi10k/906891",
+  "oracle": {
+   "stats": {
+    "cc_able": 604,
+    "faces": 31144,
+    "high_sides": 8,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 620,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     210,
+     235,
+     167,
+     8,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 612
+   },
+   "erased": 0,
+   "seconds": 12.428
+  },
+  "ours": {
+   "faces": 31198,
+   "report": {
+    "candidates": 19486,
+    "high_sides": 0,
+    "kept_paths": 528,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 8,
+    "not_convex": 14,
+    "ok": 664,
+    "parts": 1,
+    "patches": 828,
+    "redeclared": 21,
+    "relaxed_patches": 131,
+    "removed_paths": 291,
+    "seams": 7,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     241,
+     418,
+     169,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 6,
+    "unsolved": 14,
+    "valence_mismatch": 142
+   },
+   "stats": {
+    "cc_able": 814,
+    "faces": 31198,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 828,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     241,
+     418,
+     169,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 828
+   },
+   "trace_ms": 670.96
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 8725,
+    "high_sides": 0,
+    "kept_paths": 148,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 1,
+    "not_convex": 0,
+    "ok": 220,
+    "parts": 1,
+    "patches": 239,
+    "redeclared": 6,
+    "relaxed_patches": 18,
+    "removed_paths": 152,
+    "seams": 3,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     37,
+     120,
+     82,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 18
+   },
+   "stats": {
+    "cc_able": 237,
+    "faces": 22282,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 239,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     37,
+     120,
+     82,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 239
+   },
+   "trace_ms": 663.0808999999999
+  }
+ },
+ {
+  "case": "thingi10k/94990",
+  "oracle": {
+   "stats": {
+    "cc_able": 53,
+    "faces": 12584,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 53,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     14,
+     32,
+     7,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 53
+   },
+   "erased": 0,
+   "seconds": 1.244
+  },
+  "ours": {
+   "faces": 12584,
+   "report": {
+    "candidates": 5987,
+    "high_sides": 0,
+    "kept_paths": 49,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 56,
+    "parts": 1,
+    "patches": 62,
+    "redeclared": 2,
+    "relaxed_patches": 9,
+    "removed_paths": 32,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     15,
+     41,
+     6,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 5
+   },
+   "stats": {
+    "cc_able": 62,
+    "faces": 12584,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 62,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     15,
+     41,
+     6,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 62
+   },
+   "trace_ms": 146.17659999999998
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 6585,
+    "high_sides": 0,
+    "kept_paths": 43,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 52,
+    "parts": 1,
+    "patches": 58,
+    "redeclared": 5,
+    "relaxed_patches": 15,
+    "removed_paths": 26,
+    "seams": 0,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     18,
+     34,
+     6,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 2,
+    "unsolved": 0,
+    "valence_mismatch": 6
+   },
+   "stats": {
+    "cc_able": 58,
+    "faces": 12222,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 58,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     18,
+     34,
+     6,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 58
+   },
+   "trace_ms": 150.0112
+  }
+ },
+ {
+  "case": "thingi10k/97730",
+  "oracle": {
+   "stats": {
+    "cc_able": 68,
+    "faces": 10864,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 68,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     29,
+     24,
+     15,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 68
+   },
+   "erased": 0,
+   "seconds": 0.972
+  },
+  "ours": {
+   "faces": 10864,
+   "report": {
+    "candidates": 4775,
+    "high_sides": 0,
+    "kept_paths": 82,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 0,
+    "ok": 106,
+    "parts": 1,
+    "patches": 118,
+    "redeclared": 3,
+    "relaxed_patches": 10,
+    "removed_paths": 45,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     23,
+     81,
+     14,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 0,
+    "valence_mismatch": 12
+   },
+   "stats": {
+    "cc_able": 118,
+    "faces": 10864,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 118,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     23,
+     81,
+     14,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 118
+   },
+   "trace_ms": 155.704
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 5144,
+    "high_sides": 0,
+    "kept_paths": 63,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 92,
+    "parts": 1,
+    "patches": 110,
+    "redeclared": 6,
+    "relaxed_patches": 16,
+    "removed_paths": 37,
+    "seams": 2,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     30,
+     68,
+     12,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 17
+   },
+   "stats": {
+    "cc_able": 108,
+    "faces": 13692,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 110,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     30,
+     68,
+     12,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 110
+   },
+   "trace_ms": 173.1893
+  }
+ },
+ {
+  "case": "thingi10k/99836",
+  "oracle": {
+   "stats": {
+    "cc_able": 352,
+    "faces": 17374,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 355,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     59,
+     267,
+     29,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 355
+   },
+   "erased": 0,
+   "seconds": 2.623
+  },
+  "ours": {
+   "faces": 17420,
+   "report": {
+    "candidates": 16679,
+    "high_sides": 0,
+    "kept_paths": 169,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 1,
+    "ok": 359,
+    "parts": 1,
+    "patches": 408,
+    "redeclared": 2,
+    "relaxed_patches": 13,
+    "removed_paths": 161,
+    "seams": 1,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     47,
+     331,
+     30,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 1,
+    "valence_mismatch": 48
+   },
+   "stats": {
+    "cc_able": 408,
+    "faces": 17420,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 408,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     47,
+     331,
+     30,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 408
+   },
+   "trace_ms": 217.9366
+  },
+  "pipeline": {
+   "report": {
+    "candidates": 14355,
+    "high_sides": 0,
+    "kept_paths": 359,
+    "low_sides": 0,
+    "non_disk": 0,
+    "not_cc_able": 0,
+    "not_convex": 5,
+    "ok": 575,
+    "parts": 1,
+    "patches": 637,
+    "redeclared": 9,
+    "relaxed_patches": 115,
+    "removed_paths": 195,
+    "seams": 28,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     73,
+     533,
+     31,
+     0,
+     0,
+     0
+    ],
+    "sub_passes_run": 3,
+    "unsolved": 5,
+    "valence_mismatch": 57
+   },
+   "stats": {
+    "cc_able": 636,
+    "faces": 15394,
+    "high_sides": 0,
+    "low_sides": 0,
+    "non_disk": 0,
+    "patches": 637,
+    "sides_histogram": [
+     0,
+     0,
+     0,
+     73,
+     533,
+     31,
+     0,
+     0,
+     0
+    ],
+    "unassigned_faces": 0,
+    "valid": 637
+   },
+   "trace_ms": 229.2269
+  }
+ }
+]
