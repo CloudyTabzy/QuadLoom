@@ -130,6 +130,58 @@ fn quad_size_follows_the_setting() {
 }
 
 #[test]
+fn adaptivity_spends_quads_on_detail() {
+    // The prep remesh refines where curvature is high; adaptive quads follow it.
+    let (p, t) = torus(48, 24);
+    let mut params = Params::default();
+    params.quad.adaptivity = 0.0;
+    let uniform = run_mesh(&p, &t, &params).quads.unwrap();
+    params.quad.adaptivity = 1.0;
+    let adaptive = run_mesh(&p, &t, &params).quads.unwrap();
+    assert!(
+        adaptive.report.quads > uniform.report.quads,
+        "adaptive {} uniform {}",
+        adaptive.report.quads,
+        uniform.report.quads
+    );
+    assert_closed_quads_mesh(&adaptive.mesh);
+}
+
+/// Closed, all-quad, manifold.
+fn assert_closed_quads_mesh(mesh: &PolyMesh) {
+    let (sizes, edges, _) = topology(mesh);
+    assert_eq!(sizes.len(), 1, "{sizes:?}");
+    assert!(sizes.contains_key(&4));
+    assert!(edges.values().all(|&n| n == 2));
+}
+
+#[test]
+fn output_guard_rejects_broken_meshes() {
+    use glam::DVec3;
+    let square = |z: f64| {
+        [DVec3::new(0.0, 0.0, z), DVec3::new(1.0, 0.0, z), DVec3::new(1.0, 1.0, z), DVec3::new(0.0, 1.0, z)]
+    };
+    let mut positions: Vec<DVec3> = square(0.0).to_vec();
+    positions.extend([DVec3::new(0.5, -1.0, 1.0), DVec3::new(0.5, -1.0, -1.0)]);
+    let good =
+        PolyMesh { positions: positions.clone(), face_offsets: vec![0, 4], face_indices: vec![0, 1, 2, 3] };
+    assert!(super::check_output(&good).is_ok());
+    // Edge (0,1) in three faces.
+    let fan = PolyMesh {
+        positions: positions.clone(),
+        face_offsets: vec![0, 4, 7, 10],
+        face_indices: vec![0, 1, 2, 3, 1, 0, 4, 1, 0, 5],
+    };
+    assert!(super::check_output(&fan).is_err());
+    let repeated =
+        PolyMesh { positions: positions.clone(), face_offsets: vec![0, 4], face_indices: vec![0, 1, 1, 3] };
+    assert!(super::check_output(&repeated).is_err());
+    let mut nan = good.clone();
+    nan.positions[0] = DVec3::NAN;
+    assert!(super::check_output(&nan).is_err());
+}
+
+#[test]
 fn quads_off_leaves_no_quad_mesh() {
     let (p, t) = torus(24, 16);
     let mut params = Params::default();

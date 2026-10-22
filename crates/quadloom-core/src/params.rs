@@ -162,6 +162,9 @@ impl Params {
         if !(q.regularity.is_finite() && (0.0..=1000.0).contains(&q.regularity)) {
             return bad(format!("quad.regularity must be between 0 and 1000 (got {})", q.regularity));
         }
+        if !(q.adaptivity.is_finite() && (0.0..=1.0).contains(&q.adaptivity)) {
+            return bad(format!("quad.adaptivity must be between 0 and 1 (got {})", q.adaptivity));
+        }
         if q.smoothing > 100 {
             return bad(format!("quad.smoothing must be at most 100 (got {})", q.smoothing));
         }

@@ -145,6 +145,7 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
                     "frame": output.frame.as_ref().map(|f| &f.report),
                     "trace": output.trace.as_ref().map(|t| &t.report),
                     "quads": output.quads.as_ref().map(|q| &q.report),
+                    "quad_error": output.quad_error,
                     "timings_ms": timings,
                 })
             );

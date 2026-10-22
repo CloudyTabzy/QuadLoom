@@ -131,6 +131,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("edge_scale", Field::F64(&mut qd.edge_scale)),
                 ("regularity", Field::F64(&mut qd.regularity)),
                 ("smoothing", Field::Usize(&mut qd.smoothing)),
+                ("adaptivity", Field::F64(&mut qd.adaptivity)),
             ],
             other => {
                 return Err(invalid_argument(

@@ -93,7 +93,7 @@ def finish_job(context, job):
             last.field_summary = field_summary(job.result.get("field"))
             last.frame_summary = frame_summary(job.result.get("frame"))
             last.trace_summary = trace_summary(job.result.get("trace"))
-            last.quad_summary = quad_summary(job.result.get("quads"))
+            last.quad_summary = quad_summary(job.result.get("quads"), job.result.get("quad_error"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -183,8 +183,10 @@ def trace_summary(trace):
     return text
 
 
-def quad_summary(quads):
+def quad_summary(quads, error=None):
     """One line about the quad mesh, e.g. "1,234 quads (310 grid, 40 single-center patches)"."""
+    if error:
+        return f"quads failed ({error}); showing the patch layout"
     if not quads:
         return "quads off"
     report = quads["report"]

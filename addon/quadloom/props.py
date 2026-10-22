@@ -228,6 +228,14 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         description="Turn the patch layout into an all-quad mesh",
         default=True,
     )
+    quad_adaptivity: FloatProperty(
+        name="Adaptivity",
+        description="How much quads shrink in detailed areas: 0 keeps them all the same size, 1 follows the detail fully",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        precision=2,
+    )
     quad_size: FloatProperty(
         name="Quad Size",
         description="Quad edge length relative to the prep remesh's triangles (smaller makes more quads)",
@@ -398,5 +406,6 @@ def run_params(settings):
         "quad": {
             "enabled": settings.quad_enabled,
             "edge_scale": settings.quad_size,
+            "adaptivity": settings.quad_adaptivity,
         },
     }

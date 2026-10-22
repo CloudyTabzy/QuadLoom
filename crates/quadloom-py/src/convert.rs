@@ -114,6 +114,7 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         Some(q) => dict.set_item("quads", quads(py, q)?)?,
         None => dict.set_item("quads", py.None())?,
     }
+    dict.set_item("quad_error", output.quad_error.as_deref())?;
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
     Ok(dict)

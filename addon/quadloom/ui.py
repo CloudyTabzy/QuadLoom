@@ -191,6 +191,7 @@ class QUADLOOM_PT_quads(_SubPanel, bpy.types.Panel):
         if not (settings.trace_enabled and settings.field_enabled):
             layout.label(text="Needs the Cross Field and Patch Layout", icon="INFO")
         layout.prop(settings, "quad_size")
+        layout.prop(settings, "quad_adaptivity")
 
 
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):

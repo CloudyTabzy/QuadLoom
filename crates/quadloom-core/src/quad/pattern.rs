@@ -423,12 +423,28 @@ impl<'a> Builder<'a> {
     }
 
     /// Splits the patch along the best chord into two fillable pieces.
+    /// Position of ring point `i` in count space: one unit per boundary edge.
+    /// A 4-sided patch is laid out as a rectangle of its mean side counts (a
+    /// long thin patch stays long and thin), other patches as a regular polygon.
+    fn count_position(&self, ring: &[(u8, u32)], i: usize) -> DVec2 {
+        let (side, m) = (ring[i].0 as usize, ring[i].1 as f64);
+        let l: Vec<f64> = self.l.iter().map(|&v| v as f64).collect();
+        if self.n == 4 {
+            let (w, h) = (0.5 * (l[0] + l[2]), 0.5 * (l[1] + l[3]));
+            return match side {
+                0 => DVec2::new(w * m / l[0], 0.0),
+                1 => DVec2::new(w, h * m / l[1]),
+                2 => DVec2::new(w - w * m / l[2], h),
+                _ => DVec2::new(0.0, h - h * m / l[3]),
+            };
+        }
+        let perimeter: f64 = (0..self.n).map(|i| (corner(self.n, i + 1) - corner(self.n, i)).length()).sum();
+        self.boundary(side, ring[i].1).1 * (l.iter().sum::<f64>() / perimeter)
+    }
+
     fn split(&mut self) -> bool {
         let ring = self.ring();
         let t = ring.len();
-        let pos = |b: &Self, i: usize| b.boundary(ring[i].0 as usize, ring[i].1).1;
-        let perimeter: f64 = (0..self.n).map(|i| (corner(self.n, i + 1) - corner(self.n, i)).length()).sum();
-        let unit = perimeter / t as f64;
         let mut best: Option<(f64, usize, usize, u32)> = None;
         for a in 0..t {
             for b in (a + 1)..t {
@@ -437,12 +453,17 @@ impl<'a> Builder<'a> {
                 if run_ab.len() < 2 || run_ba.len() < 2 || run_ab.len() > 5 || run_ba.len() > 5 {
                     continue;
                 }
-                let ideal = (pos(self, a) - pos(self, b)).length() / unit;
-                let lo = (ideal - 2.0).round().max(1.0) as u32;
-                let hi = (ideal + 2.0).round().max(1.0) as u32;
-                for k in lo..=hi {
-                    let la: Vec<u32> = run_ab.iter().map(|&e| Self::edge_len(e)).chain([k]).collect();
-                    let lb: Vec<u32> = run_ba.iter().map(|&e| Self::edge_len(e)).chain([k]).collect();
+                let ideal = (self.count_position(&ring, a) - self.count_position(&ring, b)).length();
+                // Every chord length is tried (the closed forms decide), up to half the boundary.
+                let mut la: Vec<u32> = run_ab.iter().map(|&e| Self::edge_len(e)).chain([0]).collect();
+                let mut lb: Vec<u32> = run_ba.iter().map(|&e| Self::edge_len(e)).chain([0]).collect();
+                for k in 1..=(t as u32 / 2).max(1) {
+                    if let Some(last) = la.last_mut() {
+                        *last = k;
+                    }
+                    if let Some(last) = lb.last_mut() {
+                        *last = k;
+                    }
                     let (Some(ka), Some(kb)) = (fillable(&la), fillable(&lb)) else { continue };
                     // Irregular vertices: a Center's middle, and a patch corner the chord splits.
                     let irregular = [ka, kb].iter().filter(|&&k| k == PatternKind::Center).count()
@@ -540,7 +561,15 @@ mod tests {
     #[test]
     fn unbalanced_quads_split() {
         // (4,2,2,2) = a 2×2 grid plus the closed-form triangle (2,2,2).
-        for l in [vec![4, 2, 2, 2], vec![6, 3, 2, 3], vec![5, 3, 3, 3], vec![8, 4, 4, 4]] {
+        // (3,47,1,47) = a 1×47 grid plus the closed-form triangle (47,2,47).
+        for l in [
+            vec![4, 2, 2, 2],
+            vec![6, 3, 2, 3],
+            vec![5, 3, 3, 3],
+            vec![8, 4, 4, 4],
+            vec![3, 47, 1, 47],
+            vec![2, 27, 4, 27],
+        ] {
             let p = build(&l).unwrap();
             assert_eq!(p.kind, PatternKind::Split, "{l:?}");
             check(&p, &l);

@@ -42,6 +42,9 @@ pub struct RunOutput {
     pub trace: Option<TraceOutput>,
     /// The quad mesh built from the layout, if the quad stages ran.
     pub quads: Option<QuadOutput>,
+    /// Why the quad stages produced nothing, if they failed (the run still
+    /// succeeds, with the layout as its result).
+    pub quad_error: Option<String>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -157,6 +160,7 @@ pub fn run(
         _ => None,
     };
 
+    let mut quad_error = None;
     let quads = match &trace {
         Some(layout) if params.quad.enabled => {
             let started = Instant::now();
@@ -168,10 +172,21 @@ pub fn run(
             } else {
                 mean_edge(&positions, &triangles)
             };
-            let scales = frame.as_ref().map(|f| f.scales.as_slice());
-            let built = quad::compute(layout, scales, base * params.quad.edge_scale, &params.quad, control)?;
+            let local = (params.quad.adaptivity > 0.0)
+                .then(|| local_size(&positions, &triangles, base, params.quad.adaptivity));
+            let sizing =
+                quad::Sizing { scales: frame.as_ref().map(|f| f.scales.as_slice()), local: local.as_deref() };
+            let built = quad::compute(layout, sizing, base * params.quad.edge_scale, &params.quad, control);
             timings_ms.push((Stage::Quantize, elapsed_ms(started)));
-            Some(built)
+            match built {
+                Ok(q) => Some(q),
+                Err(e) if e.kind == crate::error::ErrorKind::Cancelled => return Err(e),
+                // Never fail a run over the quads: the layout is still a valid result.
+                Err(e) => {
+                    quad_error = Some(e.message.clone());
+                    None
+                }
+            }
         }
         _ => None,
     };
@@ -200,6 +215,7 @@ pub fn run(
         frame,
         trace,
         quads,
+        quad_error,
         timings_ms,
     })
 }
@@ -353,6 +369,39 @@ pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) ->
         return Err(Error::invalid_input(stage, "mesh is too large to index with 32-bit indices"));
     }
     Ok(())
+}
+
+/// Per-face quad-size multiplier from the prep remesh's local detail: the
+/// mean edge length around each face's corners over the global size `base`,
+/// raised to `adaptivity` (0 = uniform, 1 = follow the remesh fully).
+fn local_size(positions: &[glam::DVec3], triangles: &[[u32; 3]], base: f64, adaptivity: f64) -> Vec<f64> {
+    let mut sum = vec![0.0; positions.len()];
+    let mut count = vec![0u32; positions.len()];
+    for t in triangles {
+        for i in 0..3 {
+            let (a, b) = (t[i] as usize, t[(i + 1) % 3] as usize);
+            if let (Some(&p), Some(&q)) = (positions.get(a), positions.get(b)) {
+                let l = (p - q).length();
+                for v in [a, b] {
+                    sum[v] += l;
+                    count[v] += 1;
+                }
+            }
+        }
+    }
+    let vertex = |v: u32| {
+        let v = v as usize;
+        if count.get(v).copied().unwrap_or(0) > 0 { sum[v] / count[v] as f64 } else { base }
+    };
+    triangles
+        .iter()
+        .map(|t| {
+            let h = t.iter().map(|&v| vertex(v)).sum::<f64>() / 3.0;
+            let ratio =
+                if base > 0.0 && h.is_finite() && h > 0.0 { (h / base).clamp(0.05, 20.0) } else { 1.0 };
+            ratio.powf(adaptivity)
+        })
+        .collect()
 }
 
 /// Mean edge length of a triangle mesh (each interior edge counted twice).

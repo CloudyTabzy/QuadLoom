@@ -59,6 +59,19 @@ Every output is manifold (no edge in more than two faces).
   - fandisk's worst quad: −0.62 before, +0.12 now
   - rocker-arm's fallback patterns: 29 before, 1 now (with the salience test in features)
 
+## Update 2026-10-23 (0.1.3): adaptive, all-quad, hardened
+
+- **Adaptive quad size.** Each segment's target counts edges against the *local* quad size: the global size × (prep edge length around the face / global prep length)^adaptivity. The panel's Adaptivity slider defaults to 0.5. The prep remesh is curvature-adaptive, so quads concentrate on detail. Test: `adaptivity_spends_quads_on_detail`.
+- **Always all-quad.** A patch no pattern fills (not a disk, unmappable) splits each triangle into 3 quads through its edge midpoints and centroid. The segments around it are sampled at mesh vertices and edge midpoints, so their counts are even: the parity trick of 0.1.2 is gone.
+- **Never fails a run.** A non-cancellation error in the quad stages makes the pipeline return the layout, with `quad_error` explaining why ("quads failed (...); showing the patch layout" in the panel). A final guard (`check_output`) refuses non-finite, malformed or non-manifold quad meshes.
+- **Untangling.** After smoothing, quads with a reflex or flipped corner against the surface get full Laplacian rounds on their free vertices, projected (up to 30 rounds). Optimising each vertex for its worst corner was tried and rejected: it disagreed with the measured quality.
+- **Patterns.** The chord split tries every chord length and judges proportions in count space: a 4-sided patch is laid out as a rectangle of its mean side counts, so long thin patches split correctly. For example, (3,47,1,47) becomes a 1×47 grid plus the closed-form triangle (47,2,47).
+- **Quantization.** The global program has a 2,000-node budget (was 400). Armadillo's fallback patterns drop from 78 to 10, for about 3 s.
+- **Stress harness:** `benchmark/stress_quads.py`, raw input to quads through the full pipeline. 10 detailed models:
+  - every one 100% quads, watertight where the input is, no non-manifold edges;
+  - 1–10 s each (igea, 269k triangles in, takes 6.5 s);
+  - armadillo: fallbacks 86 → 10, p5 SJ 0.22 → 0.56, inverted 206 → 81.
+
 ## Open items
 
 - Large layouts: BiMDF, or larger region repair, to remove armadillo's fans.

@@ -38,7 +38,7 @@ pub struct Spec<'a> {
 type SideTerms = (Vec<(Variable, f64)>, f64, f64);
 
 /// Branch-and-bound nodes per solve.
-pub const NODE_LIMIT: u64 = 400;
+pub const NODE_LIMIT: u64 = 2000;
 
 /// Counts from the whole integer program, seeded with `start` (so never
 /// worse by its own measure), for problems up to [`MAX_GLOBAL_SEGMENTS`] free

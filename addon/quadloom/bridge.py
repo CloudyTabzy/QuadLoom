@@ -34,7 +34,7 @@ unavailable_reason = None
 
 # Must equal the backend's build_info()["api"]. Blender can't unload a native
 # module, so after an update the old backend stays loaded until a restart.
-API_VERSION = 3
+API_VERSION = 4
 
 
 def _load(import_module=importlib.import_module):

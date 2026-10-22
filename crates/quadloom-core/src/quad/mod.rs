@@ -49,11 +49,20 @@ pub struct QuadParams {
     pub regularity: f64,
     /// Rounds of smoothing on the surface (0 = none).
     pub smoothing: usize,
+    /// How much quad size follows the prep remesh's local detail: 0 keeps
+    /// every quad the same size, 1 follows it fully (geometric blend between).
+    pub adaptivity: f64,
 }
 
 impl Default for QuadParams {
     fn default() -> Self {
-        Self { enabled: true, edge_scale: 0.75, regularity: quantize::DEFAULT_REGULARITY, smoothing: 20 }
+        Self {
+            enabled: true,
+            edge_scale: 0.75,
+            regularity: quantize::DEFAULT_REGULARITY,
+            smoothing: 20,
+            adaptivity: 0.5,
+        }
     }
 }
 
@@ -88,12 +97,21 @@ pub struct QuadOutput {
     pub report: QuadReport,
 }
 
-/// Builds the quad mesh of `trace` with quads of edge length `edge`.
-/// `scales` (one `[along, across]` pair per face of the mesh the layout was
-/// traced on, indexed through `trace.source_face`) come from Quad Shape.
+/// Per-face inputs from the mesh the layout was traced on (indexed through
+/// `trace.source_face`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Sizing<'a> {
+    /// Quad Shape's `[along, across]` scales.
+    pub scales: Option<&'a [[f64; 2]]>,
+    /// Local quad-size multiplier (1 = the global size).
+    pub local: Option<&'a [f64]>,
+}
+
+/// Builds the quad mesh of `trace` with quads of edge length `edge` (times
+/// the local multiplier where `sizing` has one).
 pub fn compute(
     trace: &TraceOutput,
-    scales: Option<&[[f64; 2]]>,
+    sizing: Sizing<'_>,
     edge: f64,
     params: &QuadParams,
     control: &Control,
@@ -124,14 +142,13 @@ pub fn compute(
         }
     }
     let segs = if excluded.contains(&true) { segments::build(trace, &excluded) } else { first };
-    let targets = targets(trace, &segs, scales, edge);
+    let targets = targets(trace, &segs, sizing, edge);
     let counts = quantize::quantize(&segs, &targets, params.regularity, control)?;
     control.set_progress(stage, 1.0);
 
     control.checkpoint(Stage::Patterns)?;
     let mut out = Assembly::new(trace, &segs, &counts);
     let mut report = QuadReport { segments: segs.segments.len(), edge_length: edge, ..QuadReport::default() };
-    out.create_midpoints();
     for (p, faces) in faces_of.iter().enumerate() {
         if p % 64 == 0 {
             control.checkpoint(Stage::Patterns)?;
@@ -145,7 +162,7 @@ pub fn compute(
                 PatternKind::Fan => report.fan_patches += 1,
             },
             None => {
-                out.keep_triangles(p, faces);
+                out.split_triangles(p, faces);
                 report.kept_patches += 1;
             }
         }
@@ -154,6 +171,7 @@ pub fn compute(
     let (mut mesh, patch_of_face, fixed, quads, triangles) = out.finish();
     control.checkpoint(Stage::Smooth)?;
     smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing);
+    check_output(&mesh)?;
     report.quads = quads;
     report.triangles = triangles;
     control.set_progress(Stage::Patterns, 1.0);
@@ -190,18 +208,54 @@ fn mappable(trace: &TraceOutput, segs: &Segments, sides: &[Vec<(u32, bool)>], fa
     PatchMap::new(&trace.mesh.positions, &trace.mesh.triangles, faces, &boundary).is_some()
 }
 
-/// The ideal quad count of every segment: its length over `edge`, measured
-/// with the frame's per-face scales when given.
-fn targets(trace: &TraceOutput, segs: &Segments, scales: Option<&[[f64; 2]]>, edge: f64) -> Vec<f64> {
-    let mesh = &trace.mesh;
-    let mut face_of: HashMap<(u32, u32), u32> = HashMap::new();
-    if scales.is_some() {
-        for (f, t) in mesh.triangles.iter().enumerate() {
-            for i in 0..3 {
-                face_of.insert((t[i], t[(i + 1) % 3]), f as u32);
+/// A last guard before the mesh leaves the stage: finite positions, faces of
+/// at least 3 distinct vertices, and no edge in more than two faces. A failure
+/// is a bug; the pipeline then shows the layout instead of a broken mesh.
+fn check_output(mesh: &PolyMesh) -> Result<(), Error> {
+    let bad = |m: &str| Err(Error::internal(Stage::Patterns, format!("quad mesh check failed: {m}")));
+    if mesh.positions.iter().any(|p| !p.is_finite()) {
+        return bad("non-finite vertex");
+    }
+    let mut uses: HashMap<(u32, u32), u8> = HashMap::with_capacity(mesh.face_indices.len());
+    for w in mesh.face_offsets.windows(2) {
+        let face = mesh.face_indices.get(w[0] as usize..w[1] as usize).unwrap_or_default();
+        if face.len() < 3 || face.iter().any(|&v| v as usize >= mesh.positions.len()) {
+            return bad("malformed face");
+        }
+        for (i, &a) in face.iter().enumerate() {
+            if face[i + 1..].contains(&a) {
+                return bad("face repeats a vertex");
+            }
+            let b = face[(i + 1) % face.len()];
+            let n = uses.entry((a.min(b), a.max(b))).or_default();
+            *n += 1;
+            if *n > 2 {
+                return bad("edge in more than two faces");
             }
         }
     }
+    Ok(())
+}
+
+/// The ideal quad count of every segment: its length over the local quad
+/// size, measured with the frame's per-face scales when given.
+fn targets(trace: &TraceOutput, segs: &Segments, sizing: Sizing<'_>, edge: f64) -> Vec<f64> {
+    let mesh = &trace.mesh;
+    let scales = sizing.scales;
+    let mut face_of: HashMap<(u32, u32), u32> = HashMap::new();
+    for (f, t) in mesh.triangles.iter().enumerate() {
+        for i in 0..3 {
+            face_of.insert((t[i], t[(i + 1) % 3]), f as u32);
+        }
+    }
+    let local = |f: Option<u32>| -> f64 {
+        let multiplier = f
+            .and_then(|f| trace.source_face.get(f as usize))
+            .and_then(|&g| sizing.local.and_then(|l| l.get(g as usize)))
+            .copied()
+            .unwrap_or(1.0);
+        if multiplier.is_finite() && multiplier > 0.0 { multiplier } else { 1.0 }
+    };
     let position = |v: u32| mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
     segs.segments
         .iter()
@@ -211,13 +265,14 @@ fn targets(trace: &TraceOutput, segs: &Segments, scales: Option<&[[f64; 2]]>, ed
                 .windows(2)
                 .map(|w| {
                     let e = position(w[1]) - position(w[0]);
-                    let Some(scales) = scales else { return e.length() };
-                    let face = face_of.get(&(w[0], w[1])).or_else(|| face_of.get(&(w[1], w[0])));
-                    let Some(&f) = face else { return e.length() };
+                    let face = face_of.get(&(w[0], w[1])).or_else(|| face_of.get(&(w[1], w[0]))).copied();
+                    let size = local(face);
+                    let Some(scales) = scales else { return e.length() / size };
+                    let Some(f) = face else { return e.length() / size };
                     let (Some(&d), Some(t)) =
                         (mesh.directions.get(f as usize), mesh.triangles.get(f as usize))
                     else {
-                        return e.length();
+                        return e.length() / size;
                     };
                     let [a, b, c] = t.map(position);
                     let normal = (b - a).cross(c - a).normalize_or_zero();
@@ -229,7 +284,7 @@ fn targets(trace: &TraceOutput, segs: &Segments, scales: Option<&[[f64; 2]]>, ed
                         .copied()
                         .filter(|s| s.iter().all(|v| v.is_finite() && *v > 0.0))
                         .unwrap_or([1.0, 1.0]);
-                    (e.dot(d) * sx).hypot(e.dot(across) * sy)
+                    (e.dot(d) * sx).hypot(e.dot(across) * sy) / size
                 })
                 .sum();
             (length / edge).max(1e-6)
@@ -252,9 +307,11 @@ struct Assembly<'a> {
     fixed: Vec<bool>,
     /// Mesh vertices on a feature line or the border.
     feature_vertex: std::collections::HashSet<u32>,
+    /// Mesh edges on a feature line or the border.
+    sharp_edges: std::collections::HashSet<(u32, u32)>,
     /// Segments along a feature line or the border.
     feature_segment: Vec<bool>,
-    /// Extra midpoint vertices on mesh edges (polyline segments' parity samples).
+    /// Midpoint vertices of mesh edges (patches split from triangles, and the polyline segments around them).
     midpoints: HashMap<(u32, u32), u32>,
     quads: usize,
     triangles: usize,
@@ -289,6 +346,7 @@ impl<'a> Assembly<'a> {
             trace.mesh.feature_edges.iter().map(|&[a, b]| (a.min(b), a.max(b))).collect();
         sharp.extend(uses.iter().filter(|&(_, &n)| n == 1).map(|(&e, _)| e));
         let feature_vertex = sharp.iter().flat_map(|&(a, b)| [a, b]).collect();
+        let sharp_edges = sharp.clone();
         let feature_segment = segs
             .segments
             .iter()
@@ -311,6 +369,7 @@ impl<'a> Assembly<'a> {
             by_sample: HashMap::new(),
             fixed: Vec::new(),
             feature_vertex,
+            sharp_edges,
             feature_segment,
             midpoints: HashMap::new(),
             quads: 0,
@@ -347,25 +406,14 @@ impl<'a> Assembly<'a> {
             return self.mesh_vertex(segment.vertices[last]);
         }
         if segment.polyline {
-            // Sampled at its mesh vertices, plus the midpoint of its longest edge
-            // if quantization gave it one extra sample (for parity).
+            // Sampled at its mesh vertices (even k) and its edge midpoints (odd k),
+            // matching the kept patch's triangles split into quads.
             let k = k as usize;
-            return match self.split_edge(s) {
-                Some(j) if k == j + 1 => {
-                    if let Some(&id) = self.by_sample.get(&(s, k as u32)) {
-                        return id;
-                    }
-                    let (a, b) = (segment.vertices[j], segment.vertices[j + 1]);
-                    let position =
-                        |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
-                    let id = self.push(position(a).lerp(position(b), 0.5), true);
-                    self.by_sample.insert((s, k as u32), id);
-                    self.midpoints.insert((a.min(b), a.max(b)), id);
-                    id
-                }
-                Some(j) if k > j + 1 => self.mesh_vertex(segment.vertices[(k - 1).min(last)]),
-                _ => self.mesh_vertex(segment.vertices[k.min(last)]),
-            };
+            if k % 2 == 0 {
+                return self.mesh_vertex(segment.vertices[(k / 2).min(last)]);
+            }
+            let j = (k / 2).min(last.saturating_sub(1));
+            return self.midpoint(segment.vertices[j], segment.vertices[j + 1]);
         }
         if let Some(&id) = self.by_sample.get(&(s, k)) {
             return id;
@@ -502,46 +550,38 @@ impl<'a> Assembly<'a> {
         edges
     }
 
-    /// The edge (index along the canonical vertices) that a polyline segment
-    /// splits for its extra sample: its longest, if it has one.
-    fn split_edge(&self, s: u32) -> Option<usize> {
-        let segment = &self.segs.segments[s as usize];
-        if (self.counts[s as usize] as usize) < segment.vertices.len() {
-            return None;
+    /// The output vertex at the midpoint of mesh edge (a, b), shared by every
+    /// face and segment that uses it.
+    fn midpoint(&mut self, a: u32, b: u32) -> u32 {
+        let key = (a.min(b), a.max(b));
+        if let Some(&id) = self.midpoints.get(&key) {
+            return id;
         }
-        let arc = &self.arc[s as usize];
-        (0..segment.vertices.len() - 1)
-            .max_by(|&i, &j| (arc[i + 1] - arc[i]).total_cmp(&(arc[j + 1] - arc[j])))
+        let position = |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
+        let id = self.push(position(a).lerp(position(b), 0.5), self.sharp_edges.contains(&key));
+        self.midpoints.insert(key, id);
+        id
     }
 
-    /// Creates the extra midpoint samples of polyline segments, so the kept
-    /// triangles next to them can include them.
-    fn create_midpoints(&mut self) {
-        for s in 0..self.segs.segments.len() as u32 {
-            if self.segs.segments[s as usize].polyline
-                && let Some(j) = self.split_edge(s)
-            {
-                self.sample(s, j as u32 + 1);
-            }
-        }
-    }
-
-    fn keep_triangles(&mut self, p: usize, faces: &[u32]) {
+    /// The fallback for a patch no pattern fills: each of its triangles splits
+    /// into 3 quads through its edge midpoints and centroid. The segments
+    /// around it are sampled at those same midpoints, so the mesh stays
+    /// watertight and all-quad.
+    fn split_triangles(&mut self, p: usize, faces: &[u32]) {
         for &f in faces {
             let Some(&t) = self.trace.mesh.triangles.get(f as usize) else { continue };
-            // A triangle whose edge got an extra sample becomes a polygon through it.
-            let mut face = Vec::with_capacity(4);
+            let corner = t.map(|v| self.mesh_vertex(v));
+            let mid = [0, 1, 2].map(|i| self.midpoint(t[i], t[(i + 1) % 3]));
+            let position = |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
+            let centroid = self.push(t.iter().map(|&v| position(v)).sum::<DVec3>() / 3.0, false);
+            // Counter-clockwise like the triangle: corner, its outgoing midpoint, centroid, its incoming midpoint.
             for i in 0..3 {
-                let (a, b) = (t[i], t[(i + 1) % 3]);
-                face.push(self.mesh_vertex(a));
-                if let Some(&m) = self.midpoints.get(&(a.min(b), a.max(b))) {
-                    face.push(m);
-                }
+                let quad = [corner[i], mid[i], centroid, mid[(i + 2) % 3]];
+                self.face_indices.extend_from_slice(&quad);
+                self.face_offsets.push(self.face_indices.len() as u32);
+                self.patch_of_face.push(p as u32);
+                self.quads += 1;
             }
-            self.face_indices.extend_from_slice(&face);
-            self.face_offsets.push(self.face_indices.len() as u32);
-            self.patch_of_face.push(p as u32);
-            self.triangles += 1;
         }
     }
 

@@ -103,4 +103,91 @@ pub fn smooth(
             .collect();
         mesh.positions = next;
     }
+    untangle(mesh, fixed, &neighbours, &patches, trace, &surface);
+}
+
+/// Rounds of untangling after smoothing.
+const UNTANGLE_ROUNDS: usize = 30;
+
+/// Quads with a corner that turns the wrong way against the surface (reflex
+/// or flipped) get their free vertices relaxed with full Laplacian steps (projected back onto their patches)
+/// until none is inverted or the rounds run out.
+fn untangle(
+    mesh: &mut PolyMesh,
+    fixed: &[bool],
+    neighbours: &[Vec<u32>],
+    patches: &[Vec<u32>],
+    trace: &TraceOutput,
+    surface: &TriangleBvh,
+) {
+    let tm = &trace.mesh;
+    let face_normal: Vec<DVec3> = tm
+        .triangles
+        .iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|v| tm.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO));
+            (b - a).cross(c - a).normalize_or_zero()
+        })
+        .collect();
+    let project = |v: usize, goal: DVec3| -> Option<(DVec3, DVec3)> {
+        let allowed: HashSet<u32> = patches[v].iter().copied().collect();
+        let (q, _, t) = surface.closest_triangle_where(goal, |t| {
+            trace.patch_of_face.get(t as usize).is_some_and(|p| allowed.contains(p))
+        })?;
+        Some((q, face_normal.get(t as usize).copied().unwrap_or(DVec3::ZERO)))
+    };
+    let faces: Vec<&[u32]> = mesh
+        .face_offsets
+        .windows(2)
+        .map(|w| mesh.face_indices.get(w[0] as usize..w[1] as usize).unwrap_or_default())
+        .collect();
+    for _ in 0..UNTANGLE_ROUNDS {
+        let positions = &mesh.positions;
+        let normals: Vec<DVec3> = (0..positions.len())
+            .into_par_iter()
+            .map(|v| project(v, positions[v]).map_or(DVec3::ZERO, |(_, n)| n))
+            .collect();
+        let mut tangled = vec![false; positions.len()];
+        let mut any = false;
+        for face in &faces {
+            if face.len() != 4 {
+                continue;
+            }
+            let q = [face[0], face[1], face[2], face[3]].map(|v| positions[v as usize]);
+            let normal = face.iter().map(|&v| normals[v as usize]).sum::<DVec3>();
+            // Tangled: a corner turns the wrong way against the surface (a reflex
+            // or flipped corner).
+            let reflex = (0..4).any(|k| {
+                let (prev, here, next) = (q[(k + 3) % 4], q[k], q[(k + 1) % 4]);
+                (next - here).cross(prev - here).dot(normal) <= 0.0
+            });
+            if reflex {
+                for &v in face.iter() {
+                    if !fixed.get(v as usize).copied().unwrap_or(true) {
+                        tangled[v as usize] = true;
+                        any = true;
+                    }
+                }
+            }
+        }
+        if !any {
+            break;
+        }
+        let next: Vec<DVec3> = (0..positions.len())
+            .into_par_iter()
+            .map(|v| {
+                let p = positions[v];
+                if !tangled[v] || neighbours[v].is_empty() {
+                    return p;
+                }
+                let average = neighbours[v].iter().map(|&u| positions[u as usize]).sum::<DVec3>()
+                    / neighbours[v].len() as f64;
+                match project(v, average) {
+                    Some((q, _)) if q.is_finite() => q,
+                    _ => p,
+                }
+            })
+            .collect();
+        mesh.positions = next;
+    }
 }
