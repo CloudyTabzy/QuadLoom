@@ -65,6 +65,7 @@ def start_job(context):
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
+    last.symmetry_summary = ""
     _active_job = job
     job.thread.start()
     return job
@@ -94,6 +95,7 @@ def finish_job(context, job):
             last.frame_summary = frame_summary(job.result.get("frame"))
             last.trace_summary = trace_summary(job.result.get("trace"))
             last.quad_summary = quad_summary(job.result.get("quads"), job.result.get("quad_error"))
+            last.symmetry_summary = symmetry_summary(job.result.get("symmetry"))
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -199,6 +201,20 @@ def quad_summary(quads, error=None):
     text += " (" + ", ".join(parts) + " patches)"
     if report["kept_patches"]:
         text += f"; {report['kept_patches']:,} patches kept as triangles"
+    return text
+
+
+def symmetry_summary(symmetry):
+    """One line about symmetry, e.g. "mirrored X, Z (auto, asymmetry 0.12%)"; empty when off."""
+    if not symmetry:
+        return ""
+    if symmetry.get("skipped"):
+        return f"symmetry skipped: {symmetry['skipped']}"
+    axes = [name for name, on in zip("XYZ", symmetry["axes"]) if on]
+    text = "mirrored " + ", ".join(axes)
+    measured = [a for a, on in zip(symmetry["asymmetry"], symmetry["axes"]) if on and a >= 0]
+    if measured:
+        text += f" (auto, asymmetry {100 * max(measured):.2f}%)"
     return text
 
 

@@ -10,6 +10,7 @@ use crate::frame::FrameParams;
 use crate::quad::QuadParams;
 use crate::remesh::RemeshParams;
 use crate::repair::RepairParams;
+use crate::symmetry::SymmetryParams;
 use crate::trace::TraceParams;
 
 /// Largest allowed weld distance, as a fraction of the bbox diagonal. Above
@@ -40,6 +41,8 @@ pub struct Params {
     pub trace: TraceParams,
     /// Stages 5–6: quantization and quad patterns.
     pub quad: QuadParams,
+    /// Remesh one side of mirror planes and mirror the result.
+    pub symmetry: SymmetryParams,
     /// Test-only fault to inject (see [`crate::fault`]).
     #[cfg(feature = "fault-injection")]
     pub fault: Option<Fault>,
@@ -56,6 +59,7 @@ impl Default for Params {
             frame: FrameParams::default(),
             trace: TraceParams::default(),
             quad: QuadParams::default(),
+            symmetry: SymmetryParams::default(),
             #[cfg(feature = "fault-injection")]
             fault: None,
         }
@@ -164,6 +168,10 @@ impl Params {
         }
         if !(q.adaptivity.is_finite() && (0.0..=1.0).contains(&q.adaptivity)) {
             return bad(format!("quad.adaptivity must be between 0 and 1 (got {})", q.adaptivity));
+        }
+        let sym = &self.symmetry;
+        if !(sym.tolerance.is_finite() && (0.0..=0.1).contains(&sym.tolerance)) {
+            return bad(format!("symmetry.tolerance must be between 0 and 0.1 (got {})", sym.tolerance));
         }
         if q.smoothing > 100 {
             return bad(format!("quad.smoothing must be at most 100 (got {})", q.smoothing));

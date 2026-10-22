@@ -60,7 +60,10 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                     (last.frame_summary, "MOD_SIMPLEDEFORM"),
                     (last.trace_summary, "MOD_LATTICE"),
                     (last.quad_summary, "MESH_GRID"),
+                    (last.symmetry_summary, "MOD_MIRROR"),
                 ):
+                    if not summary:
+                        continue
                     for n, line in enumerate(_wrap(summary)):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
             if last.status != "RUNNING":
@@ -194,6 +197,25 @@ class QUADLOOM_PT_quads(_SubPanel, bpy.types.Panel):
         layout.prop(settings, "quad_adaptivity")
 
 
+class QUADLOOM_PT_symmetry(_SubPanel, bpy.types.Panel):
+    bl_label = "Symmetry"
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.use_property_split = True
+        row = layout.row(heading="Axes", align=True)
+        row.active = not settings.symmetry_auto
+        row.prop(settings, "symmetry_x", toggle=True)
+        row.prop(settings, "symmetry_y", toggle=True)
+        row.prop(settings, "symmetry_z", toggle=True)
+        layout.prop(settings, "symmetry_auto")
+        sub = layout.column()
+        sub.active = settings.symmetry_auto
+        sub.prop(settings, "symmetry_tolerance")
+        layout.prop(settings, "symmetry_flip")
+
+
 class QUADLOOM_PT_features(_SubPanel, bpy.types.Panel):
     bl_label = "Sharp Features"
 
@@ -260,5 +282,6 @@ classes = (
     QUADLOOM_PT_shape,
     QUADLOOM_PT_layout,
     QUADLOOM_PT_quads,
+    QUADLOOM_PT_symmetry,
     QUADLOOM_PT_advanced,
 )

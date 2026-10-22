@@ -115,6 +115,18 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         None => dict.set_item("quads", py.None())?,
     }
     dict.set_item("quad_error", output.quad_error.as_deref())?;
+    match &output.symmetry {
+        Some(s) => {
+            let report = PyDict::new(py);
+            report.set_item("axes", s.axes.to_vec())?;
+            report.set_item("offsets", s.offsets.to_vec())?;
+            report.set_item("asymmetry", s.asymmetry.to_vec())?;
+            report.set_item("seam_edges", s.seam_edges)?;
+            report.set_item("skipped", s.skipped.as_deref())?;
+            dict.set_item("symmetry", report)?;
+        }
+        None => dict.set_item("symmetry", py.None())?,
+    }
     let timings: Vec<(&str, f64)> = output.timings_ms.iter().map(|(s, ms)| (s.name(), *ms)).collect();
     dict.set_item("timings_ms", timings)?;
     Ok(dict)

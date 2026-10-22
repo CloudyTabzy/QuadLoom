@@ -17,6 +17,7 @@ use crate::quad::{self, QuadOutput};
 use crate::remesh::{self, RemeshReport};
 use crate::repair::RepairedMesh;
 use crate::repair::{RepairReport, repair};
+use crate::symmetry::{self, SymmetryReport};
 use crate::trace::{self, TraceOutput};
 use crate::validate::{ValidationReport, validate};
 
@@ -45,6 +46,9 @@ pub struct RunOutput {
     /// Why the quad stages produced nothing, if they failed (the run still
     /// succeeds, with the layout as its result).
     pub quad_error: Option<String>,
+    /// What symmetry did, if it was requested. With symmetry the quad mesh
+    /// is mirrored; the prep mesh and layout stay one side.
+    pub symmetry: Option<SymmetryReport>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -76,7 +80,7 @@ pub fn run(
 
     let started = Instant::now();
     fault::inject(params, Stage::Repair, control)?;
-    let (repaired, components, repair_report) = repair(&mesh, &params.repair, control)?;
+    let (mut repaired, mut components, repair_report) = repair(&mesh, &params.repair, control)?;
     if repaired.triangles.is_empty() {
         return Err(Error::invalid_input(
             Stage::Repair,
@@ -94,7 +98,39 @@ pub fn run(
     let started = Instant::now();
     control.checkpoint(Stage::Features)?;
     fault::inject(params, Stage::Features, control)?;
-    let (feature_set, feature_report) = features::detect(&repaired, feature_input, &params.features);
+    // Symmetry: keep one side of the planes; the cut becomes a feature line.
+    let (mut planes, mut seam) = (Vec::new(), Vec::new());
+    let symmetry_report = params.symmetry.enabled().then(|| {
+        let (found, mut report) =
+            symmetry::planes(&repaired.positions, &repaired.triangles, &params.symmetry);
+        if !found.is_empty() {
+            match symmetry::cut(&repaired, &found, params.symmetry.keep_negative) {
+                Some((half, seam_edges)) => {
+                    components = crate::components::split(&half.triangles, half.positions.len());
+                    repaired = half;
+                    report.seam_edges = seam_edges.len();
+                    seam = seam_edges;
+                    planes = found;
+                }
+                None => {
+                    report.axes = [false; 3];
+                    report.skipped = Some("nothing lies on the kept side of the plane".into());
+                }
+            }
+        }
+        report
+    });
+    let (mut feature_set, feature_report) = features::detect(&repaired, feature_input, &params.features);
+    // The seam is always a feature line, whatever the feature settings.
+    for &[a, b] in &seam {
+        match feature_set.edges.binary_search_by_key(&[a, b], |e| e.v) {
+            Ok(i) => feature_set.edges[i].sources |= features::source::BOUNDARY,
+            Err(i) => feature_set.edges.insert(
+                i,
+                features::FeatureEdge { v: [a, b], sources: features::source::BOUNDARY, convex: true },
+            ),
+        }
+    }
     control.set_progress(Stage::Features, 1.0);
     timings_ms.push((Stage::Features, elapsed_ms(started)));
 
@@ -191,6 +227,12 @@ pub fn run(
         _ => None,
     };
 
+    // Symmetry: mirror the quad mesh across the planes and weld the seam.
+    let quads = match quads {
+        Some(q) if !planes.is_empty() => Some(mirror_quads(q, &planes)),
+        other => other,
+    };
+
     let started = Instant::now();
     control.checkpoint(Stage::Output)?;
     fault::inject(params, Stage::Output, control)?;
@@ -216,6 +258,7 @@ pub fn run(
         trace,
         quads,
         quad_error,
+        symmetry: symmetry_report,
         timings_ms,
     })
 }
@@ -369,6 +412,27 @@ pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) ->
         return Err(Error::invalid_input(stage, "mesh is too large to index with 32-bit indices"));
     }
     Ok(())
+}
+
+/// The quad mesh mirrored across `planes`, seam vertices welded.
+fn mirror_quads(q: QuadOutput, planes: &[symmetry::Plane]) -> QuadOutput {
+    let m = symmetry::mirror(
+        &q.mesh.positions,
+        &q.mesh.face_offsets,
+        &q.mesh.face_indices,
+        &q.feature_edges,
+        planes,
+    );
+    let patch_of_face =
+        m.source.iter().map(|&f| q.patch_of_face.get(f as usize).copied().unwrap_or(0)).collect();
+    let mut report = q.report;
+    report.quads = m.offsets.len().saturating_sub(1);
+    QuadOutput {
+        mesh: PolyMesh { positions: m.positions, face_offsets: m.offsets, face_indices: m.indices },
+        patch_of_face,
+        feature_edges: m.edges,
+        report,
+    }
 }
 
 /// Per-face quad-size multiplier from the prep remesh's local detail: the

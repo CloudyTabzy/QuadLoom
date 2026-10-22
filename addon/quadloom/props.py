@@ -246,6 +246,29 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=2,
     )
 
+    # --- Symmetry -----------------------------------------------------------------
+    symmetry_x: BoolProperty(name="X", description="Remesh one side of the X mirror plane and mirror it", default=False)
+    symmetry_y: BoolProperty(name="Y", description="Remesh one side of the Y mirror plane and mirror it", default=False)
+    symmetry_z: BoolProperty(name="Z", description="Remesh one side of the Z mirror plane and mirror it", default=False)
+    symmetry_auto: BoolProperty(
+        name="Auto Detect",
+        description="Find the mirror planes the mesh is symmetric about (through the origin or the bounding-box center)",
+        default=False,
+    )
+    symmetry_flip: BoolProperty(
+        name="Keep Negative Side",
+        description="Remesh the negative side of each plane and mirror it, instead of the positive side",
+        default=False,
+    )
+    symmetry_tolerance: FloatProperty(
+        name="Tolerance",
+        description="Largest asymmetry Auto Detect accepts, as a fraction of the object's size",
+        default=0.005,
+        min=0.0,
+        max=0.1,
+        precision=3,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
@@ -336,6 +359,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     frame_summary: StringProperty(name="Shape")
     trace_summary: StringProperty(name="Layout")
     quad_summary: StringProperty(name="Quads")
+    symmetry_summary: StringProperty(name="Symmetry")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
@@ -407,5 +431,13 @@ def run_params(settings):
             "enabled": settings.quad_enabled,
             "edge_scale": settings.quad_size,
             "adaptivity": settings.quad_adaptivity,
+        },
+        "symmetry": {
+            "x": settings.symmetry_x,
+            "y": settings.symmetry_y,
+            "z": settings.symmetry_z,
+            "auto_detect": settings.symmetry_auto,
+            "keep_negative": settings.symmetry_flip,
+            "tolerance": settings.symmetry_tolerance,
         },
     }

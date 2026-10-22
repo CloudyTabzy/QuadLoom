@@ -22,6 +22,7 @@ pub mod quad;
 pub mod remesh;
 pub mod repair;
 pub mod spatial;
+pub mod symmetry;
 #[cfg(test)]
 mod testmesh;
 pub mod trace;
@@ -41,5 +42,6 @@ pub use pipeline::{RunOutput, check_limits, run};
 pub use quad::{QuadOutput, QuadParams, QuadReport};
 pub use remesh::{RemeshParams, RemeshReport};
 pub use repair::{RepairParams, RepairReport, RepairedMesh, repair};
+pub use symmetry::{SymmetryParams, SymmetryReport};
 pub use trace::{PatchKind, TraceCost, TraceOutput, TraceParams, TraceReport};
 pub use validate::ValidationReport;
