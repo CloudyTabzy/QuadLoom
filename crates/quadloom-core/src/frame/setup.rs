@@ -23,6 +23,9 @@ use crate::trace::graph::CANCEL_EVERY;
 const DEGENERATE_AREA: f64 = 1e-12;
 /// A face with a corner angle below this (radians) is degenerate.
 const DEGENERATE_ANGLE: f64 = 1e-4;
+/// A border vertex whose interior angle sum differs from π by more than this
+/// (radians) is a cone: a sharp rim corner (30°).
+const BORDER_CORNER: f64 = PI / 6.0;
 
 /// An interior edge `{a, b}` with `a < b`, seen from its two faces: `f`
 /// traverses `a → b` as its corner `cf`, and `g` traverses `b → a` as its
@@ -207,10 +210,33 @@ impl FrameMesh {
         }
 
         let (corner_sign, odd) = corner_signs(triangles, nv, &edges, &edge_index, &halfedge_of, control)?;
-        // A cone is a field singularity or an odd vertex. Its one-ring carries no
-        // integrability constraint: the frame is singular there anyway, and the
-        // discrete equations around clustered cones are ill-posed.
-        let cone: Vec<bool> = singular.iter().zip(&odd).map(|(&s, &o)| s || o).collect();
+        // Border vertices carry no field index, so a sharp rim corner is a cone too:
+        // on the border, the interior angle sum should be π; if it differs by more
+        // than BORDER_CORNER, the corner is singular in the frame's sense.
+        let mut angle_sum = vec![0.0; nv];
+        let mut on_border = vec![false; nv];
+        for (f, t) in triangles.iter().enumerate() {
+            for c in 0..3usize {
+                if let Some(sum) = angle_sum.get_mut(t[c] as usize) {
+                    *sum += alpha[f][c];
+                }
+                let (p, q) = (t[c], t[(c + 1) % 3]);
+                if !halfedge_of.contains_key(&(q, p)) {
+                    for v in [p, q] {
+                        if let Some(flag) = on_border.get_mut(v as usize) {
+                            *flag = true;
+                        }
+                    }
+                }
+            }
+        }
+        let border_cone =
+            on_border.iter().zip(&angle_sum).map(|(&b, &s)| b && (s - PI).abs() > BORDER_CORNER);
+        // A cone is a field singularity, an odd vertex or a sharp border corner. Its
+        // one-ring carries no integrability constraint: the frame is singular there
+        // anyway, and the discrete equations around clustered cones are ill-posed.
+        let cone: Vec<bool> =
+            singular.iter().zip(&odd).zip(border_cone).map(|((&s, &o), b)| s || o || b).collect();
         let is_cone = |v: u32| cone.get(v as usize).copied().unwrap_or(false);
         for (f, t) in triangles.iter().enumerate() {
             if t.iter().any(|&v| is_cone(v)) {
@@ -543,6 +569,25 @@ mod tests {
         assert_eq!(actual.len(), 8, "the cube's 8 corners are the odd singularities");
 
         assert!(mesh.corner_sign.iter().flatten().all(|&s| s == 1 || s == -1));
+    }
+
+    #[test]
+    fn sharp_border_corners_are_cones() {
+        // grid(4, 4): vertex id = 5j + i. The corners 0, 4, 20, 24 have an angle sum
+        // of π/2; the mid-side vertex 2 has π. The diagonal 0–6 is interior and would
+        // be free if corner 0 were not a cone.
+        let (p, t) = testmesh::grid(4, 4);
+        let directions = vec![DVec3::X; t.len()];
+        let mesh =
+            FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &Control::default()).unwrap();
+        for corner in [0u32, 4, 20, 24] {
+            let touched = mesh.free.iter().any(|&e| mesh.edges[e].a == corner || mesh.edges[e].b == corner);
+            assert!(!touched, "a free edge touches corner {corner}");
+        }
+        let diagonal = mesh.edges.iter().position(|e| (e.a, e.b) == (0, 6)).expect("the corner diagonal");
+        assert!(!mesh.free.contains(&diagonal), "the corner diagonal is free");
+        let mid_side = mesh.free.iter().any(|&e| mesh.edges[e].a == 2 || mesh.edges[e].b == 2);
+        assert!(mid_side, "mid-side vertex 2 should not be a cone");
     }
 
     #[test]

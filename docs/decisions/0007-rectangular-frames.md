@@ -65,7 +65,8 @@ Add **stage 3b, "frame"** (`crates/quadloom-core/src/frame/`), between the cross
   - the conformal map e^z with θ sampled at circumcenters gives a residual of 1e-15;
   - the analytic Jacobian and Hessian match finite differences to 1e-10.
 - **Odd singularities pin v = 0** instead of leaving one inconsistent edge per such vertex, as the MATLAB's corner reduction does.
-- **Cone one-rings carry no integrability constraint.** A cone is a field singularity or an odd vertex. No edge touching a cone is free, and every face with a cone corner is held at θ = 0. The frame is singular there anyway, and the discrete equations in a clustered cone's one-ring are ill-posed. A bounded stall stop (5 steps, 1% merit drop) also ends a solve that cannot converge, so it falls back quickly.
+- **Cone one-rings carry no integrability constraint.** A cone is a field singularity, an odd vertex, or a sharp border corner (a border vertex whose interior angle sum differs from π by more than 30°; border vertices carry no field index, so tight rim corners were missed before). No edge touching a cone is free, and every face with a cone corner is held at θ = 0. The frame is singular there anyway, and the discrete equations in a clustered cone's one-ring are ill-posed. A bounded stall stop (3 steps, 10% merit drop) also ends a solve that cannot converge, so it falls back quickly.
+- **Limits.** On models with open borders or noisy fields the constrained problem is often infeasible. The paper notes that over-constrained boundaries make the system unsolvable; its cure, automatic cone placement, is deferred. Those parts keep the regular field and are reported as fallback.
 - **Regularized KKT** (−δI, δ = 1e-10) instead of a `quadprog` fallback. It covers the one dependent constraint per closed featureless part, and the free gauges (the u constant when w_u = 0, a global θ rotation).
 - **Not taken:**
   - automatic cone placement (our field already places singularities);

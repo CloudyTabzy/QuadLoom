@@ -21,6 +21,8 @@ pub mod residual;
 pub mod setup;
 pub mod solve;
 
+use std::f64::consts::FRAC_PI_2;
+
 use glam::DVec3;
 use rayon::prelude::*;
 
@@ -62,7 +64,7 @@ impl Default for FrameParams {
             stretch_weight: 1.0,
             align_weight: 0.0,
             smoothness: 0.01,
-            max_iterations: 30,
+            max_iterations: 20,
             max_part_faces: 300_000,
         }
     }
@@ -84,7 +86,8 @@ pub struct FrameReport {
     pub iterations: usize,
     /// Largest |F|∞ over solved parts.
     pub residual: f64,
-    /// Largest rotation |θ| over solved faces, in degrees.
+    /// Largest rotation over solved faces, in degrees, modulo the cross symmetry:
+    /// the distance from θ to the nearest multiple of 90°, so the value is in [0, 45].
     pub max_rotation_deg: f64,
     /// 5th percentile of the relative quad size e^{−ū} over solved faces.
     pub size_p5: f64,
@@ -272,7 +275,10 @@ pub fn compute(
                     if let Some(slot) = out.scales.get_mut(fi) {
                         *slot = scale;
                     }
-                    report.max_rotation_deg = report.max_rotation_deg.max(theta.abs().to_degrees());
+                    // A cross field is invariant under quarter turns, so measure θ mod 90°.
+                    let quarter = theta.rem_euclid(FRAC_PI_2);
+                    let offset = quarter.min(FRAC_PI_2 - quarter);
+                    report.max_rotation_deg = report.max_rotation_deg.max(offset.to_degrees());
                     let ub = 0.5 * (scale[0].ln() + scale[1].ln());
                     let vb = 0.5 * (scale[0].ln() - scale[1].ln());
                     sizes.push((-ub).exp());
