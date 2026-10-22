@@ -9,6 +9,7 @@
 pub mod cut;
 pub mod graph;
 pub mod refine;
+pub mod search;
 
 use glam::DVec3;
 

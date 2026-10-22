@@ -194,6 +194,30 @@ impl CutMesh {
         &self.fans[a..b]
     }
 
+    /// `v`'s neighbours counter-clockwise (for a boundary vertex, from the
+    /// end of its outgoing boundary edge to the start of its incoming one).
+    pub fn neighbours(&self, v: u32) -> Vec<u32> {
+        let fan = self.fan(v);
+        let mut ring: Vec<u32> = fan.iter().map(|&h| self.head(h)).collect();
+        if self.boundary[v as usize] {
+            if let Some(&last) = fan.last() {
+                ring.push(self.tail(Self::prev(last)));
+            }
+        }
+        ring
+    }
+
+    /// The half-edge `a → b`, if `a` and `b` share an edge (either way round
+    /// a boundary edge counts only as `a → b` in its own face).
+    pub fn half_edge(&self, a: u32, b: u32) -> Option<u32> {
+        self.fan(a).iter().copied().find(|&h| self.head(h) == b)
+    }
+
+    /// Whether `a`–`b` is an edge with a face on both sides.
+    pub fn is_interior_edge(&self, a: u32, b: u32) -> bool {
+        self.half_edge(a, b).is_some_and(|h| self.twin(h).is_some())
+    }
+
     /// Boundary half-edges, ascending; each leaves one boundary vertex.
     pub fn boundary_half_edges(&self) -> impl Iterator<Item = u32> + '_ {
         (0..self.twin.len() as u32).filter(|&h| self.twin[h as usize] == NONE)
