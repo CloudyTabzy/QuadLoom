@@ -20,6 +20,9 @@ faer = { version = "0.24.4", default-features = false, features = ["std", "spars
 # foldhash-backed SwissTable maps: much faster than std's SipHash on our integer keys,
 # plus HashTable for maps whose key can be recomputed from the value.
 hashbrown = { version = "0.17.1", default-features = false, features = ["default-hasher", "inline-more"] }
+# Inline small vectors (a vertex's fan and ring) so mesh edits don't allocate;
+# tinyvec rather than smallvec because it is itself forbid(unsafe_code).
+tinyvec = { version = "1.13.3", features = ["alloc", "rustc_1_61"] }
 thiserror = "2.0.21"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

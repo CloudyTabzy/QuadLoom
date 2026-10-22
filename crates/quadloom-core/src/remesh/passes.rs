@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use super::Projector;
 use crate::control::Control;
-use crate::edit::{EditMesh, HalfEdge, VertexKind};
+use crate::edit::{EditMesh, HalfEdge, Ring, VertexKind};
 use crate::spatial::closest_point_on_triangle;
 
 const SPLIT_ABOVE: f64 = 4.0 / 3.0;
@@ -241,8 +241,8 @@ impl Pass<'_> {
     }
 
     /// The faces around any of `vertices`, each once.
-    fn faces_around_all(&self, vertices: &[u32]) -> Vec<u32> {
-        let mut faces: Vec<u32> = Vec::with_capacity(16);
+    fn faces_around_all(&self, vertices: &[u32]) -> Ring<u32> {
+        let mut faces = Ring::new();
         for &v in vertices {
             for f in self.mesh.faces_around(v) {
                 if !faces.contains(&f) {
@@ -421,7 +421,7 @@ fn smoothing_target(mesh: &EditMesh, projector: &Projector, v: u32) -> Option<DV
     match mesh.kind(v) {
         VertexKind::Corner => None,
         VertexKind::Free => {
-            let ring: Vec<u32> = mesh.one_ring(v).collect();
+            let ring: Ring<u32> = mesh.one_ring(v).collect();
             if ring.is_empty() {
                 return None;
             }

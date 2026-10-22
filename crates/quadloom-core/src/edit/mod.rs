@@ -9,6 +9,7 @@
 
 use hashbrown::{DefaultHashBuilder, HashMap, HashSet, HashTable};
 use std::hash::BuildHasher;
+use tinyvec::TinyVec;
 
 pub use glam::DVec3;
 
@@ -66,6 +67,9 @@ impl EdgeTable {
 }
 
 const NONE: u32 = u32::MAX;
+/// A vertex's fan or ring, or the faces of one edit: held inline up to 16
+/// (typical valence is 6), so the remesher's hot paths don't allocate.
+pub type Ring<T> = TinyVec<[T; 16]>;
 /// A feature vertex whose two feature edges turn by more than this (from
 /// straight) is a corner: it must never move, or smoothing would round it off.
 pub const CORNER_TURN_DEG: f64 = 35.0;
@@ -84,7 +88,7 @@ pub enum VertexKind {
 }
 
 /// A half-edge id: half-edge `i` of face `f` is `3f + i`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HalfEdge(pub u32);
 
 #[derive(Clone, Debug)]
@@ -115,6 +119,12 @@ pub struct EditMesh {
     /// released once the surface is clean enough to judge them (see
     /// [`release_flat_soft_features`](Self::release_flat_soft_features)).
     soft: HashSet<(u32, u32)>,
+}
+
+/// Drops repeats from a sorted list (`TinyVec` has no `dedup`).
+fn dedup_sorted<A: tinyvec::Array<Item = u32>>(list: &mut TinyVec<A>) {
+    let mut last = None;
+    list.retain(|&x| last.replace(x) != Some(x));
 }
 
 fn key(a: u32, b: u32) -> (u32, u32) {
@@ -325,8 +335,8 @@ impl EditMesh {
 
     /// Outgoing half-edges of `v` in fan order; for a boundary vertex the fan
     /// starts at its outgoing boundary half-edge.
-    fn fan(&self, v: u32) -> Vec<HalfEdge> {
-        let Some(&start) = self.out.get(v as usize).filter(|&&h| h != NONE) else { return Vec::new() };
+    fn fan(&self, v: u32) -> Ring<HalfEdge> {
+        let Some(&start) = self.out.get(v as usize).filter(|&&h| h != NONE) else { return Ring::new() };
         let mut first = HalfEdge(start);
         for _ in 0..MAX_FAN {
             let Some(t) = self.twin(first) else { break };
@@ -336,7 +346,8 @@ impl EditMesh {
             }
             first = back;
         }
-        let mut fan = vec![first];
+        let mut fan = Ring::new();
+        fan.push(first);
         let mut h = first;
         while fan.len() < MAX_FAN {
             let Some(t) = self.twin(self.prev(h)) else { break };
@@ -350,9 +361,9 @@ impl EditMesh {
     }
 
     /// Neighbouring vertices of `v`, in fan order.
-    pub fn one_ring(&self, v: u32) -> std::vec::IntoIter<u32> {
+    pub fn one_ring(&self, v: u32) -> tinyvec::TinyVecIterator<[u32; 16]> {
         let fan = self.fan(v);
-        let mut ring: Vec<u32> = fan.iter().map(|&h| self.to(h)).collect();
+        let mut ring: Ring<u32> = fan.iter().map(|&h| self.to(h)).collect();
         if let Some(&last) = fan.last()
             && self.twin(self.prev(last)).is_none()
         {
@@ -361,7 +372,7 @@ impl EditMesh {
         ring.into_iter()
     }
 
-    pub fn faces_around(&self, v: u32) -> Vec<u32> {
+    pub fn faces_around(&self, v: u32) -> Ring<u32> {
         self.fan(v).iter().map(|&h| self.face(h)).collect()
     }
 
@@ -376,7 +387,7 @@ impl EditMesh {
     }
 
     /// The vertex's feature neighbours.
-    pub fn feature_neighbours(&self, v: u32) -> Vec<u32> {
+    pub fn feature_neighbours(&self, v: u32) -> Ring<u32> {
         self.one_ring(v).filter(|&n| self.is_feature(v, n)).collect()
     }
 
@@ -603,17 +614,18 @@ impl EditMesh {
 
     // --- Operations ---------------------------------------------------------
 
-    /// Replaces faces atomically. Returns the new face ids, or `None` (and
+    /// Replaces faces atomically. Returns the new face ids (always a run of
+    /// fresh ids, in `add` order), or `None` (and
     /// changes nothing) if the result would have a repeated corner, a dead
     /// vertex, or a directed edge used twice.
     ///
     /// Each new face inherits the summed reference normals of the removed
     /// faces sharing the most corners with it (the face it was cut from, or
     /// both faces of a flip); with nothing removed it takes its own normal.
-    fn replace_faces(&mut self, remove: &[u32], add: &[[u32; 3]]) -> Option<Vec<u32>> {
+    fn replace_faces(&mut self, remove: &[u32], add: &[[u32; 3]]) -> Option<std::ops::Range<u32>> {
         // Neighbourhoods are tiny: linear scans beat hashing here.
         let removed = remove;
-        let mut seen: Vec<(u32, u32)> = Vec::with_capacity(add.len() * 3);
+        let mut seen: TinyVec<[(u32, u32); 48]> = TinyVec::with_capacity(add.len() * 3);
         for t in add {
             if t[0] == t[1]
                 || t[1] == t[2]
@@ -635,8 +647,8 @@ impl EditMesh {
 
         // Vertices that lose faces and get none back need a surviving face to
         // point at; find it before anything is removed.
-        let in_added: Vec<u32> = add.iter().flatten().copied().collect();
-        let mut relink: Vec<(u32, u32)> = Vec::new();
+        let in_added: TinyVec<[u32; 48]> = add.iter().flatten().copied().collect();
+        let mut relink: Ring<(u32, u32)> = Ring::new();
         for &f in remove {
             for v in self.corners[f as usize] {
                 if in_added.contains(&v) || relink.iter().any(|&(w, _)| w == v) {
@@ -663,7 +675,7 @@ impl EditMesh {
             self.face_alive[f as usize] = false;
             self.live_faces -= 1;
         }
-        let mut ids = Vec::with_capacity(add.len());
+        let first = self.corners.len() as u32;
         for t in add {
             let shared = |g: u32| self.corners[g as usize].iter().filter(|v| t.contains(v)).count();
             let most = remove.iter().map(|&g| shared(g)).max().unwrap_or(0);
@@ -686,12 +698,11 @@ impl EditMesh {
                 let alone = !self.directed.contains(&self.corners, b, a);
                 self.bump_boundary(a, b, alone, true);
             }
-            ids.push(f);
         }
         for (v, h) in relink {
             self.out[v as usize] = h;
         }
-        Some(ids)
+        Some(first..self.corners.len() as u32)
     }
 
     /// Keeps `boundary_degree` current when half-edge `a -> b` is added or
@@ -721,8 +732,8 @@ impl EditMesh {
         self.face_degree.push(0);
         self.boundary_degree.push(0);
 
-        let mut remove = vec![self.face(h)];
-        let mut add = vec![[a, m, c], [m, b, c]];
+        let mut remove: TinyVec<[u32; 2]> = std::iter::once(self.face(h)).collect();
+        let mut add: TinyVec<[[u32; 3]; 4]> = [[a, m, c], [m, b, c]].into_iter().collect();
         if let Some(t) = twin {
             let d = self.from(self.prev(t));
             remove.push(self.face(t));
@@ -765,14 +776,14 @@ impl EditMesh {
         let c = self.from(self.prev(h));
         let d = twin.map(|t| self.from(self.prev(t)));
         // Link condition: the only shared neighbours are the two opposite vertices.
-        let ring_a: Vec<u32> = self.one_ring(a).collect();
-        let mut shared: Vec<u32> = self.one_ring(b).filter(|v| ring_a.contains(v)).collect();
-        let mut expected: Vec<u32> = std::iter::once(c).chain(d).collect();
+        let ring_a: Ring<u32> = self.one_ring(a).collect();
+        let mut shared: Ring<u32> = self.one_ring(b).filter(|v| ring_a.contains(v)).collect();
+        let mut expected: TinyVec<[u32; 2]> = std::iter::once(c).chain(d).collect();
         shared.sort_unstable();
-        shared.dedup();
+        dedup_sorted(&mut shared);
         expected.sort_unstable();
-        expected.dedup();
-        if shared != expected {
+        dedup_sorted(&mut expected);
+        if shared[..] != expected[..] {
             return false;
         }
         // Opposite vertices must keep enough faces to stay valid.
@@ -792,13 +803,13 @@ impl EditMesh {
     pub fn collapse_prechecked(&mut self, h: HalfEdge, keep_position: DVec3) -> bool {
         let (a, b) = (self.from(h), self.to(h));
         let around = self.faces_around(b);
-        let add: Vec<[u32; 3]> = around
+        let add: Ring<[u32; 3]> = around
             .iter()
             .map(|&f| self.corners[f as usize])
             .filter(|t| !t.contains(&a))
             .map(|t| t.map(|v| if v == b { a } else { v }))
             .collect();
-        let feature_ring: Vec<u32> = self.feature_neighbours(b);
+        let feature_ring = self.feature_neighbours(b);
         if self.replace_faces(&around, &add).is_none() {
             return false;
         }

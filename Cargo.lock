@@ -946,6 +946,7 @@ dependencies = [
  "rayon",
  "serde",
  "thiserror 2.0.21",
+ "tinyvec",
 ]
 
 [[package]]
@@ -1279,6 +1280,12 @@ dependencies = [
  "quote",
  "syn 3.0.9",
 ]
+
+[[package]]
+name = "tinyvec"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tobj"
