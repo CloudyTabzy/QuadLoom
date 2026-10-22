@@ -115,6 +115,15 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
         None => dict.set_item("quads", py.None())?,
     }
     dict.set_item("quad_error", output.quad_error.as_deref())?;
+    let warnings = pyo3::types::PyList::empty(py);
+    for w in &output.warnings {
+        let item = PyDict::new(py);
+        item.set_item("stage", w.stage)?;
+        item.set_item("message", &w.message)?;
+        item.set_item("hint", w.hint.as_deref())?;
+        warnings.append(item)?;
+    }
+    dict.set_item("warnings", warnings)?;
     match &output.symmetry {
         Some(s) => {
             let report = PyDict::new(py);

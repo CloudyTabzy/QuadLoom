@@ -67,6 +67,11 @@ pub struct SymmetryReport {
     pub seam_edges: usize,
     /// Why symmetry was skipped, if it was.
     pub skipped: Option<String>,
+    /// Share of the surface area on the kept side (1 when skipped).
+    pub kept_share: f64,
+    /// Whether the mesh reaches every plane (a seam exists): if not, the
+    /// mirrored copy is a separate piece.
+    pub touches_planes: bool,
 }
 
 /// Samples per auto-detection test.
@@ -78,15 +83,7 @@ pub fn planes(
     triangles: &[[u32; 3]],
     params: &SymmetryParams,
 ) -> (Vec<Plane>, SymmetryReport) {
-    let mut report = SymmetryReport { asymmetry: [-1.0; 3], ..SymmetryReport::default() };
-    if !params.auto_detect {
-        let planes: Vec<Plane> =
-            (0..3).filter(|&a| params.axes[a]).map(|axis| Plane { axis, offset: 0.0 }).collect();
-        for p in &planes {
-            report.axes[p.axis] = true;
-        }
-        return (planes, report);
-    }
+    let mut report = SymmetryReport { asymmetry: [-1.0; 3], kept_share: 1.0, ..SymmetryReport::default() };
     let (lo, hi) = bounds(positions);
     let diagonal = (hi - lo).length();
     if diagonal <= 0.0 || triangles.is_empty() {
@@ -95,6 +92,16 @@ pub fn planes(
     }
     let surface = TriangleBvh::new(positions, triangles);
     let step = (positions.len() / DETECT_SAMPLES).max(1);
+    if !params.auto_detect {
+        let planes: Vec<Plane> =
+            (0..3).filter(|&a| params.axes[a]).map(|axis| Plane { axis, offset: 0.0 }).collect();
+        for p in &planes {
+            report.axes[p.axis] = true;
+            // Measured even when chosen by hand, so a mismatch can be warned about.
+            report.asymmetry[p.axis] = asymmetry(positions, &surface, p.axis, 0.0, step) / diagonal;
+        }
+        return (planes, report);
+    }
     let center = 0.5 * (lo + hi);
     let mut planes = Vec::new();
     for axis in 0..3 {
@@ -136,6 +143,34 @@ fn asymmetry(positions: &[DVec3], surface: &TriangleBvh, axis: usize, offset: f6
 
 fn bounds(positions: &[DVec3]) -> (DVec3, DVec3) {
     positions.iter().fold((DVec3::INFINITY, DVec3::NEG_INFINITY), |(lo, hi), &p| (lo.min(p), hi.max(p)))
+}
+
+/// Share of the surface area of `mesh` on the kept side of every plane, and
+/// whether the mesh crosses or touches each plane.
+pub fn kept_share(mesh: &RepairedMesh, planes: &[Plane], keep_negative: bool) -> (f64, bool) {
+    let sign = if keep_negative { -1.0 } else { 1.0 };
+    let (mut kept, mut total) = (0.0, 0.0);
+    let (lo, hi) = bounds(&mesh.positions);
+    let snap = 1e-9 * (hi - lo).length().max(1e-300);
+    let mut touches = vec![false; planes.len()];
+    for t in &mesh.triangles {
+        let [a, b, c] = t.map(|v| mesh.positions[v as usize]);
+        let area = 0.5 * (b - a).cross(c - a).length();
+        let centroid = (a + b + c) / 3.0;
+        total += area;
+        if planes.iter().all(|pl| sign * (centroid[pl.axis] - pl.offset) >= 0.0) {
+            kept += area;
+        }
+        for (i, pl) in planes.iter().enumerate() {
+            let d = [a, b, c].map(|p| p[pl.axis] - pl.offset);
+            if d.iter().any(|&x| x.abs() <= snap)
+                || (d.iter().any(|&x| x > 0.0) && d.iter().any(|&x| x < 0.0))
+            {
+                touches[i] = true;
+            }
+        }
+    }
+    (if total > 0.0 { kept / total } else { 0.0 }, touches.iter().all(|&t| t))
 }
 
 /// Clips `mesh` to the kept side of every plane. Returns the cut mesh and the
@@ -426,6 +461,54 @@ mod tests {
                 assert!(all.contains(&key(m)), "no image {m} of {v}");
             }
         }
+    }
+
+    fn run_with(
+        p: &[DVec3],
+        t: &[[u32; 3]],
+        axes: [bool; 3],
+        keep_negative: bool,
+    ) -> crate::pipeline::RunOutput {
+        let flat: Vec<f32> = p.iter().flat_map(|v| [v.x as f32, v.y as f32, v.z as f32]).collect();
+        let idx: Vec<u32> = t.iter().flatten().copied().collect();
+        let mut params = Params::default();
+        params.symmetry.axes = axes;
+        params.symmetry.keep_negative = keep_negative;
+        crate::pipeline::run(&flat, &idx, &FeatureInput::default(), &params, &Control::default()).unwrap()
+    }
+
+    fn warned(out: &crate::pipeline::RunOutput, needle: &str) -> bool {
+        out.warnings.iter().any(|w| w.message.contains(needle))
+    }
+
+    #[test]
+    fn mismatched_symmetry_is_warned_about() {
+        let (p, t) = torus(48, 24);
+        // Lopsided across X: still mirrored as asked, with a warning.
+        let lopsided: Vec<DVec3> =
+            p.iter().map(|&v| if v.x > 0.0 { v * DVec3::new(1.5, 1.0, 1.0) } else { v }).collect();
+        let out = run_with(&lopsided, &t, [true, false, false], false);
+        assert!(warned(&out, "isn't symmetric across X"), "{:?}", out.warnings);
+        // A symmetric torus: no warning.
+        let out = run_with(&p, &t, [true, false, false], false);
+        assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+        // Mostly on the other side.
+        let shifted: Vec<DVec3> = p.iter().map(|&v| v - DVec3::new(0.9, 0.0, 0.0)).collect();
+        let out = run_with(&shifted, &t, [true, false, false], false);
+        assert!(warned(&out, "of the surface is on the kept side"), "{:?}", out.warnings);
+    }
+
+    #[test]
+    fn a_mesh_away_from_the_plane_is_warned_about() {
+        let (p, t) = torus(24, 16);
+        // Entirely on the kept side, not touching x = 0: the mirror is a separate piece.
+        let away: Vec<DVec3> = p.iter().map(|&v| v + DVec3::new(3.0, 0.0, 0.0)).collect();
+        let out = run_with(&away, &t, [true, false, false], false);
+        assert!(warned(&out, "doesn't reach the mirror plane"), "{:?}", out.warnings);
+        // Entirely on the other side: skipped, with a hint.
+        let out = run_with(&away, &t, [true, false, false], true);
+        assert!(warned(&out, "symmetry skipped"), "{:?}", out.warnings);
+        assert!(out.warnings.iter().any(|w| w.hint.is_some()));
     }
 
     #[test]

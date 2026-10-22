@@ -21,6 +21,29 @@ use crate::symmetry::{self, SymmetryReport};
 use crate::trace::{self, TraceOutput};
 use crate::validate::{ValidationReport, validate};
 
+/// Something the user should know about a run that still succeeded.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct Warning {
+    /// Stage name (see [`Stage::name`]).
+    pub stage: &'static str,
+    pub message: String,
+    /// What the user can do about it.
+    pub hint: Option<String>,
+}
+
+impl Warning {
+    fn new(stage: Stage, message: impl Into<String>, hint: impl Into<String>) -> Self {
+        let hint = hint.into();
+        Self { stage: stage.name(), message: message.into(), hint: (!hint.is_empty()).then_some(hint) }
+    }
+}
+
+/// Fallback patterns above this share of patches are worth a warning.
+const FALLBACK_WARN_SHARE: f64 = 0.02;
+/// A kept side with less than this share of the surface is worth a warning.
+const SMALL_SIDE_SHARE: f64 = 0.25;
+
 /// Everything a successful run produces.
 #[derive(Clone, Debug)]
 pub struct RunOutput {
@@ -49,6 +72,8 @@ pub struct RunOutput {
     /// What symmetry did, if it was requested. With symmetry the quad mesh
     /// is mirrored; the prep mesh and layout stay one side.
     pub symmetry: Option<SymmetryReport>,
+    /// Things worth the user's attention, in pipeline order.
+    pub warnings: Vec<Warning>,
     /// Wall-clock time per stage, in pipeline order.
     pub timings_ms: Vec<(Stage, f64)>,
 }
@@ -99,11 +124,15 @@ pub fn run(
     control.checkpoint(Stage::Features)?;
     fault::inject(params, Stage::Features, control)?;
     // Symmetry: keep one side of the planes; the cut becomes a feature line.
+    let mut warnings: Vec<Warning> = Vec::new();
     let (mut planes, mut seam) = (Vec::new(), Vec::new());
     let symmetry_report = params.symmetry.enabled().then(|| {
         let (found, mut report) =
             symmetry::planes(&repaired.positions, &repaired.triangles, &params.symmetry);
         if !found.is_empty() {
+            let (share, touches) = symmetry::kept_share(&repaired, &found, params.symmetry.keep_negative);
+            report.kept_share = share;
+            report.touches_planes = touches;
             match symmetry::cut(&repaired, &found, params.symmetry.keep_negative) {
                 Some((half, seam_edges)) => {
                     components = crate::components::split(&half.triangles, half.positions.len());
@@ -118,6 +147,7 @@ pub fn run(
                 }
             }
         }
+        symmetry_warnings(&report, &params.symmetry, &mut warnings);
         report
     });
     let (mut feature_set, feature_report) = features::detect(&repaired, feature_input, &params.features);
@@ -219,6 +249,14 @@ pub fn run(
                 Err(e) if e.kind == crate::error::ErrorKind::Cancelled => return Err(e),
                 // Never fail a run over the quads: the layout is still a valid result.
                 Err(e) => {
+                    warnings.push(Warning::new(
+                        Stage::Quantize,
+                        format!(
+                            "the quads could not be built ({}); the result shows the patch layout",
+                            e.message
+                        ),
+                        "try another Quad Size, or turn Prep Remesh on if it is off",
+                    ));
                     quad_error = Some(e.message.clone());
                     None
                 }
@@ -226,6 +264,44 @@ pub fn run(
         }
         _ => None,
     };
+
+    if let Some(q) = &quads {
+        let patches = q.report.grid_patches
+            + q.report.center_patches
+            + q.report.split_patches
+            + q.report.fan_patches
+            + q.report.kept_patches;
+        let rough = q.report.fan_patches + q.report.kept_patches;
+        if patches > 0 && rough as f64 > FALLBACK_WARN_SHARE * patches as f64 {
+            warnings.push(Warning::new(
+                Stage::Patterns,
+                format!("{rough} of {patches} patches used a fallback pattern, which can look uneven"),
+                "a smaller Quad Size or more Adaptivity gives the patterns more room",
+            ));
+        }
+    }
+    if params.quad.enabled && params.trace.enabled && params.field.enabled && trace.is_none() {
+        warnings.push(Warning::new(Stage::Trace, "no patch layout was made, so no quads either", ""));
+    }
+    if !planes.is_empty() && quads.is_none() {
+        warnings.push(Warning::new(
+            Stage::Output,
+            "symmetry mirrors the quad mesh, which wasn't built: the result is one side only",
+            "turn Quads (and the Cross Field and Patch Layout it needs) on",
+        ));
+    }
+    if let Some(frame) = &frame
+        && frame.report.fallback_parts > 0
+    {
+        warnings.push(Warning::new(
+            Stage::Frame,
+            format!(
+                "Quad Shape kept the regular field on {} part(s): it could not be made rectangular there",
+                frame.report.fallback_parts
+            ),
+            "",
+        ));
+    }
 
     // Symmetry: mirror the quad mesh across the planes and weld the seam.
     let quads = match quads {
@@ -259,6 +335,7 @@ pub fn run(
         quads,
         quad_error,
         symmetry: symmetry_report,
+        warnings,
         timings_ms,
     })
 }
@@ -412,6 +489,57 @@ pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) ->
         return Err(Error::invalid_input(stage, "mesh is too large to index with 32-bit indices"));
     }
     Ok(())
+}
+
+/// Warnings about a symmetry request that doesn't fit the mesh.
+fn symmetry_warnings(
+    report: &SymmetryReport,
+    params: &crate::symmetry::SymmetryParams,
+    out: &mut Vec<Warning>,
+) {
+    let stage = Stage::Repair;
+    let names = ["X", "Y", "Z"];
+    if let Some(reason) = &report.skipped {
+        let hint = if reason.contains("kept side") {
+            "the mesh lies on the other side: try Keep Negative Side, or move the object's origin to its middle"
+        } else if params.auto_detect {
+            "the mesh isn't symmetric within the tolerance: raise Tolerance, or pick the axes yourself"
+        } else {
+            ""
+        };
+        out.push(Warning::new(stage, format!("symmetry skipped: {reason}"), hint));
+        return;
+    }
+    if !params.auto_detect {
+        for (axis, name) in names.iter().enumerate() {
+            let a = report.asymmetry[axis];
+            if report.axes[axis] && a > params.tolerance.max(1e-6) {
+                out.push(Warning::new(
+                    stage,
+                    format!(
+                        "the mesh isn't symmetric across {} ({:.1}% of its size): the other side was replaced by a mirror of this one",
+                        name,
+                        100.0 * a
+                    ),
+                    "if that isn't wanted, turn this axis off, or use Auto Detect",
+                ));
+            }
+        }
+    }
+    if report.kept_share < SMALL_SIDE_SHARE {
+        out.push(Warning::new(
+            stage,
+            format!("only {:.0}% of the surface is on the kept side of the plane", 100.0 * report.kept_share),
+            "Keep Negative Side keeps the larger part",
+        ));
+    }
+    if !report.touches_planes {
+        out.push(Warning::new(
+            stage,
+            "the mesh doesn't reach the mirror plane: the mirrored copy is a separate piece",
+            "move the object's origin, or use Auto Detect (it also tries the object's center)",
+        ));
+    }
 }
 
 /// The quad mesh mirrored across `planes`, seam vertices welded.

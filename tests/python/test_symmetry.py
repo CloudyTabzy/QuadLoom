@@ -51,3 +51,17 @@ def test_unknown_symmetry_key_rejected():
     positions, indices = torus()
     with pytest.raises(ql.InvalidInputError, match="params.symmetry.w"):
         ql.run(positions, indices, ql.Control(), params={"symmetry": {"w": True}})
+
+
+def test_warnings_are_listed_with_stage_and_hint():
+    positions, indices = torus()
+    lopsided = array("f", positions)
+    for i in range(0, len(lopsided), 3):
+        if lopsided[i] > 0:
+            lopsided[i] *= 1.5
+    result = ql.run(lopsided, indices, ql.Control(), params={"symmetry": {"x": True}})
+    warnings = result["warnings"]
+    assert any("isn't symmetric across X" in w["message"] for w in warnings)
+    assert all(set(w) == {"stage", "message", "hint"} for w in warnings)
+    clean = ql.run(positions, indices, ql.Control())
+    assert clean["warnings"] == []

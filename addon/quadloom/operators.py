@@ -17,9 +17,14 @@ _active_job = None
 
 
 class Job:
-    def __init__(self, snapshot, kwargs):
+    def __init__(self, snapshot, kwargs, warnings=()):
         self.snapshot = snapshot
         self.kwargs = kwargs
+        # Set when the job is dropped (undo, file load, unregister): its result
+        # must never reach the scene.
+        self.discarded = False
+        # Warnings found before the run (selection, transform), as (message, hint).
+        self.preflight = list(warnings)
         self.control = bridge.new_control()
         self.result = None
         self.error = None
@@ -55,17 +60,23 @@ def start_job(context):
     if job_running():
         raise RuntimeError("a QuadLoom run is already in progress")
     settings = context.scene.quadloom
-    snapshot = mesh_io.extract(context.active_object, context.evaluated_depsgraph_get(), settings.max_faces)
+    obj = context.active_object
+    if obj is not None and obj.mode == "EDIT":
+        # Edit Mode changes reach the mesh data only when flushed.
+        obj.update_from_editmode()
+    preflight = preflight_warnings(context, settings)
+    snapshot = mesh_io.extract(obj, context.evaluated_depsgraph_get(), settings.max_faces)
     kwargs = {"max_faces": settings.max_faces, "params": props.run_params(settings), **snapshot.feature_kwargs()}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
-    job = Job(snapshot, kwargs)
+    job = Job(snapshot, kwargs, preflight)
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
     last.symmetry_summary = ""
+    last.warnings = ""
     _active_job = job
     job.thread.start()
     return job
@@ -78,6 +89,10 @@ def finish_job(context, job):
         _active_job = None
     last = context.scene.quadloom_last_run
     last.elapsed_ms = job.elapsed_ms()
+    if job.discarded:
+        # Dropped by undo, a file load or unregistering: its result never lands.
+        last.status, last.message = "CANCELLED", "The run was dropped (undo or file change)"
+        return {"CANCELLED"}, ("INFO", "QuadLoom: run dropped")
     error = job.error
     if error is None:
         try:
@@ -96,6 +111,11 @@ def finish_job(context, job):
             last.trace_summary = trace_summary(job.result.get("trace"))
             last.quad_summary = quad_summary(job.result.get("quads"), job.result.get("quad_error"))
             last.symmetry_summary = symmetry_summary(job.result.get("symmetry"))
+            warnings = job.preflight + [(w["message"], w.get("hint") or "") for w in job.result.get("warnings", [])]
+            last.warnings = "\n".join(f"{m}\t{h}" for m, h in warnings)
+            if warnings:
+                more = f" (+{len(warnings) - 1} more, see the panel)" if len(warnings) > 1 else ""
+                return {"FINISHED"}, ("WARNING", f"QuadLoom: {warnings[0][0]}{more}")
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
@@ -204,6 +224,25 @@ def quad_summary(quads, error=None):
     return text
 
 
+def preflight_warnings(context, settings):
+    """Warnings Blender knows about before the run: (message, hint) pairs."""
+    warnings = []
+    obj = context.active_object
+    selected = [o for o in context.selected_objects if o is not obj]
+    if selected:
+        warnings.append(("only the active object is remeshed; other selected objects are ignored", ""))
+    symmetric = settings.symmetry_auto or settings.symmetry_x or settings.symmetry_y or settings.symmetry_z
+    if obj is not None and symmetric:
+        scale = obj.matrix_world.to_scale()
+        if min(scale) < 0:
+            warnings.append(("the object is mirrored by a negative scale: symmetry uses its own (local) axes",
+                             "apply the scale (Ctrl+A) to work in the axes you see"))
+        elif max(scale) > 1.0001 * min(scale):
+            warnings.append(("the object has a non-uniform scale: symmetry uses its own (local) axes",
+                             "apply the scale (Ctrl+A) to work in the axes you see"))
+    return warnings
+
+
 def symmetry_summary(symmetry):
     """One line about symmetry, e.g. "mirrored X, Z (auto, asymmetry 0.12%)"; empty when off."""
     if not symmetry:
@@ -233,6 +272,13 @@ def cancel_active_job(join_timeout=None):
 
 
 def discard_active_job(join_timeout=5.0):
+    """Cancels, waits for, and forgets the active job; its result is never used."""
+    if _active_job is not None:
+        _active_job.discarded = True
+    _discard(join_timeout)
+
+
+def _discard(join_timeout=5.0):
     """Cancels, waits for, and forgets the active job. Its result (if any) is dropped.
 
     Used when the context the job belongs to goes away: the add-on being
@@ -248,6 +294,14 @@ def _on_load_pre(*_args):
     discard_active_job()
 
 
+@bpy.app.handlers.persistent
+def _on_undo_pre(*_args):
+    # Undo/redo restores an older scene: a running job's result would land in
+    # it out of place, so the job is dropped (cancelled without waiting long).
+    if job_running():
+        discard_active_job(join_timeout=0.5)
+
+
 def _redraw_panels(context):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
@@ -260,8 +314,10 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
     bl_label = "Remesh"
     bl_description = "Remesh the active object into a new quad mesh. The original is left untouched"
     # UNDO: the step is pushed when the modal operator returns FINISHED, so
-    # Ctrl+Z removes exactly the result object.
-    bl_options = {"REGISTER", "UNDO"}
+    # Ctrl+Z removes exactly the result object. No REGISTER: "Adjust Last
+    # Operation" would re-run the background job synchronously, which a modal
+    # operator can't do safely.
+    bl_options = {"UNDO"}
 
     _timer = None
     _job = None
@@ -300,6 +356,10 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
 
     def modal(self, context, event):
         job = self._job
+        if job.discarded:
+            # Dropped by undo, a file load or unregistering: never build its result.
+            self._remove_timer(context)
+            return {"CANCELLED"}
         if _active_job is not job and not job.done:
             # The job was discarded underneath us (add-on disabled, file loaded).
             self._remove_timer(context)
@@ -368,8 +428,14 @@ classes = (QUADLOOM_OT_remesh, QUADLOOM_OT_cancel)
 def register_handlers():
     if _on_load_pre not in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.append(_on_load_pre)
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
+        if _on_undo_pre not in handlers:
+            handlers.append(_on_undo_pre)
 
 
 def unregister_handlers():
     if _on_load_pre in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.remove(_on_load_pre)
+    for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
+        if _on_undo_pre in handlers:
+            handlers.remove(_on_undo_pre)

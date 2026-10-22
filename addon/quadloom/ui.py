@@ -68,6 +68,16 @@ class QUADLOOM_PT_main(bpy.types.Panel):
                         col.label(text=line, icon=icon if n == 0 else "BLANK1")
             if last.status != "RUNNING":
                 col.label(text=f"Time: {last.elapsed_ms:.0f} ms")
+        if last.warnings:
+            warn = layout.box()
+            warn.label(text="Warnings", icon="ERROR")
+            col = warn.column(align=True)
+            for entry in last.warnings.split("\n"):
+                message, _, hint = entry.partition("\t")
+                for n, line in enumerate(_wrap(message)):
+                    col.label(text=line, icon="DOT" if n == 0 else "BLANK1")
+                for line in _wrap(hint):
+                    col.label(text=line, icon="BLANK1")
         layout.label(text=f"Backend {bridge.version()}", icon="SETTINGS")
 
 

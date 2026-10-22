@@ -360,6 +360,8 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     trace_summary: StringProperty(name="Layout")
     quad_summary: StringProperty(name="Quads")
     symmetry_summary: StringProperty(name="Symmetry")
+    # One warning per line: "message\thint" (hint may be empty).
+    warnings: StringProperty(name="Warnings")
 
 
 classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
