@@ -13,6 +13,7 @@ pub mod error;
 pub mod fault;
 pub mod features;
 pub mod field;
+pub mod frame;
 pub mod mesh;
 pub mod metrics;
 pub mod params;
