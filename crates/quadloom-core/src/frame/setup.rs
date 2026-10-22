@@ -1,5 +1,7 @@
 //! Frame setup: unit-area geometry, the transport between neighbouring faces,
-//! held faces, corner signs and odd singularities (decision 0007).
+//! held faces, corner signs, odd singularities and cone one-rings (decision
+//! 0007). A cone is a field singularity or an odd vertex; its one-ring has no
+//! integrability constraint and its faces are held.
 //!
 //! Notation (shared with `residual.rs`): face `f = [i, j, k]` is
 //! counter-clockwise; corner `c` is vertex `t[c]`, and halfedge `c` runs
@@ -63,9 +65,11 @@ pub struct FrameMesh {
     pub normal: Vec<DVec3>,
     /// Every interior edge, sorted by `(a, b)`. Feature edges are included.
     pub edges: Vec<FrameEdge>,
-    /// Indices into `edges` of the edges that carry a constraint.
+    /// Indices into `edges` of the edges that carry a constraint: not a feature
+    /// edge, not touching a cone, and between non-degenerate faces.
     pub free: Vec<usize>,
-    /// Faces whose θ is fixed at 0 (touching a feature or border edge, or degenerate).
+    /// Faces whose θ is fixed at 0 (touching a feature or border edge, a cone
+    /// corner, or degenerate).
     pub held: Vec<bool>,
     pub degenerate: Vec<bool>,
     /// Sign of v at each corner (±1).
@@ -76,7 +80,8 @@ pub struct FrameMesh {
 
 impl FrameMesh {
     /// Builds the frame mesh of one part. `directions` holds one unit tangent
-    /// per face (the cross field); `feature_edges` are vertex pairs in any order.
+    /// per face (the cross field); `feature_edges` are vertex pairs in any order;
+    /// `singular` has one flag per vertex, true where the field has a nonzero index.
     ///
     /// Errors: `InvalidInput` for mismatched lengths, non-finite positions,
     /// repeated or out-of-range triangle vertices, a part without area, or a
@@ -86,6 +91,7 @@ impl FrameMesh {
         triangles: &[[u32; 3]],
         feature_edges: &[[u32; 2]],
         directions: &[DVec3],
+        singular: &[bool],
         control: &Control,
     ) -> Result<Self, Error> {
         let stage = Stage::Frame;
@@ -95,6 +101,9 @@ impl FrameMesh {
         let nf = triangles.len();
         if directions.len() != nf {
             return Err(invalid("the frame needs one direction per face"));
+        }
+        if singular.len() != nv {
+            return Err(invalid("the frame needs one singularity flag per vertex"));
         }
         if positions.iter().any(|p| !p.is_finite()) {
             return Err(invalid("non-finite vertex position"));
@@ -198,10 +207,26 @@ impl FrameMesh {
         }
 
         let (corner_sign, odd) = corner_signs(triangles, nv, &edges, &edge_index, &halfedge_of, control)?;
+        // A cone is a field singularity or an odd vertex. Its one-ring carries no
+        // integrability constraint: the frame is singular there anyway, and the
+        // discrete equations around clustered cones are ill-posed.
+        let cone: Vec<bool> = singular.iter().zip(&odd).map(|(&s, &o)| s || o).collect();
+        let is_cone = |v: u32| cone.get(v as usize).copied().unwrap_or(false);
+        for (f, t) in triangles.iter().enumerate() {
+            if t.iter().any(|&v| is_cone(v)) {
+                held[f] = true;
+            }
+        }
         let free: Vec<usize> = edges
             .iter()
             .enumerate()
-            .filter(|(_, e)| !e.feature && !degenerate[e.f as usize] && !degenerate[e.g as usize])
+            .filter(|(_, e)| {
+                !e.feature
+                    && !is_cone(e.a)
+                    && !is_cone(e.b)
+                    && !degenerate[e.f as usize]
+                    && !degenerate[e.g as usize]
+            })
             .map(|(i, _)| i)
             .collect();
         control.set_progress(stage, 1.0);
@@ -430,7 +455,8 @@ mod tests {
             let directions = vec![DVec3::new(c, s, 0.0); t.len()];
             // The exact map is written in the unrotated grid coordinates.
             let (u, v) = rect_uv(&p0);
-            let mesh = FrameMesh::new(&p, &t, &[], &directions, &Control::default()).unwrap();
+            let mesh =
+                FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &Control::default()).unwrap();
             let r = mesh.residuals(&u, &v, &vec![0.0; t.len()]);
             rms_at.push(rms(&r));
         }
@@ -446,7 +472,8 @@ mod tests {
         let u: Vec<f64> = p.iter().map(|q| q.x).collect();
         let v = vec![0.0; p.len()];
         let theta = conformal_theta(&p, &t);
-        let mesh = FrameMesh::new(&p, &t, &[], &directions, &Control::default()).unwrap();
+        let mesh =
+            FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &Control::default()).unwrap();
         let r = mesh.residuals(&u, &v, &theta);
         assert!(max_abs(&r) < 1e-12, "max |F| is {:e}", max_abs(&r));
     }
@@ -471,18 +498,19 @@ mod tests {
             })
             .collect();
         let theta_rot: Vec<f64> = theta.iter().zip(&gammas).map(|(th, g)| th - g).collect();
-        let rotated = FrameMesh::new(&p, &t, &[], &directions, &control).unwrap();
+        let rotated = FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &control).unwrap();
         let f_rot = rotated.residuals(&u, &v, &theta_rot);
         assert!(max_abs(&f_rot) < 1e-12, "conformal rotated max |F| is {:e}", max_abs(&f_rot));
 
         // (b) Rectangular case (v ≠ 0). A small rotation only: F must match elementwise.
         let (u, v) = rect_uv(&p);
         let zero = vec![0.0; t.len()];
-        let unrotated = FrameMesh::new(&p, &t, &[], &vec![DVec3::X; t.len()], &control).unwrap();
+        let unrotated =
+            FrameMesh::new(&p, &t, &[], &vec![DVec3::X; t.len()], &vec![false; p.len()], &control).unwrap();
         let f_unrot = unrotated.residuals(&u, &v, &zero);
         let directions: Vec<DVec3> = gammas.iter().map(|g| DVec3::new(g.cos(), g.sin(), 0.0)).collect();
         let theta_rot: Vec<f64> = gammas.iter().map(|g| -g).collect();
-        let rotated = FrameMesh::new(&p, &t, &[], &directions, &control).unwrap();
+        let rotated = FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &control).unwrap();
         let f_rot = rotated.residuals(&u, &v, &theta_rot);
         assert_eq!(f_unrot.len(), f_rot.len());
         for (k, (a, b)) in f_unrot.iter().zip(&f_rot).enumerate() {
@@ -495,7 +523,8 @@ mod tests {
         let (p, t, features) = testmesh::cube(4);
         let control = Control::default();
         let field = compute(&p, &t, &features, &FieldParams::default(), &control).unwrap();
-        let mesh = FrameMesh::new(&p, &t, &features, &field.directions, &control).unwrap();
+        let mesh =
+            FrameMesh::new(&p, &t, &features, &field.directions, &vec![false; p.len()], &control).unwrap();
 
         for &[a, b] in &features {
             for (f, tri) in t.iter().enumerate() {
@@ -517,11 +546,40 @@ mod tests {
     }
 
     #[test]
+    fn cones_carry_no_constraint() {
+        let (p, t) = testmesh::icosphere(2);
+        let control = Control::default();
+        let field = compute(&p, &t, &[], &FieldParams::default(), &control).unwrap();
+        let mut singular = vec![false; p.len()];
+        for &(v, k) in &field.singularities {
+            if k != 0 {
+                singular[v as usize] = true;
+            }
+        }
+        let with_cones = FrameMesh::new(&p, &t, &[], &field.directions, &singular, &control).unwrap();
+        let no_cones =
+            FrameMesh::new(&p, &t, &[], &field.directions, &vec![false; p.len()], &control).unwrap();
+        let cone: Vec<bool> = singular.iter().zip(&with_cones.odd).map(|(&s, &o)| s || o).collect();
+        assert!(cone.iter().any(|&c| c), "the icosphere field should have cones for this test");
+        assert!(with_cones.free.len() < no_cones.free.len(), "cones should remove free edges");
+
+        for &e in &with_cones.free {
+            let edge = &with_cones.edges[e];
+            assert!(!cone[edge.a as usize] && !cone[edge.b as usize], "free edge {e} touches a cone");
+        }
+        for (f, tri) in t.iter().enumerate() {
+            if tri.iter().any(|&v| cone[v as usize]) {
+                assert!(with_cones.held[f], "face {f} has a cone corner but is free");
+            }
+        }
+    }
+
+    #[test]
     fn icosphere_odd_vertices_are_the_singularities() {
         let (p, t) = testmesh::icosphere(2);
         let control = Control::default();
         let field = compute(&p, &t, &[], &FieldParams::default(), &control).unwrap();
-        let mesh = FrameMesh::new(&p, &t, &[], &field.directions, &control).unwrap();
+        let mesh = FrameMesh::new(&p, &t, &[], &field.directions, &vec![false; p.len()], &control).unwrap();
         let mut expected: Vec<u32> =
             field.singularities.iter().filter(|(_, k)| k.rem_euclid(2) == 1).map(|&(v, _)| v).collect();
         expected.sort_unstable();
@@ -535,7 +593,8 @@ mod tests {
         // Vertex 5 onto its neighbour 4: every face containing both collapses.
         p[5] = p[4];
         let directions = vec![DVec3::X; t.len()];
-        let mesh = FrameMesh::new(&p, &t, &[], &directions, &Control::default()).unwrap();
+        let mesh =
+            FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &Control::default()).unwrap();
 
         let collapsed: Vec<usize> = t
             .iter()

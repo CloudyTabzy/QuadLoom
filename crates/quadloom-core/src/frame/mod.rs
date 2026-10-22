@@ -7,6 +7,11 @@
 //! equation, discretized over the dual edges), so the frame is integrable by
 //! construction. Singularities are unchanged, because θ is a 0-form.
 //!
+//! Cones (field singularities and odd vertices) are exempt: no edge touching
+//! a cone carries a constraint, and every face with a cone corner is held at
+//! θ = 0. The frame is singular there anyway, and the discrete equations in
+//! a clustered cone's one-ring are ill-posed (decision 0007).
+//!
 //! Each connected part is solved on its own (in parallel). A part that is too
 //! large, has nothing to solve, or does not converge keeps the plain field, and
 //! that is reported, never an error. Only cancellation propagates.
@@ -57,7 +62,7 @@ impl Default for FrameParams {
             stretch_weight: 1.0,
             align_weight: 0.0,
             smoothness: 0.01,
-            max_iterations: 50,
+            max_iterations: 30,
             max_part_faces: 300_000,
         }
     }
@@ -139,6 +144,8 @@ struct Context<'a> {
     positions: &'a [DVec3],
     triangles: &'a [[u32; 3]],
     directions: &'a [DVec3],
+    /// Per mesh vertex: true where the field has a nonzero index.
+    singular: &'a [bool],
     params: &'a FrameParams,
     weights: solve::Weights,
     control: &'a Control,
@@ -193,10 +200,20 @@ pub fn compute(
         }
     }
 
+    let mut singular = vec![false; nv];
+    for &(v, k) in &field.singularities {
+        if k != 0 {
+            if let Some(flag) = singular.get_mut(v as usize) {
+                *flag = true;
+            }
+        }
+    }
+
     let ctx = Context {
         positions,
         triangles,
         directions: &field.directions,
+        singular: &singular,
         params,
         weights: solve::Weights::from_params(params),
         control,
@@ -315,6 +332,8 @@ fn solve_part(
     let part_directions: Vec<DVec3> =
         faces.iter().map(|&f| ctx.directions.get(f as usize).copied().unwrap_or(DVec3::X)).collect();
     let part_features: Vec<[u32; 2]> = feature_edges.iter().map(|&[a, b]| [local(a), local(b)]).collect();
+    let part_singular: Vec<bool> =
+        vertices.iter().map(|&v| ctx.singular.get(v as usize).copied().unwrap_or(false)).collect();
 
     let control = ctx.control;
     let mesh = match setup::FrameMesh::new(
@@ -322,6 +341,7 @@ fn solve_part(
         &part_triangles,
         &part_features,
         &part_directions,
+        &part_singular,
         control,
     ) {
         Ok(mesh) => mesh,
@@ -446,7 +466,15 @@ mod tests {
         let (p, t, features) = testmesh::cube(4);
         let field = field_of(&p, &t, &features, &FieldParams::default());
         let out = compute(&p, &t, &features, &field, &on(), &Control::default()).unwrap();
-        let mesh = setup::FrameMesh::new(&p, &t, &features, &field.directions, &Control::default()).unwrap();
+        let mesh = setup::FrameMesh::new(
+            &p,
+            &t,
+            &features,
+            &field.directions,
+            &vec![false; p.len()],
+            &Control::default(),
+        )
+        .unwrap();
         assert_eq!(out.report.solved_parts, 1);
         for (f, &held) in mesh.held.iter().enumerate() {
             if held {

@@ -65,6 +65,7 @@ Add **stage 3b, "frame"** (`crates/quadloom-core/src/frame/`), between the cross
   - the conformal map e^z with θ sampled at circumcenters gives a residual of 1e-15;
   - the analytic Jacobian and Hessian match finite differences to 1e-10.
 - **Odd singularities pin v = 0** instead of leaving one inconsistent edge per such vertex, as the MATLAB's corner reduction does.
+- **Cone one-rings carry no integrability constraint.** A cone is a field singularity or an odd vertex. No edge touching a cone is free, and every face with a cone corner is held at θ = 0. The frame is singular there anyway, and the discrete equations in a clustered cone's one-ring are ill-posed. A bounded stall stop (5 steps, 1% merit drop) also ends a solve that cannot converge, so it falls back quickly.
 - **Regularized KKT** (−δI, δ = 1e-10) instead of a `quadprog` fallback. It covers the one dependent constraint per closed featureless part, and the free gauges (the u constant when w_u = 0, a global θ rotation).
 - **Not taken:**
   - automatic cone placement (our field already places singularities);

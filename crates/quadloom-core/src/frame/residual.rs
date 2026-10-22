@@ -260,7 +260,7 @@ mod tests {
         let (p, t) = testmesh::icosphere(2);
         let control = Control::default();
         let field = compute(&p, &t, &[], &FieldParams::default(), &control).unwrap();
-        let mesh = FrameMesh::new(&p, &t, &[], &field.directions, &control).unwrap();
+        let mesh = FrameMesh::new(&p, &t, &[], &field.directions, &vec![false; p.len()], &control).unwrap();
         let unknowns = Unknowns::new(&mesh);
         let n = unknowns.len();
         let m = mesh.free.len();
@@ -298,7 +298,8 @@ mod tests {
     fn zero_field_on_flat_grid_has_zero_residual() {
         let (p, t) = testmesh::grid(4, 4);
         let directions = vec![DVec3::X; t.len()];
-        let mesh = FrameMesh::new(&p, &t, &[], &directions, &Control::default()).unwrap();
+        let mesh =
+            FrameMesh::new(&p, &t, &[], &directions, &vec![false; p.len()], &Control::default()).unwrap();
         let n = p.len();
         let r = mesh.residuals(&vec![0.0; n], &vec![0.0; n], &vec![0.0; t.len()]);
         assert!(!r.is_empty());

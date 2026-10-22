@@ -32,12 +32,18 @@ const ACCEPT: f64 = 1e-6;
 const GAUGE_U: f64 = 1e-6;
 /// Regularizes the stretch objective; keeps v free when balance = 0.
 const GAUGE_V: f64 = 1e-6;
-/// Regularizes the rotation objective (a global θ rotation is otherwise free).
-const GAUGE_THETA: f64 = 1e-9;
+/// Regularizes the rotation objective. Large enough to prefer the least
+/// rotation (a global θ rotation is otherwise free), small enough not to pull
+/// the solution away from the constraints.
+const GAUGE_THETA: f64 = 1e-4;
 /// Smallest backtracking step.
 const MIN_STEP: f64 = 1e-8;
 /// Armijo factor for the KKT residual.
 const ARMIJO: f64 = 1e-4;
+/// Newton steps over which the merit must fall to count as progress.
+const STALL_WINDOW: usize = 5;
+/// After STALL_WINDOW steps, a merit above this fraction of its earlier value stops the loop.
+const STALL_RATIO: f64 = 0.99;
 
 /// The weights of the quadratic objective (see [`Weights::from_params`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,17 +100,31 @@ pub fn solve(
     max_iterations: usize,
     control: &Control,
 ) -> Result<Option<Solution>, Error> {
+    Ok(run(mesh, unknowns, weights, targets, max_iterations, control)?.0)
+}
+
+/// The Newton loop behind [`solve`].
+fn run(
+    mesh: &FrameMesh,
+    unknowns: &Unknowns,
+    weights: &Weights,
+    targets: &[f64],
+    max_iterations: usize,
+    control: &Control,
+) -> Result<(Option<Solution>, usize), Error> {
     let stage = Stage::Frame;
     let n = unknowns.len();
     let m = mesh.free.len();
     if n == 0 || m == 0 {
-        return Ok(None);
+        return Ok((None, 0));
     }
     let (h, g0) = objective(mesh, unknowns, weights, targets, control)?;
 
     let mut x = vec![0.0; n];
     let mut lambda = vec![0.0; m];
     let mut iterations = 0;
+    // Merit of every iterate so far; the stall test compares against it.
+    let mut merits: Vec<f64> = Vec::new();
     // |F|∞ at the current x; the loop always leaves it describing x.
     let mut residual;
     loop {
@@ -114,9 +134,18 @@ pub fn solve(
         residual = inf_norm(&at.f);
         let merit = norm2(&at.f).hypot(norm2(&grad));
         if !merit.is_finite() {
-            return Ok(None);
+            return Ok((None, iterations));
         }
-        if (residual < CONVERGED && merit < KKT_CONVERGED) || iterations >= max_iterations {
+        if residual < CONVERGED && merit < KKT_CONVERGED {
+            break;
+        }
+        // Stall: the merit fell by under 1% over the last STALL_WINDOW steps, so
+        // more steps are unlikely to converge. The ACCEPT check below decides.
+        merits.push(merit);
+        let k = merits.len() - 1;
+        let stalled = k >= STALL_WINDOW
+            && merits.get(k - STALL_WINDOW).is_some_and(|&earlier| merit > STALL_RATIO * earlier);
+        if iterations >= max_iterations || stalled {
             break;
         }
 
@@ -132,17 +161,17 @@ pub fn solve(
             triplets.push(Triplet::new(n + k, n + k, -KKT_DELTA));
         }
         let Ok(matrix) = SparseColMat::<usize, f64>::try_new_from_triplets(n + m, n + m, &triplets) else {
-            return Ok(None);
+            return Ok((None, iterations));
         };
         drop(triplets);
-        let Ok(lu) = matrix.sp_lu() else { return Ok(None) };
+        let Ok(lu) = matrix.sp_lu() else { return Ok((None, iterations)) };
         let mut rhs = Mat::<f64>::from_fn(n + m, 1, |k, _| {
             -if k < n { grad[k] } else { at.f.get(k - n).copied().unwrap_or(0.0) }
         });
         lu.solve_in_place(rhs.as_mut());
         let step: Vec<f64> = (0..n + m).map(|k| rhs[(k, 0)]).collect();
         if !step.iter().all(|s| s.is_finite()) {
-            return Ok(None);
+            return Ok((None, iterations));
         }
         let (dx, dl) = step.split_at(n);
 
@@ -168,10 +197,9 @@ pub fn solve(
         iterations += 1;
     }
 
-    if !(residual.is_finite() && residual <= ACCEPT && x.iter().all(|v| v.is_finite())) {
-        return Ok(None);
-    }
-    Ok(Some(Solution { x, iterations, residual }))
+    let accepted = residual.is_finite() && residual <= ACCEPT && x.iter().all(|v| v.is_finite());
+    let solution = accepted.then_some(Solution { x, iterations, residual });
+    Ok((solution, iterations))
 }
 
 /// The quadratic objective: its Hessian as triplets (duplicates add up) and
@@ -287,7 +315,8 @@ mod tests {
     ) -> (FrameMesh, Unknowns) {
         let control = Control::default();
         let field = compute(p, t, features, params, &control).unwrap();
-        let mesh = FrameMesh::new(p, t, features, &field.directions, &control).unwrap();
+        let mesh =
+            FrameMesh::new(p, t, features, &field.directions, &vec![false; p.len()], &control).unwrap();
         let unknowns = Unknowns::new(&mesh);
         (mesh, unknowns)
     }
@@ -298,9 +327,16 @@ mod tests {
         let (mesh, unknowns) = problem(&p, &t, &[], &FieldParams::default());
         let weights = Weights::from_params(&FrameParams::default());
         let zeros = vec![0.0; t.len()];
-        let sol = solve(&mesh, &unknowns, &weights, &zeros, 50, &Control::default())
-            .unwrap()
-            .expect("the icosphere solve should be accepted");
+        let sol = solve(
+            &mesh,
+            &unknowns,
+            &weights,
+            &zeros,
+            FrameParams::default().max_iterations,
+            &Control::default(),
+        )
+        .unwrap()
+        .expect("the icosphere solve should be accepted");
         assert!(sol.residual < CONVERGED, "|F|inf is {:e}", sol.residual);
         assert!(sol.iterations <= 30, "{} Newton steps", sol.iterations);
     }
@@ -311,9 +347,16 @@ mod tests {
         let (mesh, unknowns) = problem(&p, &t, &[], &FieldParams::default());
         let weights = Weights::from_params(&FrameParams::default());
         let zeros = vec![0.0; t.len()];
-        let sol = solve(&mesh, &unknowns, &weights, &zeros, 50, &Control::default())
-            .unwrap()
-            .expect("the torus solve should be accepted");
+        let sol = solve(
+            &mesh,
+            &unknowns,
+            &weights,
+            &zeros,
+            FrameParams::default().max_iterations,
+            &Control::default(),
+        )
+        .unwrap()
+        .expect("the torus solve should be accepted");
         assert!(sol.residual < CONVERGED, "|F|inf is {:e}", sol.residual);
     }
 
@@ -338,5 +381,24 @@ mod tests {
         let (mesh, unknowns) = problem(&p, &t, &[], &FieldParams::default());
         assert!(mesh.free.is_empty());
         let _ = (CurvatureAlignment::On, unknowns);
+    }
+
+    #[test]
+    fn stalled_solve_stops_early() {
+        let (p, t) = testmesh::icosphere(2);
+        let (mut mesh, unknowns) = problem(&p, &t, &[], &FieldParams::default());
+        // Shift every free edge's transport angle by 0.7 rad: the constraints then ask for a
+        // holonomy the mesh cannot supply, so the merit stalls short of zero.
+        for &e in &mesh.free {
+            mesh.edges[e].beta += 0.7;
+        }
+        let weights = Weights::from_params(&FrameParams::default());
+        let zeros = vec![0.0; t.len()];
+        let max = FrameParams::default().max_iterations;
+        let (solution, iterations) =
+            run(&mesh, &unknowns, &weights, &zeros, max, &Control::default()).unwrap();
+        assert!(solution.is_none(), "the shifted problem should not be accepted");
+        assert!(iterations < max, "{iterations} steps of {max}");
+        assert!(iterations <= 20, "{iterations} steps before the stall stop");
     }
 }
