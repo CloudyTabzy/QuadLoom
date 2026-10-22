@@ -28,3 +28,19 @@
 ## Consequences
 
 Glue-split game assets produce clean, closed topology and far fewer spurious feature lines than in QRemeshify. Differences in feature-length medians against the oracle are expected and explained above; benchmark comparisons should look at closed-surface CAD parts for a like-for-like check.
+
+## Update 2026-10-23: salience test for angle features
+
+**Problem.** The owner's dyntopo sculpt produced 59 "feature edges". The raw per-edge dihedral test (35°) also fires on sculpting and scanning noise. Those edges were then forced into the layout, marked Sharp (hard shading) and held still during smoothing, which left visible creases.
+
+**Fix.** An edge that's sharp by its own two faces stays a feature only if it's still sharp between the two **sides of its neighbourhood**:
+1. Take the faces within 3 rings of the edge.
+2. Split them by the plane that contains the edge and bisects its normals.
+3. Average each side's normals by area and test the angle between the two averages.
+
+A real crease keeps its angle; noise averages out.
+
+**Effect:**
+- fandisk is unchanged: 610 edges vs 613.
+- Organic models shed noise: armadillo drops from 1,016 to 467 edges, bunny from 525 to 388, rocker-arm from 248 to 193.
+- A ±6% lumpy sphere keeps 10 of its 388 raw-sharp edges.

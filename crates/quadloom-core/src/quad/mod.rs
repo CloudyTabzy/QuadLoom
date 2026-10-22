@@ -53,7 +53,7 @@ pub struct QuadParams {
 
 impl Default for QuadParams {
     fn default() -> Self {
-        Self { enabled: true, edge_scale: 0.75, regularity: quantize::DEFAULT_REGULARITY, smoothing: 8 }
+        Self { enabled: true, edge_scale: 0.75, regularity: quantize::DEFAULT_REGULARITY, smoothing: 20 }
     }
 }
 
@@ -131,6 +131,7 @@ pub fn compute(
     control.checkpoint(Stage::Patterns)?;
     let mut out = Assembly::new(trace, &segs, &counts);
     let mut report = QuadReport { segments: segs.segments.len(), edge_length: edge, ..QuadReport::default() };
+    out.create_midpoints();
     for (p, faces) in faces_of.iter().enumerate() {
         if p % 64 == 0 {
             control.checkpoint(Stage::Patterns)?;
@@ -253,6 +254,8 @@ struct Assembly<'a> {
     feature_vertex: std::collections::HashSet<u32>,
     /// Segments along a feature line or the border.
     feature_segment: Vec<bool>,
+    /// Extra midpoint vertices on mesh edges (polyline segments' parity samples).
+    midpoints: HashMap<(u32, u32), u32>,
     quads: usize,
     triangles: usize,
     /// Cumulative arc length along each segment (canonical order).
@@ -309,6 +312,7 @@ impl<'a> Assembly<'a> {
             fixed: Vec::new(),
             feature_vertex,
             feature_segment,
+            midpoints: HashMap::new(),
             quads: 0,
             triangles: 0,
             arc,
@@ -343,7 +347,25 @@ impl<'a> Assembly<'a> {
             return self.mesh_vertex(segment.vertices[last]);
         }
         if segment.polyline {
-            return self.mesh_vertex(segment.vertices[(k as usize).min(last)]);
+            // Sampled at its mesh vertices, plus the midpoint of its longest edge
+            // if quantization gave it one extra sample (for parity).
+            let k = k as usize;
+            return match self.split_edge(s) {
+                Some(j) if k == j + 1 => {
+                    if let Some(&id) = self.by_sample.get(&(s, k as u32)) {
+                        return id;
+                    }
+                    let (a, b) = (segment.vertices[j], segment.vertices[j + 1]);
+                    let position =
+                        |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
+                    let id = self.push(position(a).lerp(position(b), 0.5), true);
+                    self.by_sample.insert((s, k as u32), id);
+                    self.midpoints.insert((a.min(b), a.max(b)), id);
+                    id
+                }
+                Some(j) if k > j + 1 => self.mesh_vertex(segment.vertices[(k - 1).min(last)]),
+                _ => self.mesh_vertex(segment.vertices[k.min(last)]),
+            };
         }
         if let Some(&id) = self.by_sample.get(&(s, k)) {
             return id;
@@ -480,10 +502,42 @@ impl<'a> Assembly<'a> {
         edges
     }
 
+    /// The edge (index along the canonical vertices) that a polyline segment
+    /// splits for its extra sample: its longest, if it has one.
+    fn split_edge(&self, s: u32) -> Option<usize> {
+        let segment = &self.segs.segments[s as usize];
+        if (self.counts[s as usize] as usize) < segment.vertices.len() {
+            return None;
+        }
+        let arc = &self.arc[s as usize];
+        (0..segment.vertices.len() - 1)
+            .max_by(|&i, &j| (arc[i + 1] - arc[i]).total_cmp(&(arc[j + 1] - arc[j])))
+    }
+
+    /// Creates the extra midpoint samples of polyline segments, so the kept
+    /// triangles next to them can include them.
+    fn create_midpoints(&mut self) {
+        for s in 0..self.segs.segments.len() as u32 {
+            if self.segs.segments[s as usize].polyline
+                && let Some(j) = self.split_edge(s)
+            {
+                self.sample(s, j as u32 + 1);
+            }
+        }
+    }
+
     fn keep_triangles(&mut self, p: usize, faces: &[u32]) {
         for &f in faces {
             let Some(&t) = self.trace.mesh.triangles.get(f as usize) else { continue };
-            let face = t.map(|v| self.mesh_vertex(v));
+            // A triangle whose edge got an extra sample becomes a polygon through it.
+            let mut face = Vec::with_capacity(4);
+            for i in 0..3 {
+                let (a, b) = (t[i], t[(i + 1) % 3]);
+                face.push(self.mesh_vertex(a));
+                if let Some(&m) = self.midpoints.get(&(a.min(b), a.max(b))) {
+                    face.push(m);
+                }
+            }
             self.face_indices.extend_from_slice(&face);
             self.face_offsets.push(self.face_indices.len() as u32);
             self.patch_of_face.push(p as u32);

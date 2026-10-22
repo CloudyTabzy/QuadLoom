@@ -49,6 +49,16 @@ Five oracle `_rem` inputs through `quadloom run`, release build, with defaults (
 
 Every output is manifold (no edge in more than two faces).
 
+## Update 2026-10-23 (0.1.2)
+
+- **Smoothing.** 20 under-relaxed rounds (step 0.6). Each blends the neighbour average with each incident quad's parallelogram corner (weight 0.3). Full steps let a checkerboard wobble survive, and the parallelogram target alone amplifies it about 3×.
+- **Parity absorbed by kept triangles.** Segments along a patch kept as triangles have frozen counts, which could leave a region with odd parity and an unfillable patch, and a crack (rocker-arm had 26 border edges). Such a segment can now gain one extra sample, the midpoint of its longest edge, and the kept triangle on that edge becomes a polygon through it. Output is watertight wherever the input is.
+- **Results (fandisk / bunny / rocker-arm / MilkTruck / armadillo), p5 SJ:**
+  - before: 0.86 / 0.64 / 0.58 / 0.15 / 0.22
+  - now: 0.85 / 0.63 / 0.77 / 0.13 / 0.37
+  - fandisk's worst quad: −0.62 before, +0.12 now
+  - rocker-arm's fallback patterns: 29 before, 1 now (with the salience test in features)
+
 ## Open items
 
 - Large layouts: BiMDF, or larger region repair, to remove armadillo's fans.

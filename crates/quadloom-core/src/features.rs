@@ -146,6 +146,7 @@ pub fn detect(
     let face_set = group_of(&input.face_set);
     let cos_threshold = params.angle_deg.to_radians().cos();
 
+    let region = Region::new(mesh, &normals, &uses);
     let mut edges = Vec::new();
     let mut on_boundary = vec![false; positions.len()];
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
@@ -161,7 +162,8 @@ pub fn detect(
             }
             [x, y] => {
                 let (fx, fy) = (x.2 as usize, y.2 as usize);
-                if params.use_angle && normals[fx].dot(normals[fy]) < cos_threshold {
+                let raw_sharp = normals[fx].dot(normals[fy]) < cos_threshold;
+                if params.use_angle && raw_sharp && region.salient(v, fx, fy, cos_threshold) {
                     sources |= source::ANGLE;
                     let apex_height = (positions[y.3 as usize] - positions[v[0] as usize]).dot(normals[fx]);
                     convex = apex_height <= 0.0;
@@ -232,6 +234,86 @@ pub fn detect(
         length_ratio: if area > 0.0 { features.total_length(positions) / area.sqrt() } else { 0.0 },
     };
     (features, report)
+}
+
+/// Rings of faces around an edge that the salience test looks at.
+const SALIENCE_RINGS: usize = 3;
+
+/// The salience test for angle features. An edge that is sharp by its own two
+/// faces is kept only if it is still sharp between the two *sides* of its
+/// neighbourhood: the faces within [`SALIENCE_RINGS`] rings, split by the plane
+/// that contains the edge and bisects its normals, each side averaged by area.
+/// Along a real crease each side is the crease's own surface, so the angle
+/// survives. Sculpting or scanning noise averages out over the neighbourhood.
+struct Region<'a> {
+    positions: &'a [DVec3],
+    triangles: &'a [[u32; 3]],
+    normals: &'a [DVec3],
+    area: Vec<f64>,
+    centroid: Vec<DVec3>,
+    neighbours: Vec<Vec<u32>>,
+}
+
+impl<'a> Region<'a> {
+    fn new(mesh: &'a RepairedMesh, normals: &'a [DVec3], uses: &[(u32, u32, u32, u32)]) -> Self {
+        let (positions, triangles) = (&mesh.positions, &mesh.triangles);
+        let corners = |t: &[u32; 3]| t.map(|v| positions[v as usize]);
+        let area = triangles.iter().map(|t| {
+            let [a, b, c] = corners(t);
+            0.5 * (b - a).cross(c - a).length()
+        });
+        let centroid = triangles.iter().map(|t| corners(t).iter().sum::<DVec3>() / 3.0).collect();
+        let mut neighbours: Vec<Vec<u32>> = vec![Vec::new(); triangles.len()];
+        for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
+            if let [x, y] = group {
+                neighbours[x.2 as usize].push(y.2);
+                neighbours[y.2 as usize].push(x.2);
+            }
+        }
+        Self { positions, triangles, normals, area: area.collect(), centroid, neighbours }
+    }
+
+    /// Whether edge `v` (between faces `fx` and `fy`) is sharp at the scale of its neighbourhood.
+    fn salient(&self, v: [u32; 2], fx: usize, fy: usize, cos_threshold: f64) -> bool {
+        let (a, b) = (self.positions[v[0] as usize], self.positions[v[1] as usize]);
+        let mid = 0.5 * (a + b);
+        let along = (b - a).normalize_or_zero();
+        let bisector = (self.normals[fx] + self.normals[fy]).normalize_or_zero();
+        let across = along.cross(bisector);
+        // Orient `across` toward fx's side.
+        let across = if (self.centroid[fx] - mid).dot(across) >= 0.0 { across } else { -across };
+        // Faces within a few rings of the edge, breadth first from both of its faces.
+        let mut seen = vec![fx as u32, fy as u32];
+        let mut frontier = seen.clone();
+        for _ in 0..SALIENCE_RINGS {
+            let mut next = Vec::new();
+            for &f in &frontier {
+                for &g in &self.neighbours[f as usize] {
+                    if !seen.contains(&g) {
+                        seen.push(g);
+                        next.push(g);
+                    }
+                }
+            }
+            frontier = next;
+        }
+        let (mut side_x, mut side_y) = (DVec3::ZERO, DVec3::ZERO);
+        for &f in &seen {
+            let f = f as usize;
+            let weighted = self.normals[f] * self.area[f];
+            if f == fx || (f != fy && (self.centroid[f] - mid).dot(across) > 0.0) {
+                side_x += weighted;
+            } else {
+                side_y += weighted;
+            }
+        }
+        let (nx, ny) = (side_x.normalize_or_zero(), side_y.normalize_or_zero());
+        // Degenerate neighbourhoods fall back to the edge's own faces.
+        if nx == DVec3::ZERO || ny == DVec3::ZERO || self.triangles.is_empty() {
+            return true;
+        }
+        nx.dot(ny) < cos_threshold
+    }
 }
 
 /// Removes angle-only chains that dangle from the network: a chain starting at
@@ -344,6 +426,58 @@ mod tests {
         assert_eq!(features.corners().len(), 8);
         assert_eq!(report.corners, 8);
         assert_eq!(report.by_source[0], 12);
+    }
+
+    /// Edges sharper than `deg` by their two faces' raw normals.
+    fn raw_sharp_edges(p: &[DVec3], t: &[[u32; 3]], deg: f64) -> usize {
+        let normal = |f: &[u32; 3]| {
+            (p[f[1] as usize] - p[f[0] as usize]).cross(p[f[2] as usize] - p[f[0] as usize]).normalize()
+        };
+        let mut faces: std::collections::HashMap<(u32, u32), Vec<usize>> = std::collections::HashMap::new();
+        for (i, f) in t.iter().enumerate() {
+            for k in 0..3 {
+                let (a, b) = (f[k], f[(k + 1) % 3]);
+                faces.entry((a.min(b), a.max(b))).or_default().push(i);
+            }
+        }
+        faces
+            .values()
+            .filter(|fs| fs.len() == 2 && normal(&t[fs[0]]).dot(normal(&t[fs[1]])) < deg.to_radians().cos())
+            .count()
+    }
+
+    fn flat(p: &[DVec3], t: &[[u32; 3]]) -> (Vec<f32>, Vec<u32>) {
+        (
+            p.iter().flat_map(|v| [v.x as f32, v.y as f32, v.z as f32]).collect(),
+            t.iter().flatten().copied().collect(),
+        )
+    }
+
+    #[test]
+    fn sculpting_noise_is_not_a_feature() {
+        // A lumpy sphere: radial noise makes scattered edges sharper than 35°.
+        let (mut p, t) = crate::testmesh::icosphere(3);
+        let mut seed = 7u64;
+        for v in &mut p {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let r = (seed >> 11) as f64 / (1u64 << 53) as f64;
+            *v *= 1.0 + 0.12 * (r - 0.5);
+        }
+        let raw = raw_sharp_edges(&p, &t, 35.0);
+        assert!(raw > 20, "the test needs noisy edges ({raw})");
+        let (fp, ft) = flat(&p, &t);
+        let (features, _) = detect(&repaired(&fp, &ft), &FeatureInput::default(), &only(source::ANGLE));
+        assert!(features.edges.len() * 10 < raw, "{} of {raw} noisy edges kept", features.edges.len());
+    }
+
+    #[test]
+    fn real_creases_survive_the_salience_test() {
+        // A subdivided cube: every one of its 12 edges, 6 segments each, stays.
+        let (p, t, expected) = crate::testmesh::cube(6);
+        let (fp, ft) = flat(&p, &t);
+        let (features, _) = detect(&repaired(&fp, &ft), &FeatureInput::default(), &only(source::ANGLE));
+        assert_eq!(features.edges.len(), expected.len());
+        assert_eq!(features.corners().len(), 8);
     }
 
     #[test]

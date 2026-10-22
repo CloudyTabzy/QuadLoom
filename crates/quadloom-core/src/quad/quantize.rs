@@ -52,7 +52,9 @@ pub fn quantize(
     q.fix_parity(&mut n);
     control.checkpoint(Stage::Quantize)?;
     // The integer program, seeded with these counts, keeps only real improvements.
-    let spec = super::ilp::Spec { segments, targets, fixed: &q.fixed, regularity };
+    // Segments along kept triangles stay as they are now (possibly with their extra sample).
+    let fixed_now: Vec<Option<u32>> = q.fixed.iter().enumerate().map(|(s, f)| f.map(|_| n[s])).collect();
+    let spec = super::ilp::Spec { segments, targets, fixed: &fixed_now, regularity };
     if let Some(candidate) = super::ilp::refine(spec, &n)
         && q.all_even(&candidate)
         && q.total(&candidate) < q.total(&n) - 1e-9
@@ -421,11 +423,17 @@ impl<'a> Problem<'a> {
             seen[start] = true;
             let mut queue = VecDeque::from([start]);
             let mut end: Option<(usize, Option<usize>)> = None; // (patch, border segment)
+            // The nearest segment bordering a kept triangle patch: one extra sample
+            // there (its longest edge split) absorbs the parity when nothing else can.
+            let mut split: Option<(usize, usize)> = None;
             'search: while let Some(p) = queue.pop_front() {
                 let Some(Some(sides)) = self.segments.sides.get(p) else { continue };
                 for &(s, _) in sides.iter().flatten() {
                     let s = s as usize;
-                    if self.fixed[s].is_some() {
+                    if let Some(f) = self.fixed[s] {
+                        if split.is_none() && n[s] == f && self.segments.segments[s].uses.len() == 1 {
+                            split = Some((p, s));
+                        }
                         continue;
                     }
                     let uses = &self.segments.segments[s].uses;
@@ -447,7 +455,11 @@ impl<'a> Problem<'a> {
                     }
                 }
             }
-            let Some((mut p, border)) = end else { continue };
+            let (mut p, border) = match (end, split) {
+                (Some(found), _) => found,
+                (None, Some((p, s))) => (p, Some(s)),
+                (None, None) => continue,
+            };
             let mut path: Vec<usize> = border.into_iter().collect();
             while p != start {
                 let Some((s, prev)) = via[p] else { break };
@@ -455,6 +467,11 @@ impl<'a> Problem<'a> {
                 p = prev;
             }
             for s in path {
+                // A segment along kept triangles only ever gains its one extra sample.
+                if self.fixed[s].is_some() {
+                    n[s] += 1;
+                    continue;
+                }
                 // Toward the target where possible, never below 1.
                 if n[s] > 1 && (n[s] as f64) > self.targets[s] {
                     n[s] -= 1;

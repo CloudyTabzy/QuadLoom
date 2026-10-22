@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "quadloom"
-version = "0.1.1"
+version = "0.1.2"
 name = "QuadLoom"
 tagline = "Feature-aligned quad remeshing"
 maintainer = "CloudyTabzy"
@@ -14,7 +14,7 @@ license = ["SPDX:GPL-3.0-or-later"]
 platforms = ["windows-x64"]
 
 # Filled in by tools/build.py.
-wheels = ["./wheels/quadloom_native-0.1.1-cp311-abi3-win_amd64.whl"]
+wheels = ["./wheels/quadloom_native-0.1.2-cp311-abi3-win_amd64.whl"]
 
 [build]
 paths_exclude_pattern = ["__pycache__/", "/.git/", "*.zip"]
