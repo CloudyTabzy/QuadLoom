@@ -8,7 +8,7 @@
 //! (non-border) feature edge: an isolated feature edge then gets an interior
 //! vertex, so cutting along it actually opens the mesh.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::DVec3;
 

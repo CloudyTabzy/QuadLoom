@@ -6,7 +6,7 @@
 //! their vertex ids change. Corner `h = 3f + i` (vertex `i` of face `f`) is
 //! also the half-edge leaving that vertex in `f`.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use glam::DVec3;
 

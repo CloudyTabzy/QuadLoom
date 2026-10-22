@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 quadloom-core = { workspace = true, features = ["serde"] }
 serde_json.workspace = true
+hashbrown.workspace = true
 tobj.workspace = true
 stl_io.workspace = true
 

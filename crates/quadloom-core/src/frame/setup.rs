@@ -8,7 +8,7 @@
 //! `t[c] → t[c+1]`. The field's angle in a face is measured from that face's
 //! first edge, as in [`FaceFrames`].
 
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use glam::DVec3;

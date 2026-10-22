@@ -1,7 +1,7 @@
 //! What the cross field aligns to: feature lines and borders exactly, and
 //! principal curvature softly.
 
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 use glam::DVec3;
 

@@ -433,7 +433,7 @@ mod tests {
         let normal = |f: &[u32; 3]| {
             (p[f[1] as usize] - p[f[0] as usize]).cross(p[f[2] as usize] - p[f[0] as usize]).normalize()
         };
-        let mut faces: std::collections::HashMap<(u32, u32), Vec<usize>> = std::collections::HashMap::new();
+        let mut faces: hashbrown::HashMap<(u32, u32), Vec<usize>> = hashbrown::HashMap::new();
         for (i, f) in t.iter().enumerate() {
             for k in 0..3 {
                 let (a, b) = (f[k], f[(k + 1) % 3]);

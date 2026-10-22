@@ -8,7 +8,7 @@
 //! valence match: no singularity inside a 4-sided patch, one singularity of
 //! index k (in quarters) inside a (4 − k)-sided one.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::DVec3;
 
@@ -429,7 +429,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
     let chi2 = 2 * interior as i64 + boundary.len() as i64 - faces.len() as i64;
 
     // Walk the loops; each step is (half-edge, class at its head).
-    let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::with_capacity(boundary.len());
+    let mut seen: hashbrown::HashSet<u32> = hashbrown::HashSet::with_capacity(boundary.len());
     let mut loops: Vec<Vec<(u32, VertexClass, f64)>> = Vec::new();
     let mut broken = false;
     for &start in &boundary {
@@ -505,7 +505,7 @@ fn describe(ctx: &PatchContext, paths: &PathEdges, faces: Vec<u32>, scratch: &mu
     // Boundary edges glued to the same patch on their other side (a feature
     // or path with this patch on both sides), as merged edges.
     let merged_of = |v: u32| ctx.merge_id.get(v as usize).copied().unwrap_or(v);
-    let directed: std::collections::HashSet<(u32, u32)> =
+    let directed: hashbrown::HashSet<(u32, u32)> =
         boundary.iter().map(|&h| (merged_of(cut.tail(h)), merged_of(cut.head(h)))).collect();
     info.glued = boundary
         .iter()

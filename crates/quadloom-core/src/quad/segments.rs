@@ -4,7 +4,7 @@
 //! T-junction), so sides are cut at every layout corner. The pieces, segments,
 //! are each shared by at most two patches and carry one integer quad count.
 
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 use crate::trace::{PatchKind, TraceOutput};
 

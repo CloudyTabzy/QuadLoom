@@ -10,7 +10,7 @@
 //! Singular vertices have no field direction and hence no nodes: no path
 //! passes through them.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::f64::consts::FRAC_PI_4;
 
 use glam::{DQuat, DVec3};

@@ -19,7 +19,7 @@
 //!   center vertex and one quad per two boundary edges. Always valid, poor
 //!   shape; the last resort.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::f64::consts::TAU;
 
 use glam::DVec2;

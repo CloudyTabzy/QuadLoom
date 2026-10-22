@@ -7,7 +7,7 @@
 //! always leave open edges, while separate closed parts that merely touch (a
 //! bolt sitting on a panel) have none, so they're never glued together.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub use glam::DVec3;
 

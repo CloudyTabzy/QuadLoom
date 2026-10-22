@@ -1,6 +1,6 @@
 //! Measuring any layout the same way: ours, or the oracle's `_p0` files.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::DVec3;
 

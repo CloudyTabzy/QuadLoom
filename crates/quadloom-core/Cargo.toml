@@ -17,6 +17,7 @@ serde = ["dep:serde"]
 
 [dependencies]
 glam.workspace = true
+hashbrown.workspace = true
 rayon.workspace = true
 faer.workspace = true
 microlp.workspace = true

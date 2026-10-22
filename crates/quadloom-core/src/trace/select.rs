@@ -10,7 +10,8 @@
 //! passes, a clean-up that dissolves paths whose removal makes no patch
 //! worse, and a recovery ladder for whatever is still invalid.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
+use std::collections::BinaryHeap;
 
 use glam::DVec3;
 use rayon::prelude::*;

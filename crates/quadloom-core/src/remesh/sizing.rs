@@ -1,6 +1,6 @@
 //! Target edge length and the per-vertex sizing field.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use glam::{DMat4, DVec3, DVec4};
 use rayon::prelude::*;

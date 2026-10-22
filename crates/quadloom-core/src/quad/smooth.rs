@@ -8,7 +8,7 @@
 //! vertex belongs to, so it stays on the surface and can't jump across thin
 //! parts. Vertices on feature lines and borders don't move.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use glam::DVec3;
 use rayon::prelude::*;
@@ -228,7 +228,7 @@ fn projection_regions(patches: &[Vec<u32>], trace: &TraceOutput) -> Regions {
     let tm = &trace.mesh;
     let count = trace.patches.len();
     let mut pool: Vec<HashSet<u32>> = (0..count as u32).map(|p| HashSet::from([p])).collect();
-    let mut face_of: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+    let mut face_of: hashbrown::HashMap<(u32, u32), u32> = hashbrown::HashMap::new();
     for (f, t) in tm.triangles.iter().enumerate() {
         for i in 0..3 {
             let (a, b) = (t[i], t[(i + 1) % 3]);
@@ -247,7 +247,7 @@ fn projection_regions(patches: &[Vec<u32>], trace: &TraceOutput) -> Regions {
             face_of.insert((a, b), f as u32);
         }
     }
-    let mut merged: std::collections::HashMap<Vec<u32>, usize> = std::collections::HashMap::new();
+    let mut merged: hashbrown::HashMap<Vec<u32>, usize> = hashbrown::HashMap::new();
     let of_vertex = patches
         .iter()
         .map(|own| match own.as_slice() {
@@ -255,7 +255,8 @@ fn projection_regions(patches: &[Vec<u32>], trace: &TraceOutput) -> Regions {
             _ => {
                 let mut key: Vec<u32> = own.iter().copied().filter(|&p| (p as usize) < count).collect();
                 key.sort_unstable();
-                *merged.entry(key.clone()).or_insert_with(|| {
+                // entry_ref: the key is copied only when it is new.
+                *merged.entry_ref(key.as_slice()).or_insert_with(|| {
                     let union: HashSet<u32> =
                         key.iter().flat_map(|&p| pool[p as usize].iter().copied()).collect();
                     pool.push(union);

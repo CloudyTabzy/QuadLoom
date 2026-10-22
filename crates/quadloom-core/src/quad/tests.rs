@@ -1,6 +1,6 @@
 //! End-to-end checks of the quad stages through the pipeline.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::DVec3;
 

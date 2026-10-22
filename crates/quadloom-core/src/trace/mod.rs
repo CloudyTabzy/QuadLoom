@@ -19,7 +19,7 @@ pub mod turns;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use glam::DVec3;

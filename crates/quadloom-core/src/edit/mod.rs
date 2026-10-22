@@ -7,39 +7,63 @@
 //! changes* (no repeated corners, no edge used twice in the same direction), so
 //! a refused operation leaves the mesh exactly as it was.
 
-use std::collections::{HashMap, HashSet};
-use std::hash::{BuildHasherDefault, Hasher};
+use hashbrown::{DefaultHashBuilder, HashMap, HashSet, HashTable};
+use std::hash::BuildHasher;
 
 pub use glam::DVec3;
 
-/// A fast hasher for small integer keys (edge pairs). SipHash's DoS
-/// resistance buys nothing here and costs most of the remesher's time.
-#[derive(Default, Clone, Copy, Debug)]
-struct EdgeHasher(u64);
+/// Half-edges by `(from, to)`. Only the half-edge id is stored (4 bytes, not
+/// a 12-byte key and value): its key is read back from the face corners.
+/// That is sound because a face's corners never change once it exists (faces
+/// are only appended), so the table can rehash any entry at any time.
+#[derive(Clone, Debug, Default)]
+struct EdgeTable {
+    table: HashTable<u32>,
+    hasher: DefaultHashBuilder,
+}
 
-impl Hasher for EdgeHasher {
-    fn finish(&self) -> u64 {
-        self.0
+fn ends(corners: &[[u32; 3]], h: u32) -> (u32, u32) {
+    let t = corners[(h / 3) as usize];
+    let i = (h % 3) as usize;
+    (t[i], t[(i + 1) % 3])
+}
+
+impl EdgeTable {
+    fn with_capacity(n: usize) -> Self {
+        Self { table: HashTable::with_capacity(n), hasher: DefaultHashBuilder::default() }
     }
 
-    fn write(&mut self, bytes: &[u8]) {
-        for &b in bytes {
-            self.write_u64(u64::from(b));
+    fn len(&self) -> usize {
+        self.table.len()
+    }
+
+    fn get(&self, corners: &[[u32; 3]], a: u32, b: u32) -> Option<u32> {
+        self.table.find(self.hasher.hash_one((a, b)), |&h| ends(corners, h) == (a, b)).copied()
+    }
+
+    fn contains(&self, corners: &[[u32; 3]], a: u32, b: u32) -> bool {
+        self.get(corners, a, b).is_some()
+    }
+
+    /// Adds half-edge `h`, whose `(from, to)` must not be in the table yet.
+    fn insert(&mut self, corners: &[[u32; 3]], h: u32) {
+        let hasher = &self.hasher;
+        self.table
+            .insert_unique(hasher.hash_one(ends(corners, h)), h, |&x| hasher.hash_one(ends(corners, x)));
+    }
+
+    fn remove(&mut self, corners: &[[u32; 3]], a: u32, b: u32) {
+        if let Ok(entry) =
+            self.table.find_entry(self.hasher.hash_one((a, b)), |&h| ends(corners, h) == (a, b))
+        {
+            entry.remove();
         }
     }
 
-    fn write_u32(&mut self, n: u32) {
-        self.write_u64(u64::from(n));
-    }
-
-    fn write_u64(&mut self, n: u64) {
-        // FxHash-style mixing: rotate, xor, multiply by an odd constant.
-        self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    fn keys<'a>(&'a self, corners: &'a [[u32; 3]]) -> impl Iterator<Item = (u32, u32)> + 'a {
+        self.table.iter().map(move |&h| ends(corners, h))
     }
 }
-
-type FastMap<K, V> = HashMap<K, V, BuildHasherDefault<EdgeHasher>>;
-type FastSet<K> = HashSet<K, BuildHasherDefault<EdgeHasher>>;
 
 const NONE: u32 = u32::MAX;
 /// A feature vertex whose two feature edges turn by more than this (from
@@ -84,13 +108,13 @@ pub struct EditMesh {
     face_alive: Vec<bool>,
     live_faces: usize,
     /// `(from, to)` → half-edge.
-    directed: FastMap<(u32, u32), u32>,
+    directed: EdgeTable,
     /// Feature edges as sorted vertex pairs.
-    features: FastSet<(u32, u32)>,
+    features: HashSet<(u32, u32)>,
     /// The subset of `features` that came from the angle test alone and may be
     /// released once the surface is clean enough to judge them (see
     /// [`release_flat_soft_features`](Self::release_flat_soft_features)).
-    soft: FastSet<(u32, u32)>,
+    soft: HashSet<(u32, u32)>,
 }
 
 fn key(a: u32, b: u32) -> (u32, u32) {
@@ -118,9 +142,9 @@ impl EditMesh {
             references: Vec::with_capacity(triangles.len()),
             face_alive: Vec::with_capacity(triangles.len()),
             live_faces: 0,
-            directed: FastMap::with_capacity_and_hasher(triangles.len() * 3, Default::default()),
-            features: FastSet::default(),
-            soft: FastSet::default(),
+            directed: EdgeTable::with_capacity(triangles.len() * 3),
+            features: HashSet::default(),
+            soft: HashSet::default(),
         };
         for (f, t) in triangles.iter().enumerate() {
             if t.iter().any(|&v| v as usize >= n) {
@@ -132,13 +156,13 @@ impl EditMesh {
         }
         let boundary: Vec<(u32, u32)> = mesh
             .directed
-            .keys()
-            .filter(|&&(a, b)| !mesh.directed.contains_key(&(b, a)))
-            .map(|&(a, b)| key(a, b))
+            .keys(&mesh.corners)
+            .filter(|&(a, b)| !mesh.directed.contains(&mesh.corners, b, a))
+            .map(|(a, b)| key(a, b))
             .collect();
         mesh.features.extend(boundary);
         for &[a, b] in feature_edges {
-            if mesh.directed.contains_key(&(a, b)) || mesh.directed.contains_key(&(b, a)) {
+            if mesh.directed.contains(&mesh.corners, a, b) || mesh.directed.contains(&mesh.corners, b, a) {
                 mesh.features.insert(key(a, b));
             }
         }
@@ -228,11 +252,11 @@ impl EditMesh {
     }
 
     pub fn twin(&self, h: HalfEdge) -> Option<HalfEdge> {
-        self.directed.get(&(self.to(h), self.from(h))).map(|&t| HalfEdge(t))
+        self.directed.get(&self.corners, self.to(h), self.from(h)).map(HalfEdge)
     }
 
     pub fn find_half_edge(&self, a: u32, b: u32) -> Option<HalfEdge> {
-        self.directed.get(&(a, b)).map(|&h| HalfEdge(h))
+        self.directed.get(&self.corners, a, b).map(HalfEdge)
     }
 
     pub fn is_feature(&self, a: u32, b: u32) -> bool {
@@ -390,7 +414,7 @@ impl EditMesh {
         let (a, b) = (self.from(h), self.to(h));
         let (pa, pb) = (self.position(a), self.position(b));
         let (f0, f1) = (self.face(h), self.face(t));
-        let mut line: FastSet<(u32, u32)> = FastSet::default();
+        let mut line: HashSet<(u32, u32)> = HashSet::default();
         line.insert(key(a, b));
         for (from, start) in [(b, a), (a, b)] {
             let (mut prev, mut at, mut travelled) = (from, start, 0.0);
@@ -412,7 +436,7 @@ impl EditMesh {
         };
         let near = |c: DVec3| distance(c) <= radius;
         let flood = |start: u32| {
-            let mut seen: FastSet<u32> = FastSet::default();
+            let mut seen: HashSet<u32> = HashSet::default();
             seen.insert(start);
             let mut queue = vec![start];
             while let Some(f) = queue.pop() {
@@ -437,7 +461,7 @@ impl EditMesh {
         let axis = (pb - pa).cross(self.face_normal(f0) + self.face_normal(f1)).normalize_or_zero();
         let reference = (self.centroid(f0) - pa).dot(axis).signum();
         let mut sides = [DVec3::ZERO; 2];
-        for &f in side0.iter().chain(side1.iter().filter(|f| !side0.contains(f))) {
+        for &f in side0.iter().chain(side1.iter().filter(|f| !side0.contains(*f))) {
             let side = match (side0.contains(&f), side1.contains(&f)) {
                 (true, false) => 0,
                 (false, true) => 1,
@@ -600,7 +624,8 @@ impl EditMesh {
             }
             for i in 0..3 {
                 let e = (t[i], t[(i + 1) % 3]);
-                let taken = self.directed.get(&e).is_some_and(|h| !removed.contains(&(h / 3)));
+                let taken =
+                    self.directed.get(&self.corners, e.0, e.1).is_some_and(|h| !removed.contains(&(h / 3)));
                 if taken || seen.contains(&e) {
                     return None;
                 }
@@ -630,9 +655,9 @@ impl EditMesh {
             let t = self.corners[f as usize];
             for i in 0..3 {
                 let (a, b) = (t[i], t[(i + 1) % 3]);
-                self.directed.remove(&(a, b));
+                self.directed.remove(&self.corners, a, b);
                 self.face_degree[a as usize] -= 1;
-                let alone = !self.directed.contains_key(&(b, a));
+                let alone = !self.directed.contains(&self.corners, b, a);
                 self.bump_boundary(a, b, alone, false);
             }
             self.face_alive[f as usize] = false;
@@ -655,10 +680,10 @@ impl EditMesh {
             self.live_faces += 1;
             for i in 0..3 {
                 let (a, b) = (t[i], t[(i + 1) % 3]);
-                self.directed.insert((a, b), 3 * f + i as u32);
+                self.directed.insert(&self.corners, 3 * f + i as u32);
                 self.out[a as usize] = 3 * f + i as u32;
                 self.face_degree[a as usize] += 1;
-                let alone = !self.directed.contains_key(&(b, a));
+                let alone = !self.directed.contains(&self.corners, b, a);
                 self.bump_boundary(a, b, alone, true);
             }
             ids.push(f);
@@ -907,7 +932,7 @@ impl EditMesh {
                     return Err(format!("face {f} uses dead vertex {v}"));
                 }
                 *faces_of.entry(v).or_default() += 1;
-                if self.directed.get(&(t[i], t[(i + 1) % 3])) != Some(&(3 * f + i as u32)) {
+                if self.directed.get(&self.corners, t[i], t[(i + 1) % 3]) != Some(3 * f + i as u32) {
                     return Err(format!(
                         "half-edge {} of face {f} missing from the edge map",
                         3 * f + i as u32
@@ -943,11 +968,11 @@ impl EditMesh {
             }
         }
         for &(a, b) in &self.features {
-            if !self.directed.contains_key(&(a, b)) && !self.directed.contains_key(&(b, a)) {
+            if !self.directed.contains(&self.corners, a, b) && !self.directed.contains(&self.corners, b, a) {
                 return Err(format!("feature edge ({a}, {b}) is not a mesh edge"));
             }
         }
-        if let Some(&(a, b)) = self.soft.iter().find(|e| !self.features.contains(e)) {
+        if let Some(&(a, b)) = self.soft.iter().find(|e| !self.features.contains(*e)) {
             return Err(format!("soft edge ({a}, {b}) is not a feature"));
         }
         Ok(())

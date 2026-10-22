@@ -6,7 +6,7 @@
 //! edge-connected fan gets one copy per extra fan. Detaching an edge is just
 //! "don't link across it": the vertex-fan step does the actual separation.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub use glam::DVec3;
 

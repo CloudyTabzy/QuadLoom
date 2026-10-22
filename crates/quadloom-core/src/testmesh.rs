@@ -3,7 +3,7 @@
 // Shared fixtures: not every test build uses each one.
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::f64::consts::TAU;
 
 use glam::DVec3;

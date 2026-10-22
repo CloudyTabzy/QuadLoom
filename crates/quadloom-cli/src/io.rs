@@ -146,8 +146,7 @@ pub fn write_rosy(path: &Path, directions: &[DVec3]) -> Result<(), IoError> {
 /// Writes feature edges of a triangle mesh in QuadWild's `.sharp` format:
 /// the count, then `kind,face,edge` per feature edge side (kind 0).
 pub fn write_sharp(path: &Path, mesh: &PolyMesh, features: &[[u32; 2]]) -> Result<(), IoError> {
-    let wanted: std::collections::HashSet<[u32; 2]> =
-        features.iter().map(|&[a, b]| [a.min(b), a.max(b)]).collect();
+    let wanted: hashbrown::HashSet<[u32; 2]> = features.iter().map(|&[a, b]| [a.min(b), a.max(b)]).collect();
     let mut lines = Vec::new();
     for (f, face) in mesh.face_offsets.windows(2).enumerate() {
         let corners = mesh.face_indices.get(face[0] as usize..face[1] as usize).unwrap_or_default();
@@ -340,7 +339,7 @@ pub fn write_layout(prefix: &Path, layout: &quadloom_core::TraceOutput) -> Resul
         }
     }
     write(path("corners"), text)?;
-    let features: std::collections::HashSet<[u32; 2]> = mesh.feature_edges.iter().copied().collect();
+    let features: hashbrown::HashSet<[u32; 2]> = mesh.feature_edges.iter().copied().collect();
     let mut lines = Vec::new();
     for (f, t) in mesh.triangles.iter().enumerate() {
         for e in 0..3 {

@@ -2,7 +2,7 @@
 
 use glam::DVec3;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use super::*;
 use crate::field::{FaceFrames, FieldParams, ROSY, compute as field_compute, vertex_indices};

@@ -6,8 +6,9 @@
 //! crossing. A path may end on another one at right angles (a T-junction),
 //! or where the other one ends, continuing it.
 
+use hashbrown::HashMap;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 
 use super::cut::CutMesh;
 use super::graph::{DIRECT, FieldGraph, Node, TWIN, transport};

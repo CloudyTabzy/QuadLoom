@@ -48,7 +48,7 @@ impl Projector {
                 (b - a).cross(c - a).normalize_or_zero()
             })
             .collect();
-        let mut beside: std::collections::HashMap<(u32, u32), Vec<u32>> = std::collections::HashMap::new();
+        let mut beside: hashbrown::HashMap<(u32, u32), Vec<u32>> = hashbrown::HashMap::new();
         for (f, t) in triangles.iter().enumerate() {
             for i in 0..3 {
                 let (a, b) = (t[i], t[(i + 1) % 3]);

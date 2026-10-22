@@ -1,7 +1,7 @@
 //! Per-face tangent frames, complex numbers for power fields, and the dual
 //! edges (face pairs) the smoothness energy runs over.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::ops::{Add, Mul, Sub};
 
 use glam::DVec3;

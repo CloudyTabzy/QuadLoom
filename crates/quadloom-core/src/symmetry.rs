@@ -12,7 +12,7 @@
 //! 3. **Mirror.** The finished half is reflected across each plane in turn
 //!    (with flipped winding), and vertices on the plane are welded.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::DVec3;
 
@@ -428,7 +428,7 @@ mod tests {
         // Every vertex has its mirror image among the vertices.
         let key =
             |v: DVec3| ((v.x * 1e6).round() as i64, (v.y * 1e6).round() as i64, (v.z * 1e6).round() as i64);
-        let all: std::collections::HashSet<_> = q.mesh.positions.iter().map(|&v| key(v)).collect();
+        let all: hashbrown::HashSet<_> = q.mesh.positions.iter().map(|&v| key(v)).collect();
         for &v in &q.mesh.positions {
             assert!(all.contains(&key(DVec3::new(-v.x, v.y, v.z))), "no mirror for {v}");
         }
@@ -455,7 +455,7 @@ mod tests {
         assert!(uses.values().all(|&n| n == 2), "closed and manifold");
         let key =
             |v: DVec3| ((v.x * 1e6).round() as i64, (v.y * 1e6).round() as i64, (v.z * 1e6).round() as i64);
-        let all: std::collections::HashSet<_> = q.mesh.positions.iter().map(|&v| key(v)).collect();
+        let all: hashbrown::HashSet<_> = q.mesh.positions.iter().map(|&v| key(v)).collect();
         for &v in &q.mesh.positions {
             for m in [DVec3::new(-v.x, v.y, v.z), DVec3::new(v.x, -v.y, v.z), DVec3::new(-v.x, -v.y, v.z)] {
                 assert!(all.contains(&key(m)), "no image {m} of {v}");

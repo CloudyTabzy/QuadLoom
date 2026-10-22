@@ -25,7 +25,7 @@ pub mod smooth;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use glam::{DVec2, DVec3};
 
@@ -306,9 +306,9 @@ struct Assembly<'a> {
     /// Per output vertex: whether smoothing must leave it (on a feature or border).
     fixed: Vec<bool>,
     /// Mesh vertices on a feature line or the border.
-    feature_vertex: std::collections::HashSet<u32>,
+    feature_vertex: hashbrown::HashSet<u32>,
     /// Mesh edges on a feature line or the border.
-    sharp_edges: std::collections::HashSet<(u32, u32)>,
+    sharp_edges: hashbrown::HashSet<(u32, u32)>,
     /// Segments along a feature line or the border.
     feature_segment: Vec<bool>,
     /// Midpoint vertices of mesh edges (patches split from triangles, and the polyline segments around them).
@@ -342,7 +342,7 @@ impl<'a> Assembly<'a> {
                 *uses.entry((a.min(b), a.max(b))).or_default() += 1;
             }
         }
-        let mut sharp: std::collections::HashSet<(u32, u32)> =
+        let mut sharp: hashbrown::HashSet<(u32, u32)> =
             trace.mesh.feature_edges.iter().map(|&[a, b]| (a.min(b), a.max(b))).collect();
         sharp.extend(uses.iter().filter(|&(_, &n)| n == 1).map(|(&e, _)| e));
         let feature_vertex = sharp.iter().flat_map(|&(a, b)| [a, b]).collect();

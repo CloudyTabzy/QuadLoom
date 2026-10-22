@@ -6,7 +6,7 @@
 //! and positive weights the map is a bijection (Tutte's theorem), so every
 //! domain point lies in exactly one mapped triangle.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use faer::linalg::solvers::Solve;
 use faer::sparse::{SparseColMat, Triplet};
