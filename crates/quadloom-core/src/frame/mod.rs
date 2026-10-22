@@ -11,6 +11,7 @@
 //! large, has nothing to solve, or does not converge keeps the plain field, and
 //! that is reported, never an error. Only cancellation propagates.
 
+pub mod curvature;
 pub mod residual;
 pub mod setup;
 pub mod solve;
@@ -331,8 +332,32 @@ fn solve_part(
     if unknowns.is_empty() || mesh.free.is_empty() {
         return Ok(Outcome::Untouched);
     }
-    // Curvature targets come with Task 3; until then every target is zero.
-    let targets = vec![0.0; faces.len()];
+    // Curvature targets, blended so that w_v (v − t)² matches the stretch
+    // term stretch_weight·(v − raw)²: t = stretch_weight·raw / w_v.
+    let targets = if ctx.params.curvature_stretch {
+        let raw = match curvature::aspect_targets(
+            &mesh.positions,
+            &mesh.triangles,
+            &part_directions,
+            ctx.params.max_stretch,
+            curvature::SMOOTHING_STEPS,
+            control,
+        ) {
+            Ok(raw) => raw,
+            Err(e) if e.kind == ErrorKind::Cancelled => return Err(e),
+            // A target that cannot be computed is zero: the frame never fails a run.
+            Err(_) => vec![0.0; faces.len()],
+        };
+        let scale = if ctx.weights.w_v > 0.0 { ctx.params.stretch_weight / ctx.weights.w_v } else { 0.0 };
+        raw.iter()
+            .map(|&r| {
+                let t = scale * r;
+                if t.is_finite() { t } else { 0.0 }
+            })
+            .collect()
+    } else {
+        vec![0.0; faces.len()]
+    };
     let solution =
         match solve::solve(&mesh, &unknowns, &ctx.weights, &targets, ctx.params.max_iterations, control) {
             Ok(Some(solution)) => solution,
@@ -510,6 +535,25 @@ mod tests {
         control.cancel();
         let err = compute(&p, &t, &[], &field, &on(), &control).unwrap_err();
         assert_eq!(err.kind, ErrorKind::Cancelled);
+    }
+
+    #[test]
+    fn curvature_stretch_elongates_cylinder_quads() {
+        let (p, t) = testmesh::cylinder(8, 32);
+        let field = field_of(&p, &t, &[], &FieldParams::default());
+        let params = FrameParams {
+            curvature_stretch: true,
+            max_stretch: 3.0,
+            balance: 0.5,
+            stretch_weight: 1.0,
+            ..on()
+        };
+        let out = compute(&p, &t, &[], &field, &params, &Control::default()).unwrap();
+        assert_eq!(out.report.solved_parts, 1, "{:?}", out.report);
+        let mut ratios: Vec<f64> = out.scales.iter().map(|s| s[0].max(s[1]) / s[0].min(s[1])).collect();
+        ratios.sort_unstable_by(f64::total_cmp);
+        let median = ratios[ratios.len() / 2];
+        assert!(median >= 1.9, "median stretch {median:.3}");
     }
 
     #[test]
