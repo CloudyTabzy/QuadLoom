@@ -426,3 +426,41 @@ fn spurs_leave_the_patch_boundary() {
     let clean = vec![side(&[0, 1], 1.0), side(&[1, 2], 1.0), side(&[2, 0], 1.0)];
     assert_eq!(without_spurs(vec![0, 1, 2], clean.clone()), (vec![0, 1, 2], clean, Vec::new()));
 }
+
+/// An icosphere with bumps: the field gets many singularities close together.
+fn bumpy_sphere(level: u32, amplitude: f64, frequency: f64) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let (p, t) = icosphere(level);
+    let p = p
+        .iter()
+        .map(|v| {
+            let n = v.normalize();
+            let bump = (frequency * n.x).sin() * (frequency * n.y).sin() * (frequency * n.z).sin();
+            n * (1.0 + amplitude * bump)
+        })
+        .collect();
+    (p, t)
+}
+
+fn crowding(out: &TraceOutput) -> usize {
+    out.patches.iter().map(|p| p.singularities.len().saturating_sub(1)).sum()
+}
+
+#[test]
+fn crowded_part_is_laid_out_again_with_crowding_first() {
+    // The usual order leaves patches holding several singularities here;
+    // the crowding-first layout is kept because it holds fewer.
+    let (p, t) = bumpy_sphere(3, 0.12, 9.0);
+    let out = layout(&p, &t, &[]);
+    assert_valid(&out);
+    assert_eq!(out.report.uncrowded, 1, "{}", summary(&out));
+    assert!(crowding(&out) <= 3, "{}", summary(&out));
+}
+
+#[test]
+fn uncrowded_part_is_laid_out_once() {
+    let (p, t) = bumpy_sphere(3, 0.15, 5.0);
+    let out = layout(&p, &t, &[]);
+    assert_valid(&out);
+    assert_eq!(crowding(&out), 0);
+    assert_eq!(out.report.uncrowded, 0);
+}

@@ -262,6 +262,8 @@ pub struct TraceReport {
     pub seams: usize,
     /// Patches whose corners were re-declared to bring their side count in range.
     pub redeclared: usize,
+    /// Parts laid out a second time with crowding ranked first, and kept.
+    pub uncrowded: usize,
     /// Patches that are still invalid (non-disk, not convex, or a side count out of range).
     pub unsolved: usize,
 }
@@ -398,22 +400,17 @@ fn layout_part(
     }
     let mean_edge = if count > 0 { sum / count as f64 } else { 0.0 };
     let labels = HashMap::new();
-    let region = select::Region::new(
-        select::RegionMesh {
-            positions: &mesh.positions,
-            triangles: &mesh.triangles,
-            barrier: &mesh.feature_edges,
-            directions: mesh.directions.clone(),
-            singular: &singular,
-            labels: &labels,
-            tolerance: settings.cc_tolerance * mean_edge,
-            merge_id: None,
-        },
-        settings,
-        control,
-    )?;
-    let mut layout = select::Layout::new(region, settings, control);
-    layout.run(control)?;
+    let region = select::RegionMesh {
+        positions: &mesh.positions,
+        triangles: &mesh.triangles,
+        barrier: &mesh.feature_edges,
+        directions: mesh.directions.clone(),
+        singular: &singular,
+        labels: &labels,
+        tolerance: settings.cc_tolerance * mean_edge,
+        merge_id: None,
+    };
+    let mut layout = select::lay_out(region, settings, control)?;
     let partition = layout.partition().clone();
     let cut = &layout.region.cut;
     let original = |v: u32| cut.original[v as usize];
@@ -541,4 +538,5 @@ fn merge(out: &mut TraceOutput, part: PartLayout) {
     r.relaxed_patches += part.tally.relaxed_patches;
     r.seams += part.tally.seams;
     r.redeclared += part.tally.redeclared;
+    r.uncrowded += part.tally.uncrowded;
 }

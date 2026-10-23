@@ -9,6 +9,11 @@
 //! a patch that still fails a condition. The whole part then gets sub-patch
 //! passes, a clean-up that dissolves paths whose removal makes no patch
 //! worse, and a recovery ladder for whatever is still invalid.
+//!
+//! A part that still comes out crowded (patches holding several
+//! singularities, which no pattern can place) is laid out once more with
+//! crowding ranked ahead of side counts, and the less crowded layout is kept
+//! (see [`lay_out`]).
 
 use hashbrown::{HashMap, HashSet};
 use std::collections::BinaryHeap;
@@ -49,6 +54,11 @@ const REMOVAL_SWEEPS: usize = 3;
 /// Rounds of recovery seams.
 const MAX_SEAM_ROUNDS: usize = 64;
 
+/// A part is laid out again with crowding first when patches holding several
+/// singularities cover at least this share of it. Below it, the second layout
+/// mostly trades a few tiny crowded patches for slightly worse shapes.
+const CROWDED_SHARE: f64 = 0.005;
+
 /// How a layout is chosen (from [`super::TraceParams`]).
 #[derive(Clone, Debug)]
 pub struct Settings {
@@ -71,6 +81,8 @@ pub struct Tally {
     pub relaxed_patches: usize,
     pub seams: usize,
     pub redeclared: usize,
+    /// Parts whose crowding-first layout was kept (see [`lay_out`]).
+    pub uncrowded: usize,
 }
 
 /// A path that was chosen.
@@ -354,6 +366,8 @@ pub struct Layout<'s> {
     pub tally: Tally,
     /// Search arrays reused across rounds and parallel jobs.
     searches: SearchPool,
+    /// Rank crowding ahead of side counts (see [`layout_score`]).
+    crowd_first: bool,
 }
 
 impl<'s> Layout<'s> {
@@ -386,6 +400,7 @@ impl<'s> Layout<'s> {
             min_seeds: MIN_SEEDS,
             tally: Tally::default(),
             searches: SearchPool::default(),
+            crowd_first: false,
         }
     }
 
@@ -983,6 +998,7 @@ impl<'s> Layout<'s> {
         let sub = Region::new(mesh, self.settings, control)?;
         let mut layout = Layout::new(sub, self.settings, control);
         layout.min_seeds = MIN_SUB_SEEDS;
+        layout.crowd_first = self.crowd_first;
         layout.reach_scale = reach / layout.region.reach().max(f64::MIN_POSITIVE);
         layout.run_rounds(true, relaxed, control)?;
         let g = &self.region.graph;
@@ -1003,45 +1019,40 @@ impl<'s> Layout<'s> {
         Ok((paths, layout.tally.candidates))
     }
 
-    /// Whether `after` is no worse than `before`, lexicographically (after
-    /// the oracle's `BetterConfiguration`): non-disk patches, non-convex
-    /// boundary vertices, missing or extra sides, the most singularities in
-    /// one patch, singularities matching their patch (more is better), and
-    /// patches failing CC-ability. Counting vertices and sides rather than
-    /// patches (as the oracle does) makes splitting a 0-sided patch into two
-    /// 2-sided ones count as progress, and merging two back as a loss.
+    /// Whether `after` is no worse than `before` (see [`layout_score`]).
     fn no_worse(&self, before: &[PatchInfo], after: &[&PatchInfo]) -> bool {
         self.compare(before, after).is_le()
     }
 
-    /// How `after` compares with `before` (less is better; see [`Self::no_worse`]).
+    /// How `after` compares with `before` (less is better; see [`layout_score`]).
     fn compare(&self, before: &[PatchInfo], after: &[&PatchInfo]) -> std::cmp::Ordering {
-        let max = self.settings.max_sides;
-        let score = |infos: &mut dyn Iterator<Item = &PatchInfo>| {
-            let mut s = [0i64; 8];
-            let mut max_sing = 1i64;
-            // Topology first (cut open; glued edges, which fall as a
-            // self-glued band is cut into disks; then with features glued
-            // back, which catches pinches), then the paper's conditions.
-            for i in infos {
-                let n = i.sides.len();
-                s[0] += i.excess.max(0);
-                s[1] += i.glued as i64;
-                s[2] += i.merged_excess.max(0);
-                s[3] += i.not_convex.len() as i64;
-                if i.kind != PatchKind::NonDisk {
-                    s[4] += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max) as i64;
-                }
-                max_sing = max_sing.max(i.singularities.len() as i64);
-                s[6] -= i64::from(i.matches_singularity());
-                s[7] += i64::from(!i.cc_able && (3..=6).contains(&n));
-            }
-            s[5] = max_sing;
-            s
-        };
-        let b = score(&mut before.iter());
-        let a = score(&mut after.iter().copied());
+        let (max, crowd_first) = (self.settings.max_sides, self.crowd_first);
+        let b = layout_score(before.iter(), max, crowd_first);
+        let a = layout_score(after.iter().copied(), max, crowd_first);
         a.cmp(&b)
+    }
+
+    /// The share of the region's area in patches holding several singularities.
+    fn crowded_share(&mut self) -> f64 {
+        self.partition();
+        let (Some(partition), cut) = (&self.partition, &self.region.cut) else { return 0.0 };
+        let crowded: f64 = partition
+            .patches()
+            .filter(|(_, i)| crowding(i) > 0)
+            .flat_map(|(_, i)| &i.faces)
+            .map(|&f| {
+                let [a, b, c] = cut.triangles[f as usize].map(|v| cut.positions[v as usize]);
+                0.5 * (b - a).cross(c - a).length()
+            })
+            .sum();
+        crowded / self.region.area.max(f64::MIN_POSITIVE)
+    }
+
+    /// The finished layout's score with crowding ranked first, for choosing
+    /// between two layouts of the same part.
+    fn final_score(&mut self) -> [i64; 8] {
+        let max = self.settings.max_sides;
+        layout_score(self.partition().patches().map(|(_, i)| i), max, true)
     }
 
     /// Whether removing chosen path `k` would leave another path dangling.
@@ -1418,6 +1429,83 @@ impl<'s> Layout<'s> {
     }
 }
 
+/// Lays out a region: the usual schedule, then, if patches holding several
+/// singularities still cover [`CROWDED_SHARE`] of it, once more from scratch
+/// with crowding ranked ahead of side counts, keeping the second layout only
+/// if it scores better with crowding first. A crowded patch gets no pattern that places its
+/// singularities, so its quads flatten the shape there; a missing or extra
+/// side, which the usual order ranks ahead, is mostly temporary (later paths
+/// and the final corner re-declaration fix it). Applying crowding-first
+/// everywhere costs quality on parts that were never crowded (the paths
+/// taken early differ), so only crowded parts pay for the second layout.
+pub fn lay_out<'s>(
+    mesh: RegionMesh<'_>,
+    settings: &'s Settings,
+    control: &'s Control,
+) -> Result<Layout<'s>, Error> {
+    let mut layout = Layout::new(Region::new(mesh.clone(), settings, control)?, settings, control);
+    layout.run(control)?;
+    if layout.crowded_share() < CROWDED_SHARE {
+        return Ok(layout);
+    }
+    let mut other = Layout::new(Region::new(mesh, settings, control)?, settings, control);
+    other.crowd_first = true;
+    other.run(control)?;
+    if other.final_score() < layout.final_score() {
+        other.tally.uncrowded = 1;
+        other.tally.candidates += layout.tally.candidates;
+        return Ok(other);
+    }
+    layout.tally.candidates += other.tally.candidates;
+    Ok(layout)
+}
+
+/// Singularities beyond the first in a patch (patterns place at most one).
+fn crowding(info: &PatchInfo) -> i64 {
+    info.singularities.len().saturating_sub(1) as i64
+}
+
+/// A layout's score, compared lexicographically (less is better), after the
+/// oracle's `BetterConfiguration`. Topology first: cut-open excess, glued
+/// edges (which fall as a self-glued band is cut into disks), excess with
+/// features glued back (which catches pinches). Then the paper's conditions:
+/// non-convex boundary vertices, missing or extra sides, the most
+/// singularities in one patch, singularities matching their patch (more is
+/// better), and patches failing CC-ability. Counting vertices and sides
+/// rather than patches (as the oracle does) makes splitting a 0-sided patch
+/// into two 2-sided ones count as progress, and merging two back as a loss.
+///
+/// With `crowd_first`, total crowding (see [`crowding`]) takes the place of
+/// the most singularities and moves ahead of the side counts: a path that
+/// separates singularities but leaves a patch with too many sides is then
+/// progress. Convexity stays ahead of it, since a reflex corner folds the
+/// pattern however few singularities the patch holds.
+fn layout_score<'a>(
+    infos: impl Iterator<Item = &'a PatchInfo>,
+    max_sides: usize,
+    crowd_first: bool,
+) -> [i64; 8] {
+    let mut s = [0i64; 8];
+    let (mut most, mut crowded) = (1i64, 0i64);
+    let mut sides = 0i64;
+    for i in infos {
+        let n = i.sides.len();
+        s[0] += i.excess.max(0);
+        s[1] += i.glued as i64;
+        s[2] += i.merged_excess.max(0);
+        s[3] += i.not_convex.len() as i64;
+        if i.kind != PatchKind::NonDisk {
+            sides += 3usize.saturating_sub(n) as i64 + n.saturating_sub(max_sides) as i64;
+        }
+        most = most.max(i.singularities.len() as i64);
+        crowded += crowding(i);
+        s[6] -= i64::from(i.matches_singularity());
+        s[7] += i64::from(!i.cc_able && (3..=6).contains(&n));
+    }
+    (s[4], s[5]) = if crowd_first { (crowded, sides) } else { (sides, most) };
+    s
+}
+
 /// Vertices of `ring` at least `ring.len() / k` steps away from `v` along it.
 fn far_side(ring: &[u32], v: u32, k: usize) -> Vec<u32> {
     let m = ring.len();
@@ -1431,4 +1519,68 @@ fn far_side(ring: &[u32], v: u32, k: usize) -> Vec<u32> {
         })
         .map(|(_, &x)| x)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::trace::patches::SideInfo;
+
+    /// A disk patch with `sides` one-edge sides, these singularities (+1
+    /// quarter each) and these concave boundary vertices.
+    fn patch(sides: usize, singularities: u32, concave: u32) -> PatchInfo {
+        PatchInfo {
+            faces: vec![0],
+            loops: 1,
+            loop_vertices: vec![(0..sides as u32).collect()],
+            corners: (0..sides as u32).collect(),
+            sides: (0..sides as u32).map(|v| SideInfo { vertices: vec![v, v + 1], length: 1.0 }).collect(),
+            not_convex: (0..concave).map(|v| (100 + v, VertexClass::Concave)).collect(),
+            singularities: (0..singularities).map(|v| (200 + v, 1)).collect(),
+            kind: PatchKind::Ok,
+            cc_margin: 0.0,
+            cc_able: true,
+            steps: Vec::new(),
+            cut_disk: true,
+            excess: 0,
+            merged_excess: 0,
+            glued: 0,
+        }
+    }
+
+    fn compare(before: &[PatchInfo], after: &[PatchInfo], crowd_first: bool) -> std::cmp::Ordering {
+        let a = layout_score(after.iter(), 6, crowd_first);
+        a.cmp(&layout_score(before.iter(), 6, crowd_first))
+    }
+
+    #[test]
+    fn crowding_counts_singularities_beyond_the_first() {
+        let counts: Vec<i64> = (0..4).map(|k| crowding(&patch(4, k, 0))).collect();
+        assert_eq!(counts, [0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn crowding_first_takes_a_split_that_leaves_too_many_sides() {
+        // Three singularities separated, at the price of a 7-sided piece.
+        let before = [patch(4, 3, 0)];
+        let after = [patch(3, 1, 0), patch(7, 1, 0), patch(3, 1, 0)];
+        assert!(compare(&before, &after, false).is_gt(), "the usual order refuses it");
+        assert!(compare(&before, &after, true).is_lt(), "crowding first takes it");
+    }
+
+    #[test]
+    fn convexity_still_ranks_ahead_of_crowding() {
+        let before = [patch(4, 3, 0)];
+        let after = [patch(3, 1, 1), patch(3, 1, 0), patch(3, 1, 0)];
+        assert!(compare(&before, &after, true).is_gt());
+    }
+
+    #[test]
+    fn crowding_first_still_ranks_side_counts_after_crowding() {
+        // Equal crowding: the side counts decide, as in the usual order.
+        let before = [patch(4, 2, 0), patch(4, 0, 0)];
+        let after = [patch(4, 2, 0), patch(7, 0, 0)];
+        assert!(compare(&before, &after, true).is_gt());
+        assert!(compare(&before, &after, false).is_gt());
+    }
 }
