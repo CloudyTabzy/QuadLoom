@@ -8,7 +8,7 @@ setting live in collapsed sub-panels ("Details", "Advanced").
 
 import bpy
 
-from . import bridge, operators
+from . import bridge, operators, wording
 
 STATUS_ICONS = {
     "NONE": "INFO",
@@ -31,7 +31,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
             box = layout.box()
             box.alert = True
             box.label(text="Backend unavailable", icon="ERROR")
-            for line in _wrap(bridge.unavailable_reason or "unknown reason"):
+            for line in _wrap(wording.sentence(bridge.unavailable_reason or "unknown reason")):
                 box.label(text=line)
             return
         settings = context.scene.quadloom
@@ -73,14 +73,14 @@ def _draw_result(layout, last):
     status = last.bl_rna.properties["status"].enum_items[last.status].name
     if last.status == "RUNNING":
         box.label(text=last.message or "Running…", icon=STATUS_ICONS["RUNNING"])
-        box.label(text="Esc or Cancel stops it", icon="BLANK1")
+        box.label(text="Esc or Cancel to Stop", icon="BLANK1")
         return
     if last.status == "OK":
         seconds = last.elapsed_ms / 1000.0
         if last.quads_out == last.faces_out:
-            headline = f"{last.quads_out:,} quads in {seconds:.1f} s"
+            headline = f"{last.quads_out:,} Quads in {seconds:.1f} s"
         else:
-            headline = f"{last.faces_out:,} faces ({last.quads_out:,} quads) in {seconds:.1f} s"
+            headline = f"{last.faces_out:,} Faces ({last.quads_out:,} Quads) in {seconds:.1f} s"
         box.label(text=headline, icon=STATUS_ICONS["OK"])
         col = box.column(align=True)
         col.label(text=last.message, icon="BLANK1")
@@ -90,10 +90,10 @@ def _draw_result(layout, last):
         box.alert = last.status == "ERROR"
         box.label(text=status, icon=STATUS_ICONS.get(last.status, "INFO"))
         col = box.column(align=True)
-        for line in _wrap(last.message):
+        for line in _wrap(wording.sentence(last.message)):
             col.label(text=line)
         if last.hint:
-            for n, line in enumerate(_wrap(last.hint)):
+            for n, line in enumerate(_wrap(wording.sentence(last.hint))):
                 col.label(text=line, icon="LIGHT" if n == 0 else "BLANK1")
     if last.warnings:
         warn = layout.box()
@@ -101,9 +101,9 @@ def _draw_result(layout, last):
         col = warn.column(align=True)
         for entry in last.warnings.split("\n"):
             message, _, hint = entry.partition("\t")
-            for n, line in enumerate(_wrap(message)):
+            for n, line in enumerate(_wrap(wording.sentence(message))):
                 col.label(text=line, icon="DOT" if n == 0 else "BLANK1")
-            for line in _wrap(hint):
+            for line in _wrap(wording.sentence(hint)):
                 col.label(text=line, icon="BLANK1")
 
 

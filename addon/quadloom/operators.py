@@ -12,7 +12,7 @@ import time
 
 import bpy
 
-from . import bridge, mesh_io, props
+from . import bridge, mesh_io, props, wording
 
 _active_job = None
 
@@ -94,7 +94,7 @@ def finish_job(context, job):
     if job.discarded:
         # Dropped by undo, a file load or unregistering: its result never lands.
         last.status, last.message = "CANCELLED", "The run was dropped (undo or file change)"
-        return {"CANCELLED"}, ("INFO", "QuadLoom: run dropped")
+        return {"CANCELLED"}, ("INFO", "QuadLoom: Run dropped")
     error = job.error
     if error is None:
         try:
@@ -120,21 +120,30 @@ def finish_job(context, job):
             last.warnings = "\n".join(f"{m}\t{h}" for m, h in warnings)
             if warnings:
                 more = f" (+{len(warnings) - 1} more, see the panel)" if len(warnings) > 1 else ""
-                return {"FINISHED"}, ("WARNING", f"QuadLoom: {warnings[0][0]}{more}")
+                return {"FINISHED"}, ("WARNING", f"QuadLoom: {wording.sentence(warnings[0][0])}{more}")
             return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
     last.status = "CANCELLED" if cancelled else "ERROR"
-    last.message = str(error)
+    last.message = wording.sentence(str(error))
     last.stage = getattr(error, "stage", None) or ""
-    last.hint = getattr(error, "hint", None) or ""
+    last.hint = wording.sentence(getattr(error, "hint", None) or "")
     if cancelled:
-        return {"CANCELLED"}, ("INFO", "QuadLoom: cancelled")
-    return {"CANCELLED"}, ("ERROR", f"QuadLoom failed: {error}")
+        return {"CANCELLED"}, ("INFO", "QuadLoom: Cancelled")
+    return {"CANCELLED"}, ("ERROR", f"QuadLoom failed: {last.message}")
+
+
+def _count(count, noun):
+    """'1 patch', '3 patches': a count with its noun in the right number."""
+    if noun.endswith("y") and noun[-2:-1] not in "aeiou":
+        plural = noun[:-1] + "ies"
+    else:
+        plural = noun + ("es" if noun.endswith(("s", "sh", "ch", "x")) else "s")
+    return f"{count:,} {noun if count == 1 else plural}"
 
 
 def repair_summary(repair):
-    """One line describing what cleanup changed, e.g. "welded 812 vertices, 2 parts"."""
+    """One line describing what cleanup changed, e.g. "Cleanup: Welded 812 Vertices, 2 Parts"."""
     parts = []
     removed = repair["removed_repeated"] + repair["removed_zero_area"] + repair["removed_duplicates"]
     for count, text in (
@@ -148,32 +157,36 @@ def repair_summary(repair):
     ):
         if count:
             parts.append(text.format(f"{count:,}"))
-    components = repair["components"]
-    parts.append(f"{components} part" + ("" if components == 1 else "s"))
-    return ", ".join(parts) if len(parts) > 1 else f"no cleanup needed, {parts[0]}"
+    parts.append(_count(repair["components"], "part"))
+    return wording.title("Cleanup: " + (", ".join(parts) if len(parts) > 1 else f"none needed, {parts[0]}"))
 
 
 def remesh_summary(remesh, enabled):
+    """E.g. "Prep Remesh: 268,686 → 21,414 Triangles"."""
     if not enabled or not remesh:
-        return "prep remesh off"
-    return f"remeshed {remesh['input_faces']:,} → {remesh['output_faces']:,} triangles"
+        return "Prep Remesh: Off"
+    return wording.title(f"Prep Remesh: {remesh['input_faces']:,} → {_count(remesh['output_faces'], 'triangle')}")
 
 
 def field_summary(field):
-    """One line about the cross field, e.g. "cross field: 32 singularities, follows curvature"."""
+    """One line about the cross field, e.g. "Cross Field: 32 Singularities, Follows Curvature"."""
     if not field:
-        return "cross field off"
+        return "Cross Field: Off"
     report = field["report"]
-    text = f"cross field: {report['singularities']:,} singularities"
+    text = f"Cross Field: {_count(report['singularities'], 'singularity')}"
     if report["curvature_aligned"]:
         text += ", follows curvature"
     if report["fallback_parts"]:
-        text += f", {report['fallback_parts']} parts used the fallback field"
-    return text
+        text += f", {_count(report['fallback_parts'], 'part')} used the fallback field"
+    return wording.title(text)
 
 
 def frame_summary(frame):
-    """One line about the rectangular frame, e.g. "rotated ≤ 23.7°, size 0.70–1.91×, stretch 1.5 (p95 3.6)"."""
+    """One line about the rectangular frame, e.g. "Quad Shape: Rotated ≤ 23.7°, Size 0.70–1.91×, …"."""
+    return wording.title("Quad Shape: " + _frame_details(frame))
+
+
+def _frame_details(frame):
     if not frame:
         return "off"
     if frame["solved_parts"] == 0:
@@ -194,39 +207,40 @@ def frame_summary(frame):
 
 
 def _parts(count):
-    return f"{count} part" + ("" if count == 1 else "s")
+    return _count(count, "part")
 
 
 def trace_summary(trace):
-    """One line about the patch layout, e.g. "layout: 312 patches (4 need fixing)"."""
+    """One line about the patch layout, e.g. "Patch Layout: 312 Patches (4 Need Fixing)"."""
     if not trace:
-        return "patch layout off"
+        return "Patch Layout: Off"
     report = trace["report"]
-    text = f"layout: {report['patches']:,} patches"
+    text = f"Patch Layout: {_count(report['patches'], 'patch')}"
     if report["unsolved"]:
-        text += f" ({report['unsolved']:,} need fixing)"
+        unsolved = report["unsolved"]
+        text += f" ({unsolved:,} {'needs' if unsolved == 1 else 'need'} fixing)"
     if report["seams"]:
-        text += f", {report['seams']:,} seams"
-    return text
+        text += f", {_count(report['seams'], 'seam')}"
+    return wording.title(text)
 
 
 def quad_summary(quads, error=None):
-    """One line about the quad mesh, e.g. "1,234 quads (310 grid, 40 single-center patches)"."""
+    """One line about the quad mesh, e.g. "Quads: 1,234 (310 Grid, 40 Center Patches)"."""
     if error:
-        return f"quads failed ({error}); showing the patch layout"
+        return f"Quads: Failed, Showing the Patch Layout ({wording.sentence(error)})"
     if not quads:
-        return "quads off"
+        return "Quads: Off"
     report = quads["report"]
-    text = f"{report['quads']:,} quads"
     parts = [f"{report['grid_patches']:,} grid", f"{report['center_patches']:,} center"]
     if report["split_patches"]:
         parts.append(f"{report['split_patches']:,} split")
     if report["fan_patches"]:
         parts.append(f"{report['fan_patches']:,} fallback")
-    text += " (" + ", ".join(parts) + " patches)"
+    text = f"Quads: {report['quads']:,} (" + ", ".join(parts) + " patches)"
     if report["kept_patches"]:
-        text += f"; {report['kept_patches']:,} patches kept as triangles"
-    return text
+        kept = report["kept_patches"]
+        text += f"; {_count(kept, 'patch')} kept as triangles"
+    return wording.title(text)
 
 
 def preflight_warnings(context, settings):
@@ -235,35 +249,38 @@ def preflight_warnings(context, settings):
     obj = context.active_object
     selected = [o for o in context.selected_objects if o is not obj]
     if selected:
-        warnings.append(("only the active object is remeshed; other selected objects are ignored", ""))
+        warnings.append(("Only the active object is remeshed; other selected objects are ignored", ""))
     symmetric = settings.symmetry_auto or settings.symmetry_x or settings.symmetry_y or settings.symmetry_z
     if obj is not None and symmetric:
         scale = obj.matrix_world.to_scale()
         if min(scale) < 0:
-            warnings.append(("the object is mirrored by a negative scale: symmetry uses its own (local) axes",
-                             "apply the scale (Ctrl+A) to work in the axes you see"))
+            warnings.append(("The object is mirrored by a negative scale: symmetry uses its own (local) axes",
+                             "Apply the scale (Ctrl+A) to work in the axes you see"))
         elif max(scale) > 1.0001 * min(scale):
-            warnings.append(("the object has a non-uniform scale: symmetry uses its own (local) axes",
-                             "apply the scale (Ctrl+A) to work in the axes you see"))
+            warnings.append(("The object has a non-uniform scale: symmetry uses its own (local) axes",
+                             "Apply the scale (Ctrl+A) to work in the axes you see"))
     return warnings
 
 
 def symmetry_summary(symmetry):
-    """One line about symmetry, e.g. "mirrored X, Z (auto, asymmetry 0.12%)"; empty when off."""
+    """One line about symmetry, e.g. "Symmetry: Mirrored X, Z (Auto, Asymmetry 0.12%)"; empty when off."""
     if not symmetry:
         return ""
     if symmetry.get("skipped"):
-        return f"symmetry skipped: {symmetry['skipped']}"
+        return f"Symmetry: Skipped ({wording.sentence(symmetry['skipped'])})"
     axes = [name for name, on in zip("XYZ", symmetry["axes"]) if on]
-    text = "mirrored " + ", ".join(axes)
+    text = "Symmetry: mirrored " + ", ".join(axes)
     measured = [a for a, on in zip(symmetry["asymmetry"], symmetry["axes"]) if on and a >= 0]
     if measured:
         text += f" (auto, asymmetry {100 * max(measured):.2f}%)"
-    return text
+    return wording.title(text)
 
 
 def feature_summary(features):
-    return f"{features['edges']:,} feature edges, {features['corners']:,} corners"
+    """E.g. "Sharp Features: 266 Edges, 56 Corners"."""
+    return wording.title(
+        f"Sharp Features: {_count(features['edges'], 'edge')}, {_count(features['corners'], 'corner')}"
+    )
 
 
 def cancel_active_job(join_timeout=None):
@@ -375,7 +392,7 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
             return {"PASS_THROUGH"}
         if not job.done:
             stage, fraction = job.control.progress()
-            context.scene.quadloom_last_run.message = f"{stage.replace('_', ' ')} {fraction:.0%}"
+            context.scene.quadloom_last_run.message = f"{wording.stage_name(stage)}… {fraction:.0%}"
             _redraw_panels(context)
             return {"RUNNING_MODAL"}
         self._remove_timer(context)
