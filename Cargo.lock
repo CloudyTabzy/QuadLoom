@@ -931,7 +931,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-cli"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "hashbrown",
  "quadloom-core",
@@ -942,7 +942,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "faer",
  "fearless_simd",
@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "quadloom-py"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "pyo3",
  "quadloom-core",
