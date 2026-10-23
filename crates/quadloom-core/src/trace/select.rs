@@ -1432,10 +1432,10 @@ impl<'s> Layout<'s> {
 /// Lays out a region: the usual schedule, then, if patches holding several
 /// singularities still cover [`CROWDED_SHARE`] of it, once more from scratch
 /// with crowding ranked ahead of side counts, keeping the second layout only
-/// if it scores better with crowding first. A crowded patch gets no pattern that places its
-/// singularities, so its quads flatten the shape there; a missing or extra
-/// side, which the usual order ranks ahead, is mostly temporary (later paths
-/// and the final corner re-declaration fix it). Applying crowding-first
+/// if it scores better with crowding first. A crowded patch gets no pattern
+/// that places its singularities, so its quads flatten the shape there; a
+/// missing or extra side, which the usual order ranks ahead, is mostly
+/// temporary (later paths and the final corner re-declaration fix it). Applying crowding-first
 /// everywhere costs quality on parts that were never crowded (the paths
 /// taken early differ), so only crowded parts pay for the second layout.
 pub fn lay_out<'s>(
