@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 /// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
 /// Bump it whenever either side changes.
-pub const API_VERSION: u32 = 7;
+pub const API_VERSION: u32 = 8;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -249,6 +249,77 @@ mod quadloom_native {
                 dict.set_item("reused", reused)?;
                 Ok(dict)
             }
+            Ok(Err(error)) => Err(errors::to_py_err(py, &error)),
+            Err((payload, stage)) => Err(errors::from_panic(py, payload.as_ref(), stage)),
+        }
+    }
+
+    /// Maps a result mesh (polygons as `face_offsets` into `face_indices`)
+    /// back onto its source triangles, for attribute transfer. `corner_keys`
+    /// (3 per source triangle) and `face_keys` (1 per triangle) are optional:
+    /// see `quadloom_core::transfer`. Returns the buffers described in the
+    /// add-on's `bridge.py`.
+    #[pyfunction]
+    #[pyo3(signature = (
+        source_positions, source_indices, positions, face_offsets, face_indices, control, *,
+        corner_keys = None, face_keys = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn transfer_map<'py>(
+        py: Python<'py>,
+        source_positions: &Bound<'py, PyAny>,
+        source_indices: &Bound<'py, PyAny>,
+        positions: &Bound<'py, PyAny>,
+        face_offsets: &Bound<'py, PyAny>,
+        face_indices: &Bound<'py, PyAny>,
+        control: &Bound<'py, Control>,
+        corner_keys: Option<&Bound<'py, PyAny>>,
+        face_keys: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let points = |name: &str, flat: Vec<f32>| -> PyResult<Vec<glam::DVec3>> {
+            if !flat.len().is_multiple_of(3) {
+                return Err(errors::invalid_argument(py, format!("{name} must hold xyz triples")));
+            }
+            Ok(flat
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|&[x, y, z]| glam::DVec3::new(x.into(), y.into(), z.into()))
+                .collect())
+        };
+        let source_positions = points("source_positions", convert::positions(py, source_positions)?)?;
+        let source_indices = convert::indices(py, source_indices, "source_indices")?;
+        if !source_indices.len().is_multiple_of(3) {
+            return Err(errors::invalid_argument(py, "source_indices must hold triangles"));
+        }
+        let triangles = source_indices.as_chunks::<3>().0.to_vec();
+        let positions = points("positions", convert::positions(py, positions)?)?;
+        let offsets = convert::indices(py, face_offsets, "face_offsets")?;
+        let corners = convert::indices(py, face_indices, "face_indices")?;
+        let corner_keys = corner_keys.map(|k| convert::indices(py, k, "corner_keys")).transpose()?;
+        let face_keys = face_keys.map(|k| convert::indices(py, k, "face_keys")).transpose()?;
+        let control = Arc::clone(&control.get().inner);
+
+        let outcome = py.detach(move || {
+            catch_unwind(AssertUnwindSafe(|| {
+                let source = quadloom_core::transfer::Source {
+                    positions: &source_positions,
+                    triangles: &triangles,
+                    corner_keys: corner_keys.as_deref(),
+                    face_keys: face_keys.as_deref(),
+                };
+                let target = quadloom_core::transfer::Target {
+                    positions: &positions,
+                    offsets: &offsets,
+                    corners: &corners,
+                };
+                quadloom_core::transfer::map(source, target, &control)
+            }))
+            .map_err(|payload| (payload, control.progress().0))
+        });
+
+        match outcome {
+            Ok(Ok(map)) => convert::transfer_map(py, &map),
             Ok(Err(error)) => Err(errors::to_py_err(py, &error)),
             Err((payload, stage)) => Err(errors::from_panic(py, payload.as_ref(), stage)),
         }

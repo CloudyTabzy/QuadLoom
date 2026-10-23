@@ -19,8 +19,13 @@ def mesh_io(monkeypatch):
     mathutils.Matrix = object
     monkeypatch.setitem(sys.modules, "bpy", bpy)
     monkeypatch.setitem(sys.modules, "mathutils", mathutils)
-    spec = importlib.util.spec_from_file_location("quadloom_mesh_io_under_test", MESH_IO)
+    # A stand-in package, so mesh_io's relative imports find their siblings.
+    package = types.ModuleType("quadloom_under_test")
+    package.__path__ = [str(MESH_IO.parent)]
+    monkeypatch.setitem(sys.modules, "quadloom_under_test", package)
+    spec = importlib.util.spec_from_file_location("quadloom_under_test.mesh_io", MESH_IO)
     module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "quadloom_under_test.mesh_io", module)
     spec.loader.exec_module(module)
     return module
 

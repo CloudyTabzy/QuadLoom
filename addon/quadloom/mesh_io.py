@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import bpy
 from mathutils import Matrix
 
+from . import transfer
+
 RESULT_SUFFIX = "_QuadLoom"
 
 
@@ -32,6 +34,7 @@ class MeshSnapshot:
     seam_edges: array  # int32 vertex pairs of UV seams
     material: array  # int32 material index per triangle
     face_set: array | None  # int32 sculpt face set per triangle, if the mesh has them
+    transfer: object = None  # transfer.TransferData, when attributes are kept
 
     @property
     def face_count(self):
@@ -65,14 +68,30 @@ def _per_triangle(mesh, polygon_values):
     return array("i", np.asarray(polygon_values, dtype=np.int32)[polygon_of].tobytes())
 
 
-def extract(obj, depsgraph, max_faces):
+def extract(obj, depsgraph, max_faces, keep=None):
     """Snapshots the evaluated (modifiers applied) mesh of `obj` as triangles.
 
     Size limits are checked from counts alone, before triangulating or copying,
-    so a huge modifier result is refused without freezing the UI.
+    so a huge modifier result is refused without freezing the UI. With `keep`
+    (transfer.Options) the attributes to transfer are copied too; binding to a
+    rig snapshots the rest shape (Armature modifiers off for the moment).
     """
+    rest = transfer.armature_modifiers(obj) if keep is not None and keep.rig else []
+    for modifier in rest:
+        modifier.show_viewport = False
+    try:
+        if rest:
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+        return _extract(obj, depsgraph, max_faces, keep, [m.name for m in rest])
+    finally:
+        for modifier in rest:
+            modifier.show_viewport = True
+
+
+def _extract(obj, depsgraph, max_faces, keep, resting):
     evaluated = obj.evaluated_get(depsgraph)
     mesh = evaluated.to_mesh()
+    kept = None
     try:
         if len(mesh.polygons) == 0:
             raise EmptyMesh(f"{obj.name} has no faces (after modifiers)")
@@ -99,6 +118,11 @@ def extract(obj, depsgraph, max_faces):
             polygon_set = array("i", bytes(4 * len(mesh.polygons)))
             attr.data.foreach_get("value", polygon_set)
             face_set = _per_triangle(mesh, polygon_set)
+        if keep is not None:
+            kept = transfer.collect(obj, mesh, keep, resting)
+            if kept is not None and keep.follow_uv_islands and kept.uv_render:
+                # Quads follow the render UV map's islands, so none spans two.
+                seam_edges.extend(transfer.uv_island_borders(mesh, kept.uv_render))
     finally:
         evaluated.to_mesh_clear()
     collections = obj.users_collection
@@ -112,6 +136,7 @@ def extract(obj, depsgraph, max_faces):
         seam_edges=seam_edges,
         material=material,
         face_set=face_set,
+        transfer=kept,
     )
 
 
@@ -139,6 +164,17 @@ def decode_result(result):
     if _has_repeated_corner(offsets, corners, vertex_count):
         raise ValueError("result has a face that uses the same vertex twice")
     return positions, offsets, corners
+
+
+def final_geometry(result):
+    """The result object's mesh as (positions, face offsets, face corners):
+    the quads if there are any, else the patch layout, else the remeshed mesh
+    (the same choice `build_result` makes)."""
+    if result.get("quads"):
+        return decode_quads(result["quads"])[:3]
+    if result.get("trace"):
+        return decode_layout(result["trace"])[:3]
+    return decode_result(result)
 
 
 def decode_quads(quads):

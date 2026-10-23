@@ -26,6 +26,7 @@ pub mod symmetry;
 #[cfg(test)]
 mod testmesh;
 pub mod trace;
+pub mod transfer;
 mod unionfind;
 pub mod validate;
 

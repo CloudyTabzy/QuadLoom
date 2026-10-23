@@ -318,3 +318,49 @@ def test_trace_section_and_bytes():
     hexes = ql.run(p, i, ql.Control(), params={"trace": {"max_sides": 6, "cost": "angle_penalty", "drift": 100.0}})
     assert hexes["trace"]["report"]["unsolved"] == 0
 
+
+
+def test_transfer_map_samples_reproduce_the_result():
+    # The result is the source's own tetrahedron, as polygons.
+    p, i = tet()
+    offsets = array("I", [0, 3, 6, 9, 12])
+    out = ql.transfer_map(p, i, p, offsets, i, ql.Control())
+    vt = struct.unpack("<4I", out["vertex_triangles"])
+    vw = struct.unpack("<12f", out["vertex_weights"])
+    assert len(out["corner_triangles"]) == 12 * 4
+    assert len(out["corner_weights"]) == 12 * 3 * 4
+    assert len(out["face_triangles"]) == 4 * 4
+    for v in range(4):
+        tri = TET_INDICES[3 * vt[v] : 3 * vt[v] + 3]
+        point = [sum(vw[3 * v + k] * TET_POSITIONS[3 * tri[k] + axis] for k in range(3)) for axis in range(3)]
+        assert point == pytest.approx(TET_POSITIONS[3 * v : 3 * v + 3], abs=1e-5)
+
+
+def test_transfer_map_takes_keys_as_uint32_buffers():
+    p, i = tet()
+    offsets = array("I", [0, 3, 6, 9, 12])
+    out = ql.transfer_map(
+        p, i, p, offsets, i, ql.Control(), corner_keys=array("I", range(12)), face_keys=array("I", [0, 0, 1, 1])
+    )
+    faces = struct.unpack("<4I", out["face_triangles"])
+    assert all(f < 4 for f in faces)
+
+
+def test_transfer_map_refuses_bad_input():
+    p, i = tet()
+    offsets = array("I", [0, 3, 6, 9, 12])
+    with pytest.raises(ql.InvalidInputError):
+        ql.transfer_map(p, i, p, array("I", [0, 2]), array("I", [0, 1]), ql.Control())
+    with pytest.raises(ql.InvalidInputError):
+        ql.transfer_map(p, i, p, offsets, i, ql.Control(), corner_keys=array("I", [0, 1]))
+    with pytest.raises(ql.InvalidInputError):
+        ql.transfer_map(p, array("I", [0, 1]), p, offsets, i, ql.Control())
+
+
+def test_transfer_map_cancelled():
+    p, i = tet()
+    control = ql.Control()
+    control.cancel()
+    with pytest.raises(ql.CancelledError) as e:
+        ql.transfer_map(p, i, p, array("I", [0, 3, 6, 9, 12]), i, control)
+    assert e.value.stage == "transfer"

@@ -960,6 +960,7 @@ dependencies = [
 name = "quadloom-py"
 version = "0.2.0"
 dependencies = [
+ "glam",
  "pyo3",
  "quadloom-core",
 ]

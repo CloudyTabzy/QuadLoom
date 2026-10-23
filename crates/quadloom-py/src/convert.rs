@@ -7,6 +7,7 @@ use pyo3::buffer::{Element, PyUntypedBuffer};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use quadloom_core::features::FeatureReport;
+use quadloom_core::transfer::{Sample, TransferMap};
 use quadloom_core::{
     FieldOutput, FrameOutput, PatchKind, QuadOutput, RemeshReport, RepairReport, RunOutput, TraceOutput,
     ValidationReport,
@@ -75,6 +76,25 @@ pub fn groups(py: Python<'_>, obj: Option<&Bound<'_, PyAny>>, name: &str) -> PyR
     read::<i32>(py, obj)
         .map(Some)
         .map_err(|e| invalid_argument(py, format!("{name} must be an int32 buffer (e.g. array('i')): {e}")))
+}
+
+/// Packs an attribute-transfer mapping: per result vertex and per corner a
+/// source triangle (`*_triangles`, uint32) and its three corner weights
+/// (`*_weights`, float32 × 3); per result face a source triangle.
+pub fn transfer_map<'py>(py: Python<'py>, map: &TransferMap) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    let triangles =
+        |samples: &[Sample]| samples.iter().flat_map(|s| s.triangle.to_le_bytes()).collect::<Vec<u8>>();
+    let weights = |samples: &[Sample]| {
+        samples.iter().flat_map(|s| s.weights).flat_map(f32::to_le_bytes).collect::<Vec<u8>>()
+    };
+    dict.set_item("vertex_triangles", PyBytes::new(py, &triangles(&map.vertices)))?;
+    dict.set_item("vertex_weights", PyBytes::new(py, &weights(&map.vertices)))?;
+    dict.set_item("corner_triangles", PyBytes::new(py, &triangles(&map.corners)))?;
+    dict.set_item("corner_weights", PyBytes::new(py, &weights(&map.corners)))?;
+    let faces: Vec<u8> = map.faces.iter().flat_map(|t| t.to_le_bytes()).collect();
+    dict.set_item("face_triangles", PyBytes::new(py, &faces))?;
+    Ok(dict)
 }
 
 /// Packs a run's output into the dict the add-on consumes.

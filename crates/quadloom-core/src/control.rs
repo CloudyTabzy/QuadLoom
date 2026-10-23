@@ -29,11 +29,13 @@ pub enum Stage {
     Map,
     Smooth,
     Output,
+    /// Mapping a result onto its source for attribute transfer (after the run).
+    Transfer,
 }
 
 impl Stage {
     /// Every stage, in pipeline order.
-    pub const ALL: [Stage; 13] = [
+    pub const ALL: [Stage; 14] = [
         Self::Validate,
         Self::Repair,
         Self::Features,
@@ -47,6 +49,7 @@ impl Stage {
         Self::Map,
         Self::Smooth,
         Self::Output,
+        Self::Transfer,
     ];
 
     pub fn name(self) -> &'static str {
@@ -64,6 +67,7 @@ impl Stage {
             Self::Map => "map",
             Self::Smooth => "smooth",
             Self::Output => "output",
+            Self::Transfer => "transfer",
         }
     }
 

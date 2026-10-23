@@ -24,6 +24,7 @@ STAGE_NAMES = {
     "map": "Mapping",
     "smooth": "Smoothing",
     "output": "Output",
+    "transfer": "Attributes",
 }
 
 

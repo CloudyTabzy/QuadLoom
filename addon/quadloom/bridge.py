@@ -34,7 +34,7 @@ unavailable_reason = None
 
 # Must equal the backend's build_info()["api"]. Blender can't unload a native
 # module, so after an update the old backend stays loaded until a restart.
-API_VERSION = 7
+API_VERSION = 8
 
 
 def _load(import_module=importlib.import_module):
@@ -92,6 +92,18 @@ def new_cache():
     if native is None:
         raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
     return native.Cache()
+
+
+def transfer_map(source_positions, source_indices, positions, face_offsets, face_indices, control, **kwargs):
+    """Maps a result mesh onto its source for attribute transfer; blocks.
+
+    Returns `vertex_triangles`/`corner_triangles`/`face_triangles` (uint32) and
+    `vertex_weights`/`corner_weights` (float32 × 3): the source triangle and its
+    corner weights per result vertex and corner, and a triangle per face.
+    """
+    if native is None:
+        raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
+    return native.transfer_map(source_positions, source_indices, positions, face_offsets, face_indices, control, **kwargs)
 
 
 def run_job(positions, indices, control, **kwargs):

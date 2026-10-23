@@ -12,7 +12,7 @@ import time
 
 import bpy
 
-from . import bridge, mesh_io, props, wording
+from . import bridge, mesh_io, props, transfer, wording
 
 _active_job = None
 
@@ -31,6 +31,9 @@ class Job:
         self.control = bridge.new_control()
         self.result = None
         self.error = None
+        # The attribute-transfer mapping, or why it failed (the result still lands).
+        self.mapping = None
+        self.transfer_error = None
         self.started = time.monotonic()
         self.thread = threading.Thread(target=self._work, name="QuadLoom job", daemon=True)
 
@@ -39,6 +42,26 @@ class Job:
             self.result = bridge.run_job(self.snapshot.positions, self.snapshot.indices, self.control, **self.kwargs)
         except Exception as e:  # every failure is reported, never re-raised into Blender
             self.error = e
+            return
+        data = self.snapshot.transfer
+        if data is None:
+            return
+        try:
+            positions, offsets, corners = mesh_io.final_geometry(self.result)
+            self.mapping = bridge.transfer_map(
+                self.snapshot.positions,
+                self.snapshot.indices,
+                positions,
+                offsets,
+                corners,
+                self.control,
+                corner_keys=data.corner_keys,
+                face_keys=data.face_keys,
+            )
+        except bridge.CancelledError as e:
+            self.error = e
+        except Exception as e:  # the result still lands, with a warning
+            self.transfer_error = e
 
     @property
     def done(self):
@@ -102,7 +125,8 @@ def start_job(context):
         # Edit Mode changes reach the mesh data only when flushed.
         obj.update_from_editmode()
     preflight = preflight_warnings(context, settings)
-    snapshot = mesh_io.extract(obj, context.evaluated_depsgraph_get(), settings.max_faces)
+    keep = transfer.Options.from_settings(settings) if settings.keep_attributes else None
+    snapshot = mesh_io.extract(obj, context.evaluated_depsgraph_get(), settings.max_faces, keep)
     kwargs = {"max_faces": settings.max_faces, "params": props.run_params(settings), **snapshot.feature_kwargs()}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
@@ -159,6 +183,7 @@ def finish_job(context, job):
             last.quad_summary = quad_summary(job.result.get("quads"), job.result.get("quad_error"))
             last.symmetry_summary = symmetry_summary(job.result.get("symmetry"))
             warnings = job.preflight + [(w["message"], w.get("hint") or "") for w in job.result.get("warnings", [])]
+            warnings += _apply_transfer(obj, job)
             if job.show_steps:
                 try:
                     steps = mesh_io.build_steps(job.snapshot, job.result, context.scene)
@@ -181,6 +206,19 @@ def finish_job(context, job):
     if cancelled:
         return {"CANCELLED"}, ("INFO", "QuadLoom: Cancelled")
     return {"CANCELLED"}, ("ERROR", f"QuadLoom failed: {last.message}")
+
+
+def _apply_transfer(obj, job):
+    """Puts the kept attributes on the result. Returns warnings; never raises."""
+    if job.snapshot.transfer is None:
+        return []
+    hint = "The result was created without them"
+    if job.transfer_error is not None:
+        return [(f"Attributes could not be transferred ({job.transfer_error})", hint)]
+    try:
+        return transfer.apply(obj, job.snapshot.transfer, job.snapshot.indices, job.snapshot.material, job.mapping)
+    except Exception as e:  # the result stays, perhaps with some attributes
+        return [(f"Some attributes could not be transferred ({e})", "")]
 
 
 def _count(count, noun):

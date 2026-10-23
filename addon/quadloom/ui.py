@@ -3,7 +3,7 @@
 
 The main panel holds what an artist needs: a preset, a few plain settings,
 the Remesh button and the result. Per-stage details and every technical
-setting live in collapsed sub-panels ("Details", "Advanced").
+setting live in collapsed sub-panels ("Keep Attributes", "Details", "Advanced").
 """
 
 import bpy
@@ -119,6 +119,29 @@ class _SubPanel:
     @classmethod
     def poll(cls, context):
         return bridge.available()
+
+
+class QUADLOOM_PT_attributes(_SubPanel, bpy.types.Panel):
+    bl_label = "Keep Attributes"
+    bl_parent_id = "QUADLOOM_PT_main"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.quadloom, "keep_attributes", text="")
+
+    def draw(self, context):
+        settings = context.scene.quadloom
+        layout = self.layout
+        layout.active = settings.keep_attributes
+        col = layout.column(align=True)
+        col.prop(settings, "keep_uvs")
+        sub = col.row()
+        sub.active = settings.keep_uvs
+        sub.separator(factor=2.0)
+        sub.prop(settings, "follow_uv_islands")
+        col.prop(settings, "keep_materials")
+        col.prop(settings, "keep_vertex_groups")
+        col.prop(settings, "keep_other_attributes")
+        col.prop(settings, "bind_to_rig")
 
 
 class QUADLOOM_PT_details(_SubPanel, bpy.types.Panel):
@@ -342,6 +365,7 @@ def _wrap(text, width=38):
 
 classes = (
     QUADLOOM_PT_main,
+    QUADLOOM_PT_attributes,
     QUADLOOM_PT_details,
     QUADLOOM_PT_advanced,
     QUADLOOM_PT_quads,

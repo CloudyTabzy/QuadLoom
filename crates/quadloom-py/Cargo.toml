@@ -19,6 +19,7 @@ fault-injection = ["quadloom-core/fault-injection"]
 
 [dependencies]
 quadloom-core.workspace = true
+glam.workspace = true
 pyo3.workspace = true
 
 [lints]

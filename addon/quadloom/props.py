@@ -369,6 +369,49 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=3,
     )
 
+    # --- Attributes (decision 0019) ---------------------------------------------
+    keep_attributes: BoolProperty(
+        name="Keep Attributes",
+        description="Carry the source's UV maps, materials, vertex groups, colors and rig over to the result",
+        default=True,
+    )
+    keep_uvs: BoolProperty(
+        name="UV Maps",
+        description="Every UV map, by name, with seams marked where the active render map is cut",
+        default=True,
+    )
+    keep_materials: BoolProperty(
+        name="Materials",
+        description="The material slots and each face's material",
+        default=True,
+    )
+    keep_vertex_groups: BoolProperty(
+        name="Vertex Groups",
+        description="Every vertex group, by name, with its weights",
+        default=True,
+    )
+    keep_other_attributes: BoolProperty(
+        name="Colors and Other Attributes",
+        description="Color attributes, face sets, flat or smooth shading and any other point, corner or face attribute",
+        default=True,
+    )
+    follow_uv_islands: BoolProperty(
+        name="Follow UV Islands",
+        description=(
+            "Quads follow the borders of the render UV map's islands, so no quad spans two islands and "
+            "the UVs carry over exactly. Turn off for maps with very many small islands"
+        ),
+        default=True,
+    )
+    bind_to_rig: BoolProperty(
+        name="Bind to Rig",
+        description=(
+            "Give the result the source's parent and Armature modifiers. A rigged mesh is remeshed in its "
+            "rest shape, so the result deforms with the rig like the source"
+        ),
+        default=True,
+    )
+
     # --- Sharp features (stage 1) ------------------------------------------------
     use_angle: BoolProperty(
         name="By Angle",
