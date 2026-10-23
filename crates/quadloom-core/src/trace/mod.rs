@@ -129,6 +129,99 @@ pub struct Side {
     pub length: f64,
 }
 
+/// Drops spurs from a patch's boundary loop. A traced path that ends inside a
+/// patch is walked down one side and back up the other, so the loop goes
+/// `a → x → a`: `a` is visited twice and the patch can't be quadrangulated (it
+/// was kept as triangles, a large irregular spot). Removing `x` and the repeated
+/// `a` leaves a simple loop; the spur's edges stay inside the patch. Sides
+/// left without length disappear (their length joins the side they fall in).
+/// Corners and sides come back unchanged if nothing needs removing or too
+/// little would be left. Also returns the spurs' vertices (tips and bases).
+fn without_spurs(corners: Vec<u32>, sides: Vec<Side>) -> (Vec<u32>, Vec<Side>, Vec<u32>) {
+    // The loop as (vertex, starts a side?, original side) steps.
+    let mut steps: Vec<(u32, bool, usize)> = Vec::new();
+    for (i, side) in sides.iter().enumerate() {
+        let open = &side.vertices[..side.vertices.len().saturating_sub(1)];
+        steps.extend(open.iter().enumerate().map(|(k, &v)| (v, k == 0, i)));
+    }
+    let before = steps.len();
+    let mut spurs = Vec::new();
+    while steps.len() >= 4 {
+        let n = steps.len();
+        let Some(tip) = (0..n).find(|&i| steps[(i + n - 1) % n].0 == steps[(i + 1) % n].0) else { break };
+        let (prev, back) = ((tip + n - 1) % n, (tip + 1) % n);
+        spurs.extend([steps[tip].0, steps[prev].0]);
+        // `back` repeats `prev`: keep `prev`, with `back`'s corner mark if it had one.
+        if steps[back].1 {
+            steps[prev].1 = true;
+        }
+        let (high, low) = if tip > back { (tip, back) } else { (back, tip) };
+        steps.remove(high);
+        steps.remove(low);
+    }
+    let Some(first) = steps.iter().position(|s| s.1) else { return (corners, sides, Vec::new()) };
+    if steps.len() == before || steps.iter().filter(|s| s.1).count() < 3 {
+        return (corners, sides, Vec::new());
+    }
+    steps.rotate_left(first);
+    let (mut new_corners, mut new_sides) = (Vec::new(), Vec::<Side>::new());
+    let mut absorbed: Vec<usize> = Vec::new();
+    for (k, &(v, corner, original)) in steps.iter().enumerate() {
+        if corner {
+            if let Some(side) = new_sides.last_mut() {
+                side.vertices.push(v);
+            }
+            new_corners.push(v);
+            new_sides.push(Side { vertices: vec![v], length: 0.0 });
+            absorbed.clear();
+        } else if let Some(side) = new_sides.last_mut() {
+            side.vertices.push(v);
+        }
+        if !absorbed.contains(&original) {
+            absorbed.push(original);
+            if let (Some(side), Some(old)) = (new_sides.last_mut(), sides.get(original)) {
+                side.length += old.length;
+            }
+        }
+        if k + 1 == steps.len()
+            && let Some(side) = new_sides.last_mut()
+        {
+            side.vertices.push(steps[0].0);
+        }
+    }
+    (new_corners, new_sides, spurs)
+}
+
+/// Dihedral angle (between face normals) above which a spur along a feature
+/// line keeps its patch as triangles.
+const SPUR_CREASE_DEG: f64 = 60.0;
+
+/// A patch's kind once spurs are gone (they were all that made it
+/// non-convex): the rest of [`patches::classify`]'s tests on the cleaned sides.
+fn kind_without_spurs(
+    sides: &[Side],
+    singularities: &[(u32, i32)],
+    settings: &select::Settings,
+    tolerance: f64,
+) -> PatchKind {
+    let lengths: Vec<f64> = sides.iter().map(|s| s.length).collect();
+    let n = sides.len();
+    let shortest = lengths.iter().copied().fold(f64::INFINITY, f64::min);
+    let cc_able = (n == 4 && settings.match_valence)
+        || ((3..=6).contains(&n) && patches::cc_margin(&lengths) + shortest + tolerance > 0.0);
+    if n < 3 {
+        PatchKind::LowSides
+    } else if n > settings.max_sides {
+        PatchKind::HighSides
+    } else if !cc_able {
+        PatchKind::NotCcAble
+    } else if settings.match_valence && patches::expected_sides(singularities) != Some(n) {
+        PatchKind::ValenceMismatch
+    } else {
+        PatchKind::Ok
+    }
+}
+
 /// One patch of the layout.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Patch {
@@ -324,6 +417,29 @@ fn layout_part(
     let partition = layout.partition().clone();
     let cut = &layout.region.cut;
     let original = |v: u32| cut.original[v as usize];
+    // Normals of the faces on each feature edge (for spurs along a crease).
+    let mut crease: HashMap<(u32, u32), Vec<DVec3>> =
+        mesh.feature_edges.iter().map(|&[a, b]| ((a.min(b), a.max(b)), Vec::new())).collect();
+    for t in &mesh.triangles {
+        let [a, b, c] = t.map(|v| mesh.positions[v as usize]);
+        let normal = (b - a).cross(c - a).normalize_or_zero();
+        for i in 0..3 {
+            let (u, v) = (t[i], t[(i + 1) % 3]);
+            if let Some(normals) = crease.get_mut(&(u.min(v), u.max(v))) {
+                normals.push(normal);
+            }
+        }
+    }
+    // A spur along a sharp crease is an edge ending inside the patch: no
+    // pattern can follow it (its quads fold), so that patch keeps its
+    // triangles. Along a soft crease the pattern is fine.
+    let on_sharp_crease = |spurs: &[u32]| {
+        spurs.as_chunks::<2>().0.iter().any(|&[a, b]| {
+            crease
+                .get(&(a.min(b), a.max(b)))
+                .is_some_and(|n| n.len() == 2 && n[0].dot(n[1]) < SPUR_CREASE_DEG.to_radians().cos())
+        })
+    };
     // Patches renumbered by first face.
     let mut ids: HashMap<u32, u32> = HashMap::new();
     let mut patches = Vec::new();
@@ -334,20 +450,33 @@ fn layout_part(
         if id == next
             && let Some(info) = partition.info(p)
         {
-            patches.push(Patch {
-                corners: info.corners.iter().map(|&v| original(v)).collect(),
-                sides: info
-                    .sides
-                    .iter()
-                    .map(|s| Side {
-                        vertices: s.vertices.iter().map(|&v| original(v)).collect(),
-                        length: s.length,
-                    })
-                    .collect(),
-                singularities: info.singularities.iter().map(|&(v, k)| (original(v), k)).collect(),
-                kind: info.kind,
-                cc_margin: info.cc_margin,
-            });
+            let corners: Vec<u32> = info.corners.iter().map(|&v| original(v)).collect();
+            let sides: Vec<Side> = info
+                .sides
+                .iter()
+                .map(|s| Side {
+                    vertices: s.vertices.iter().map(|&v| original(v)).collect(),
+                    length: s.length,
+                })
+                .collect();
+            // Only where the spurs were all that made the patch non-convex: a
+            // patch with a real reflex corner folds when mapped onto its
+            // (convex) pattern, so it stays kept as triangles.
+            let singularities: Vec<(u32, i32)> =
+                info.singularities.iter().map(|&(v, k)| (original(v), k)).collect();
+            let (corners, sides, kind) = match without_spurs(corners.clone(), sides.clone()) {
+                (c, s, spurs)
+                    if !spurs.is_empty()
+                        && !on_sharp_crease(&spurs)
+                        && info.not_convex.iter().all(|&(v, _)| spurs.contains(&original(v))) =>
+                {
+                    let kind =
+                        kind_without_spurs(&s, &singularities, settings, settings.cc_tolerance * mean_edge);
+                    (c, s, kind)
+                }
+                _ => (corners, sides, info.kind),
+            };
+            patches.push(Patch { corners, sides, singularities, kind, cc_margin: info.cc_margin });
         }
         patch_of_face[f] = id;
     }

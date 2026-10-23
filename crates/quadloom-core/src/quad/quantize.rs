@@ -29,6 +29,18 @@ use crate::error::Error;
 /// Weight of a unit of 4-sided imbalance, or of an infeasible closed form,
 /// against a unit of deviation from the target.
 pub const DEFAULT_REGULARITY: f64 = 50.0;
+/// No segment gets fewer quads than this share of its target (at least 1).
+/// Without a floor, a patch that can't take a valid pattern at sensible
+/// counts (a sliver, a non-convex patch) is "fixed" by shrinking a whole
+/// strip of segments around it, starving large patches of quads; with it,
+/// that patch gets a fallback pattern and its neighbours keep their size.
+const FLOOR_SHARE: f64 = 0.5;
+
+/// The fewest quads a segment with target `t` may get.
+pub(crate) fn count_floor(t: f64) -> u32 {
+    if t.is_finite() { (t * FLOOR_SHARE).floor().max(1.0).min(u32::MAX as f64) as u32 } else { 1 }
+}
+
 /// Passes of integer moves.
 const MAX_PASSES: usize = 12;
 /// Longest chord walked through 4-sided patches.
@@ -43,16 +55,19 @@ pub fn quantize(
     effort: f64,
     control: &Control,
 ) -> Result<Vec<u32>, Error> {
+    let stage = Stage::Quantize;
     let q = Problem::new(segments, targets, regularity);
-    control.checkpoint(Stage::Quantize)?;
+    control.checkpoint(stage)?;
     let mut n = q.relaxed()?;
-    control.checkpoint(Stage::Quantize)?;
+    control.checkpoint(stage)?;
+    control.set_progress(stage, 0.1);
     q.improve(&mut n, control)?;
     q.fix_parity_by_chords(&mut n, control)?;
     q.improve(&mut n, control)?;
     q.fix_parity_by_chords(&mut n, control)?;
     q.fix_parity(&mut n);
-    control.checkpoint(Stage::Quantize)?;
+    control.checkpoint(stage)?;
+    control.set_progress(stage, 0.2);
     // The integer program, seeded with these counts, keeps only real improvements.
     let spec = super::ilp::Spec { segments, targets, fixed: &q.fixed, regularity, effort };
     if let Some(candidate) = super::ilp::refine(spec, &n)
@@ -62,7 +77,8 @@ pub fn quantize(
         n = candidate;
     }
     // Then region by region where problems remain.
-    control.checkpoint(Stage::Quantize)?;
+    control.checkpoint(stage)?;
+    control.set_progress(stage, 0.6);
     let bad = |n: &[u32], p: usize| q.patch_cost(n, p) > 0.0;
     let mut accept = |old: &[u32], new: &[u32]| q.all_even(new) && q.total(new) < q.total(old) - 1e-9;
     super::ilp::neighbourhoods(spec, &mut n, &bad, &mut accept, control)?;
@@ -75,6 +91,8 @@ struct Problem<'a> {
     regularity: f64,
     fixed: Vec<Option<u32>>,
     weight: Vec<f64>,
+    /// [`count_floor`] of each segment's target.
+    floor: Vec<u32>,
 }
 
 impl<'a> Problem<'a> {
@@ -86,7 +104,8 @@ impl<'a> Problem<'a> {
             .collect();
         // Relative deviation: long segments tolerate an extra quad more easily.
         let weight = targets.iter().map(|&t| 1.0 / t.max(1.0)).collect();
-        Self { segments, targets, regularity, fixed, weight }
+        let floor = targets.iter().map(|&t| count_floor(t)).collect();
+        Self { segments, targets, regularity, fixed, weight, floor }
     }
 
     /// Total cost: deviation plus weighted pattern cost.
@@ -197,7 +216,7 @@ impl<'a> Problem<'a> {
         for s in 0..m {
             if let Some(i) = index[s] {
                 let v = if x[i].is_finite() && x[i] > 0.0 { x[i] } else { self.targets[s] };
-                n[s] = v.round().max(1.0) as u32;
+                n[s] = (v.round().max(1.0) as u32).max(self.floor[s]);
             }
         }
         Ok(n)
@@ -278,7 +297,7 @@ impl<'a> Problem<'a> {
                 let chord = self.chord(n, s);
                 for moves in [vec![s], chord] {
                     for delta in [1i64, -1] {
-                        if moves.iter().any(|&t| n[t] as i64 + delta < 1) {
+                        if moves.iter().any(|&t| n[t] as i64 + delta < self.floor[t] as i64) {
                             continue;
                         }
                         let before = self.cost_of(n, &moves);
@@ -380,7 +399,7 @@ impl<'a> Problem<'a> {
             while p != start {
                 let Some((c, prev, delta)) = via[p] else { break };
                 for &t in &chords[c].0 {
-                    n[t] = (n[t] as i64 + delta).max(1) as u32;
+                    n[t] = (n[t] as i64 + delta).max(self.floor[t] as i64) as u32;
                 }
                 p = prev;
             }
@@ -392,7 +411,7 @@ impl<'a> Problem<'a> {
     fn chord_move(&self, n: &[u32], segs: &[usize]) -> Option<(i64, f64)> {
         [1i64, -1]
             .into_iter()
-            .filter(|&d| segs.iter().all(|&t| n[t] as i64 + d >= 1))
+            .filter(|&d| segs.iter().all(|&t| n[t] as i64 + d >= self.floor[t] as i64))
             .map(|d| {
                 let cost: f64 = segs
                     .iter()
@@ -457,8 +476,8 @@ impl<'a> Problem<'a> {
                 p = prev;
             }
             for s in path {
-                // Toward the target where possible, never below 1.
-                if n[s] > 1 && (n[s] as f64) > self.targets[s] {
+                // Toward the target where possible, never below the floor.
+                if n[s] > self.floor[s] && (n[s] as f64) > self.targets[s] {
                     n[s] -= 1;
                 } else {
                     n[s] += 1;

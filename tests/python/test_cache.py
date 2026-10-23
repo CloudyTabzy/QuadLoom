@@ -33,11 +33,11 @@ def test_cache_reuses_the_layout_and_matches_a_full_run():
     positions, indices = torus()
     cache = ql.Cache()
     first = ql.run(positions, indices, ql.Control(), cache=cache)
-    assert first["reused"] is False and cache.filled()
+    assert first["reused"] is False and cache.filled() and not cache.reusing()
     for quad in ({"edge_scale": 0.5}, {"regularity": 100.0, "smoothing": 3}, {"solver_effort": 0.25}):
         quick = ql.run(positions, indices, ql.Control(), params={"quad": quad}, cache=cache)
         full = ql.run(positions, indices, ql.Control(), params={"quad": quad})
-        assert quick["reused"] is True, quad
+        assert quick["reused"] is True and cache.reusing(), quad
         assert full["reused"] is False
         assert quads(quick) == quads(full), quad
         assert quick["warnings"] == full["warnings"]

@@ -175,7 +175,7 @@ pub fn compute(
     let feature_edges = out.feature_edges();
     let (mut mesh, patch_of_face, fixed, quads, triangles) = out.finish();
     control.checkpoint(Stage::Smooth)?;
-    smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing);
+    smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing, control);
     check_output(&mesh)?;
     report.quads = quads;
     report.triangles = triangles;

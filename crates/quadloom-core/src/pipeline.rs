@@ -317,6 +317,8 @@ pub fn run_upstream(
 /// result and the quad settings in `params`.
 pub fn finish(upstream: Upstream, params: &Params, control: &Control) -> Result<RunOutput, Error> {
     params.check()?;
+    // Progress leaves the earlier stages at once, also when they were reused.
+    control.set_progress(Stage::Quantize, 0.0);
     let Upstream {
         positions,
         triangles,

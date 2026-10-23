@@ -13,6 +13,7 @@ mod settings;
 
 use std::hash::{BuildHasher, Hash, Hasher, RandomState};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
@@ -63,6 +64,8 @@ struct Kept {
 struct CacheInner {
     kept: Mutex<Option<Kept>>,
     hasher: RandomState,
+    /// Whether the run in progress (or the last one) reuses the kept work.
+    reusing: AtomicBool,
 }
 
 impl CacheInner {
@@ -101,7 +104,13 @@ struct Cache {
 impl Cache {
     #[new]
     fn new() -> Self {
-        Self { inner: Arc::new(CacheInner { kept: Mutex::new(None), hasher: RandomState::new() }) }
+        Self {
+            inner: Arc::new(CacheInner {
+                kept: Mutex::new(None),
+                hasher: RandomState::new(),
+                reusing: AtomicBool::new(false),
+            }),
+        }
     }
 
     /// Forgets the kept run (frees its memory).
@@ -109,6 +118,12 @@ impl Cache {
         if let Ok(mut kept) = self.inner.kept.lock() {
             *kept = None;
         }
+    }
+
+    /// Whether the run in progress reuses the kept work (meaningful once its
+    /// progress has left the first stage; the last run's answer before that).
+    fn reusing(&self) -> bool {
+        self.inner.reusing.load(Ordering::SeqCst)
     }
 
     /// Whether a run is kept.
@@ -140,6 +155,8 @@ fn run_cached(
         }
         kept.as_ref().filter(|_| reusable).map(|k| k.upstream.clone())
     });
+    // Set before any progress moves on, so a progress reader can rely on it.
+    cache.reusing.store(hit.is_some(), Ordering::SeqCst);
     if let Some(upstream) = hit {
         return quadloom_core::finish(upstream.without_timings(), params, control).map(|out| (out, true));
     }

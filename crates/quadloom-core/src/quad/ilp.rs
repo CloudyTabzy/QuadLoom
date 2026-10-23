@@ -88,8 +88,10 @@ pub fn neighbourhoods(
             sides.iter().flatten().map(|&(s, _)| s as usize).filter(|&s| fixed[s].is_none()).collect()
         })
     };
-    for _ in 0..MAX_ROUNDS {
+    for round in 0..MAX_ROUNDS {
         control.checkpoint(Stage::Quantize)?;
+        // The last 40% of the quantize stage's progress (rounds usually stop early).
+        control.set_progress(Stage::Quantize, 0.6 + 0.4 * round as f32 / MAX_ROUNDS as f32);
         // Pick disjoint regions around problem patches.
         let mut taken = vec![false; patches];
         let mut regions: Vec<Vec<usize>> = Vec::new(); // free segments per region
@@ -241,9 +243,10 @@ fn build(spec: Spec<'_>, start: &[u32], mode: Mode<'_>) -> Built {
         }
         let t = targets[s];
         let upper = (4.0 * t.ceil() + 8.0).min(i32::MAX as f64) as i32;
+        let floor = super::quantize::count_floor(t).min(upper as u32) as i32;
         let (lo, hi) = match mode {
-            Mode::Integer(Some(bounds)) => bounds.get(s).copied().flatten().unwrap_or((1, upper)),
-            _ => (1, upper),
+            Mode::Integer(Some(bounds)) => bounds.get(s).copied().flatten().unwrap_or((floor, upper)),
+            _ => (floor, upper),
         };
         let n = int_var(&mut problem, lo, hi);
         // Quadratic deviation (n − t)² / max(t, 1), exact at integers: chords

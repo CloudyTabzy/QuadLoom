@@ -80,6 +80,17 @@ def clear_cache():
     _cache = None
 
 
+def progress_message(job):
+    """The running status: the stage and how far it is, e.g. "Quick Re-run: Quad Sizes… 60%"."""
+    stage, fraction = job.control.progress()
+    text = f"{wording.stage_name(stage)}… {fraction:.0%}"
+    cache = job.kwargs.get("cache")
+    # The cache's flag belongs to this run once progress has left the first stage.
+    if cache is not None and stage != "validate" and cache.reusing():
+        text = f"Quick Re-run: {text}"
+    return text
+
+
 def start_job(context):
     """Snapshots the active object and starts a job. Raises on bad input."""
     global _active_job
@@ -156,10 +167,11 @@ def finish_job(context, job):
                 else:
                     last.message += f" and {len(steps)} hidden steps in \"{mesh_io.STEPS_COLLECTION}\""
             last.warnings = "\n".join(f"{m}\t{h}" for m, h in warnings)
+            title = "QuadLoom (Quick Re-run)" if last.reused else "QuadLoom"
             if warnings:
                 more = f" (+{len(warnings) - 1} more, see the panel)" if len(warnings) > 1 else ""
-                return {"FINISHED"}, ("WARNING", f"QuadLoom: {wording.sentence(warnings[0][0])}{more}")
-            return {"FINISHED"}, ("INFO", f"QuadLoom: {last.message} ({last.faces_out} faces)")
+                return {"FINISHED"}, ("WARNING", f"{title}: {wording.sentence(warnings[0][0])}{more}")
+            return {"FINISHED"}, ("INFO", f"{title}: {last.message} ({last.faces_out:,} faces)")
 
     cancelled = isinstance(error, bridge.CancelledError)
     last.status = "CANCELLED" if cancelled else "ERROR"
@@ -430,8 +442,7 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
         if event.type != "TIMER":
             return {"PASS_THROUGH"}
         if not job.done:
-            stage, fraction = job.control.progress()
-            context.scene.quadloom_last_run.message = f"{wording.stage_name(stage)}… {fraction:.0%}"
+            context.scene.quadloom_last_run.message = progress_message(job)
             _redraw_panels(context)
             return {"RUNNING_MODAL"}
         self._remove_timer(context)

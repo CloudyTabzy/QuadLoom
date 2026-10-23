@@ -396,3 +396,33 @@ fn source_face_maps_children_to_parents() {
         assert!((child - center).length() <= radius + 1e-9, "trace triangle {k} escapes its parent");
     }
 }
+
+#[test]
+fn spurs_leave_the_patch_boundary() {
+    // A square patch 0-1-2-3 with a path ending inside it at 9, entered from
+    // corner 0 and walked back: the loop visits 0 twice (side 0 is 0 → 9 → 0).
+    let side = |v: &[u32], length: f64| Side { vertices: v.to_vec(), length };
+    let corners = vec![0, 0, 1, 2, 3];
+    let sides = vec![
+        side(&[0, 9, 0], 0.4),
+        side(&[0, 4, 1], 2.0),
+        side(&[1, 5, 2], 2.0),
+        side(&[2, 6, 3], 2.0),
+        side(&[3, 7, 0], 2.0),
+    ];
+    let (corners, sides, spurs) = without_spurs(corners, sides);
+    assert_eq!(corners, vec![0, 1, 2, 3]);
+    assert!(spurs.contains(&9) && spurs.contains(&0), "the spur's tip and base: {spurs:?}");
+    let vertices: Vec<Vec<u32>> = sides.iter().map(|s| s.vertices.clone()).collect();
+    assert_eq!(vertices, vec![vec![0, 4, 1], vec![1, 5, 2], vec![2, 6, 3], vec![3, 7, 0]]);
+
+    // A spur in the middle of a side, and an ordinary patch left alone.
+    let corners = vec![0, 1, 2, 3];
+    let sides = vec![side(&[0, 4, 8, 4, 1], 2.0), side(&[1, 2], 1.0), side(&[2, 3], 1.0), side(&[3, 0], 1.0)];
+    let (corners, sides, _) = without_spurs(corners, sides);
+    assert_eq!(corners, vec![0, 1, 2, 3]);
+    assert_eq!(sides[0].vertices, vec![0, 4, 1]);
+    assert!((sides[0].length - 2.0).abs() < 1e-12);
+    let clean = vec![side(&[0, 1], 1.0), side(&[1, 2], 1.0), side(&[2, 0], 1.0)];
+    assert_eq!(without_spurs(vec![0, 1, 2], clean.clone()), (vec![0, 1, 2], clean, Vec::new()));
+}

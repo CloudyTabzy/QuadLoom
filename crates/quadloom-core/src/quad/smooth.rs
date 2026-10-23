@@ -13,6 +13,7 @@ use hashbrown::HashSet;
 use glam::DVec3;
 use rayon::prelude::*;
 
+use crate::control::{Control, Stage};
 use crate::mesh::PolyMesh;
 use crate::spatial::TriangleBvh;
 use crate::trace::TraceOutput;
@@ -33,6 +34,7 @@ pub fn smooth(
     patch_of_face: &[u32],
     trace: &TraceOutput,
     iterations: usize,
+    control: &Control,
 ) {
     if iterations == 0 || mesh.positions.is_empty() {
         return;
@@ -71,7 +73,8 @@ pub fn smooth(
     // A vertex projects onto its own patches and their neighbours: restricting it
     // to its own patches alone clamps drifting vertices onto shared patch corners.
     let regions = projection_regions(&patches, trace);
-    for _ in 0..iterations {
+    for round in 0..iterations {
+        control.set_progress(Stage::Smooth, round as f32 / iterations as f32);
         let current = &mesh.positions;
         let next: Vec<DVec3> = (0..n)
             .into_par_iter()
