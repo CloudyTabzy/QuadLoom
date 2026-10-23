@@ -9,6 +9,8 @@ A fixed set of public meshes used to compare QuadLoom against the oracle (QRemes
 | `sources.json` | The curated list: source, model, tags, license notes. Edit this to change the set. |
 | `fetch_meshes.py` | Downloads everything in `sources.json` into `meshes/` (stdlib only, idempotent; `--force` re-downloads). |
 | `meshes/` | Downloaded files, **gitignored**. `meshes/MANIFEST.json` records URL, license, tags, size and SHA-256 per file. |
+| `ab_compare.py` | Interleaved A/B of two `quadloom` builds on the stress models plus a 1M-triangle sphere: best stage and total times, peak memory, byte-identical outputs. See `docs/performance-journal.md`. |
+| `stress_quads.py` | Full-pipeline quality check (quads, open edges, scaled Jacobian) on detailed models. |
 
 ## Fetch
 
