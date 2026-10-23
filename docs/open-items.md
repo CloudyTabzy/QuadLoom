@@ -1,0 +1,50 @@
+# Open and deferred items
+
+Everything known to be unfinished, in one place. Last updated 2026-10-23 (after attribute transfer, commit 4b39989). The details live in the decision records named here. When you finish an item, move it to "Done" with its decision number.
+
+## Next up
+
+1. **Release attribute transfer.** It's committed after 0.2.0 but not version-bumped, built or installed. Bump to 0.3.0 (a feature), build the release zip, and test on real assets (glTF characters, rigged and posed meshes, Smart UV Project maps).
+2. **Out-of-memory safety.** Use `try_reserve` on big buffers, and optionally run the backend in a separate worker process (design §6). Rust aborts on allocation failure, and that takes Blender down.
+3. **Target quad count.** "About N quads" as an alternative to Density: a scale on the existing size targets.
+4. **M9: v0.1 release.** A full benchmark comparison against QRemeshify on quad output, then the GitHub release.
+
+## Output quality
+
+| Item | Notes | Where |
+|---|---|---|
+| Quad Shape vs Follow UV Islands | UV seams as feature lines can make the opt-in Quad Shape solver fall back (the torus primitive does). Workaround: turn Follow UV Islands off. | 0019, 0007 |
+| Crowded patches, remainder | The Organic armadillo hand keeps a few patches with 2–4 singularities (3.7% of the area). Under-resolved bumpy meshes stay crowded. The second layout costs about 3 s on the armadillo. | 0018 |
+| High-index singularities | UV-sphere poles and similar; open since M4. | M4 rulings |
+| Leftover non-convex patches, handle recovery | 141 concave vertices across the benchmark, plus patches with a handle. | M5 rulings |
+| Large layouts | Over 2,500 free segments the global ILP is skipped and only regional repair runs. | 0008 |
+| Known hard inputs | crane/oloid quality; heavy-noise input takes 59 s. | M3b rulings |
+| Automatic cone placement for Quad Shape | Organic models with borders fall back to the regular field. | 0007 |
+
+## Features
+
+| Item | Notes | Where |
+|---|---|---|
+| Shape keys | Not transferred: their deltas need the basis shape, not the evaluated mix. | 0019 |
+| Edge attributes | Crease and bevel weights aren't transferred (the edges don't survive). Custom normals are recomputed. | 0019 |
+| Anisotropy | Long quads on tubes and cylinders. | external ideas |
+| Size field | One Poisson solve for better local size targets. | external ideas |
+| More symmetry | Planes through any point or orientation; radial symmetry. | 0009 |
+| Best-of-N layouts | Try a few seeds and keep the best by score. | |
+| Voxel fallback (opt-in) | For input that repair can't make manifold. | |
+
+## Robustness, platforms, polish
+
+| Item | Notes |
+|---|---|
+| Linux and macOS wheels, CI | Plus a Blender 4.2–5.1 test matrix (design §11). |
+| Progress across parallel parts | Not monotonic. |
+| Stale "running" state | Seen after switching scenes. |
+| Main-thread freeze | 1–2 s marking sharp edges at 1M triangles. |
+| Memory on 87355 / 105762 | +3 MB since 0.1.7; not profiled (performance journal). |
+
+## Done
+
+- Crowded patches: 0.2.0, decision 0018.
+- Attribute transfer (UVs, materials, vertex groups, colours, rig): decision 0019, not yet released.
+- Starved and spur-blocked patches: 0.1.10, decision 0017.
