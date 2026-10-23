@@ -4,9 +4,9 @@ Everything known to be unfinished, in one place. Last updated 2026-10-24 (crash 
 
 ## Next up
 
-1. **Release attribute transfer.** It's committed after 0.2.0 but not version-bumped, built or installed. Bump to 0.3.0 (a feature), build the release zip, and test on real assets (glTF characters, rigged and posed meshes, Smart UV Project maps).
+1. **0.4.0: Target quad count.** Owner-assigned next release; research, implementation and crucial count/quality/resource tests follow 0.3.0.
 2. **Validate crash containment on larger real assets.** Decision 0021 isolates the backend and attribute mapping, with OS memory limits. Profile IPC/startup overhead and host allocations on dense meshes; Blender modifier evaluation and output allocation still run in Blender.
-3. **Target quad count.** "About N quads" as an alternative to Density: a scale on the existing size targets.
+3. **More real attribute assets.** Test additional glTF characters, posed rigs and Smart UV Project maps beyond the automated synthetic rig/UV/material scenarios.
 4. **M9: v0.1 release.** A full benchmark comparison against QRemeshify on quad output, then the GitHub release.
 
 ## Output quality
@@ -46,7 +46,7 @@ Everything known to be unfinished, in one place. Last updated 2026-10-24 (crash 
 
 ## Done
 
-- Backend OOM/abort containment, bounded worker IPC, scene-switch and construction safety: decision 0021 (full gate passed: 93 Python tests, 47 Blender scenarios).
+- 0.3.0 OOM-hardening release: decisions 0019/0021; production ZIP and local tag, full gate plus seven production smoke scenarios passed. See `releases/0.3.0.md`.
 - Crowded patches: 0.2.0, decision 0018.
 - Attribute transfer (UVs, materials, vertex groups, colours, rig): decision 0019, not yet released.
 - Starved and spur-blocked patches: 0.1.10, decision 0017.
