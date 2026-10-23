@@ -21,7 +21,7 @@ use super::cut::CutMesh;
 use super::graph::{FieldGraph, Node, transport};
 use super::patches::{Partition, PatchContext, PatchInfo, PatchKind, PathEdges};
 use super::sample::{DistanceField, farthest_points};
-use super::search::{Occupancy, Search, TracePath, cut_ears, self_intersects};
+use super::search::{Occupancy, SearchPool, TracePath, cut_ears, self_intersects};
 use super::turns::{FaceCrosses, VertexClass, classify_boundary};
 use crate::control::{Control, Stage};
 use crate::error::Error;
@@ -352,6 +352,8 @@ pub struct Layout<'s> {
     reach_scale: f64,
     min_seeds: usize,
     pub tally: Tally,
+    /// Search arrays reused across rounds and parallel jobs.
+    searches: SearchPool,
 }
 
 impl<'s> Layout<'s> {
@@ -383,6 +385,7 @@ impl<'s> Layout<'s> {
             reach_scale: 1.0,
             min_seeds: MIN_SEEDS,
             tally: Tally::default(),
+            searches: SearchPool::default(),
         }
     }
 
@@ -585,7 +588,7 @@ impl<'s> Layout<'s> {
             .par_iter()
             .with_min_len(16)
             .map_init(
-                || Search::new(g),
+                || self.searches.search(g),
                 |search, &s| match mode {
                     Mode::Dijkstra => search.shortest(&[s], &target, reach, control),
                     Mode::Direct => Ok(search.direct(s, &target, g.vertex_count())),
@@ -773,7 +776,10 @@ impl<'s> Layout<'s> {
         let found: Vec<Option<TracePath>> = starts
             .par_iter()
             .with_min_len(8)
-            .map_init(|| Search::new(g), |search, &s| search.guided_loop(cut, s, reach, LOOP_RINGS, control))
+            .map_init(
+                || self.searches.search(g),
+                |search, &s| search.guided_loop(cut, s, reach, LOOP_RINGS, control),
+            )
             .collect::<Result<_, _>>()?;
         let candidates = self.keep_valid(found);
         let added = self.choose_farthest(candidates, control)?;
@@ -787,7 +793,7 @@ impl<'s> Layout<'s> {
         let found: Vec<Option<TracePath>> = starts
             .par_iter()
             .with_min_len(8)
-            .map_init(|| Search::new(g), |search, &s| search.closed_loop(s, reach, control))
+            .map_init(|| self.searches.search(g), |search, &s| search.closed_loop(s, reach, control))
             .collect::<Result<_, _>>()?;
         let candidates = self.keep_valid(found);
         self.choose_farthest(candidates, control)

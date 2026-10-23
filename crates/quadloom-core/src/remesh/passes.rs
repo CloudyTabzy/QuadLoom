@@ -2,6 +2,7 @@
 
 use glam::DVec3;
 use rayon::prelude::*;
+use tinyvec::TinyVec;
 
 use super::Projector;
 use crate::control::Control;
@@ -170,7 +171,8 @@ impl Pass<'_> {
             }
             // Try removing the less constrained endpoint first.
             let reverse = self.mesh.find_half_edge(b, a);
-            let mut candidates = vec![h];
+            let mut candidates: TinyVec<[HalfEdge; 2]> = TinyVec::new();
+            candidates.push(h);
             candidates.extend(reverse);
             candidates.sort_by_key(|&c| rank(self.mesh.kind(self.mesh.to(c))));
             for c in candidates {

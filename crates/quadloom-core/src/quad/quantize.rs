@@ -19,6 +19,7 @@ use std::collections::VecDeque;
 use faer::linalg::solvers::Solve;
 use faer::sparse::{SparseColMat, Triplet};
 use faer::{Mat, Side};
+use tinyvec::TinyVec;
 
 use super::pattern::center_deficit;
 use super::segments::Segments;
@@ -99,7 +100,7 @@ impl<'a> Problem<'a> {
             .all(|p| self.side_counts(n, p).is_none_or(|l| l.iter().sum::<u32>() % 2 == 0))
     }
 
-    fn side_counts(&self, n: &[u32], p: usize) -> Option<Vec<u32>> {
+    fn side_counts(&self, n: &[u32], p: usize) -> Option<TinyVec<[u32; 8]>> {
         let sides = self.segments.sides.get(p)?.as_ref()?;
         Some(sides.iter().map(|side| side.iter().map(|&(s, _)| n[s as usize]).sum()).collect())
     }

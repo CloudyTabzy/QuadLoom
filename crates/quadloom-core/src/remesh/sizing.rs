@@ -107,11 +107,13 @@ pub fn vertex_sizes(mesh: &EditMesh, target: f64, tolerance: f64, params: &Remes
             if !mesh.is_vertex_alive(v) {
                 continue;
             }
-            let ring: Vec<u32> = mesh.one_ring(v).collect();
-            if ring.is_empty() {
+            let (sum, count) = mesh
+                .one_ring(v)
+                .fold((0.0, 0usize), |(sum, count), n| (sum + previous[n as usize], count + 1));
+            if count == 0 {
                 continue;
             }
-            let neighbours = ring.iter().map(|&n| previous[n as usize]).sum::<f64>() / ring.len() as f64;
+            let neighbours = sum / count as f64;
             sizes[v as usize] = 0.5 * (previous[v as usize] + neighbours);
         }
     }
@@ -155,6 +157,7 @@ struct Ball {
     seen: HashSet<u32>,
     queue: Vec<u32>,
     samples: Vec<u32>,
+    offsets: Vec<DVec3>,
 }
 
 impl Ball {
@@ -201,10 +204,13 @@ impl Ball {
             return ring_curvature(mesh, v);
         }
         let n = normal.normalize();
-        let offsets: Vec<DVec3> = self.samples.iter().map(|&u| mesh.position(u) - p).collect();
-        jet_curvature(&offsets, n).unwrap_or_else(|| {
-            let (height, d2) =
-                offsets.iter().fold((0.0, 0.0), |(h, d2), e| (h + e.dot(n).abs(), d2 + e.length_squared()));
+        self.offsets.clear();
+        self.offsets.extend(self.samples.iter().map(|&u| mesh.position(u) - p));
+        jet_curvature(&self.offsets, n).unwrap_or_else(|| {
+            let (height, d2) = self
+                .offsets
+                .iter()
+                .fold((0.0, 0.0), |(h, d2), e| (h + e.dot(n).abs(), d2 + e.length_squared()));
             if d2 > 0.0 { 2.0 * height / d2 } else { 0.0 }
         })
     }

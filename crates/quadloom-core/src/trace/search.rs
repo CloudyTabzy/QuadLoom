@@ -9,6 +9,7 @@
 use hashbrown::HashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::sync::Mutex;
 
 use super::cut::CutMesh;
 use super::graph::{DIRECT, FieldGraph, Node, TWIN, transport};
@@ -91,20 +92,104 @@ pub struct Search<'g> {
     restrict: bool,
 }
 
+/// A [`Search`]'s arrays without the graph, kept for the next search.
+#[derive(Debug, Default)]
+pub struct Scratch {
+    dist: Vec<f64>,
+    parent: Vec<u32>,
+    via: Vec<u32>,
+    touched: Vec<u32>,
+    heap: BinaryHeap<Entry>,
+    corridor: Vec<u32>,
+    stamp: u32,
+}
+
+/// Spare search arrays for a parallel loop's jobs. Each job would otherwise
+/// allocate and fill arrays the size of the graph (gigabytes over a trace).
+/// Every search resets what its predecessor touched, so a reused one is as
+/// good as new.
+#[derive(Debug, Default)]
+pub struct SearchPool(Mutex<Vec<Scratch>>);
+
+impl SearchPool {
+    /// A search over `graph`, on spare arrays if any fit; they return to the
+    /// pool when it is dropped.
+    pub fn search<'p, 'g>(&'p self, graph: &'g FieldGraph) -> Pooled<'p, 'g> {
+        let spare = self.0.lock().ok().and_then(|mut spares| spares.pop());
+        Pooled { search: Search::with_scratch(graph, spare), pool: self }
+    }
+}
+
+/// A [`Search`] borrowed from a [`SearchPool`].
+#[derive(Debug)]
+pub struct Pooled<'p, 'g> {
+    search: Search<'g>,
+    pool: &'p SearchPool,
+}
+
+impl<'g> std::ops::Deref for Pooled<'_, 'g> {
+    type Target = Search<'g>;
+    fn deref(&self) -> &Search<'g> {
+        &self.search
+    }
+}
+
+impl<'g> std::ops::DerefMut for Pooled<'_, 'g> {
+    fn deref_mut(&mut self) -> &mut Search<'g> {
+        &mut self.search
+    }
+}
+
+impl Drop for Pooled<'_, '_> {
+    fn drop(&mut self) {
+        // Swapped for empty arrays, which allocate nothing.
+        let graph = self.search.graph;
+        let search = std::mem::replace(&mut self.search, Search::from_scratch(graph, Scratch::default()));
+        if let Ok(mut spares) = self.pool.0.lock() {
+            spares.push(search.into_scratch());
+        }
+    }
+}
+
 impl<'g> Search<'g> {
     pub fn new(graph: &'g FieldGraph) -> Self {
-        let n = graph.node_count();
+        Self::with_scratch(graph, None)
+    }
+
+    /// A search on `scratch`'s arrays if they were sized for a graph like this one.
+    fn with_scratch(graph: &'g FieldGraph, scratch: Option<Scratch>) -> Self {
+        let (n, vertices) = (graph.node_count(), graph.vertex_count());
+        let s = scratch.filter(|s| s.dist.len() == n && s.corridor.len() == vertices).unwrap_or_else(|| {
+            Scratch {
+                dist: vec![f64::INFINITY; n],
+                parent: vec![NONE; n],
+                via: vec![DIRECT; n],
+                touched: Vec::new(),
+                heap: BinaryHeap::new(),
+                corridor: vec![0; vertices],
+                stamp: 0,
+            }
+        });
+        Self::from_scratch(graph, s)
+    }
+
+    fn from_scratch(graph: &'g FieldGraph, s: Scratch) -> Self {
         Self {
             graph,
-            dist: vec![f64::INFINITY; n],
-            parent: vec![NONE; n],
-            via: vec![DIRECT; n],
-            touched: Vec::new(),
-            heap: BinaryHeap::new(),
-            corridor: vec![0; graph.vertex_count()],
-            stamp: 0,
+            dist: s.dist,
+            parent: s.parent,
+            via: s.via,
+            touched: s.touched,
+            heap: s.heap,
+            corridor: s.corridor,
+            stamp: s.stamp,
             restrict: false,
         }
+    }
+
+    fn into_scratch(self) -> Scratch {
+        let Self { dist, parent, via, touched, heap, corridor, stamp, .. } = self;
+        Scratch { dist, parent, via, touched, heap, corridor, stamp }
     }
 
     fn allowed(&self, v: u32) -> bool {
