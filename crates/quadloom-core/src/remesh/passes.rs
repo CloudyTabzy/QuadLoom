@@ -6,7 +6,7 @@ use tinyvec::TinyVec;
 
 use super::Projector;
 use crate::control::Control;
-use crate::edit::{EditMesh, HalfEdge, Ring, VertexKind};
+use crate::edit::{EditMesh, HalfEdge, Ring, VertexKind, reserve_quarter};
 use crate::spatial::closest_point_on_triangle;
 
 const SPLIT_ABOVE: f64 = 4.0 / 3.0;
@@ -74,16 +74,24 @@ impl Pass<'_> {
         (self.mesh.position(self.mesh.from(h)) - self.mesh.position(self.mesh.to(h))).length()
     }
 
-    /// The live half-edge between `h`'s endpoints, in either direction (`None`
-    /// once the edge is gone). Sweeps snapshot half-edge ids, and an operation
-    /// on a neighbour re-creates the faces around an edge (new ids) without
-    /// removing the edge itself; looking it up again keeps such an edge in the
-    /// sweep. Skipping stale ids instead left a 2.15-long panel edge unsplit
-    /// through all 15 iterations on `khronos/CommercialRefrigerator`, since the
-    /// fan beside it re-formed every iteration.
-    fn current(&self, h: HalfEdge) -> Option<HalfEdge> {
-        let (a, b) = (self.mesh.from(h), self.mesh.to(h));
+    /// The live half-edge from `a` to `b`, else from `b` to `a` (`None` once
+    /// the edge is gone). Sweeps snapshot edges by their endpoints, and an
+    /// operation on a neighbour re-creates the faces around an edge (new ids)
+    /// without removing the edge itself; looking it up again keeps such an
+    /// edge in the sweep. Skipping stale edges instead left a 2.15-long panel
+    /// edge unsplit through all 15 iterations on
+    /// `khronos/CommercialRefrigerator`, since the fan beside it re-formed
+    /// every iteration. Endpoints, unlike ids, also survive
+    /// [`EditMesh::compact_faces`].
+    fn current(&self, (a, b): (u32, u32)) -> Option<HalfEdge> {
         self.mesh.find_half_edge(a, b).or_else(|| self.mesh.find_half_edge(b, a))
+    }
+
+    /// Between sweep steps: reclaim dead face slots once they outnumber live faces.
+    fn reclaim(&mut self) {
+        if self.mesh.mostly_dead() {
+            self.mesh.compact_faces();
+        }
     }
 
     /// Splits every edge longer than 4/3 of its local target at its midpoint.
@@ -91,9 +99,12 @@ impl Pass<'_> {
         let mut total = 0;
         for _ in 0..SPLIT_ROUNDS {
             let mut splits = 0;
-            for (i, h) in self.mesh.half_edges().into_iter().enumerate() {
-                if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
-                    return total + splits;
+            for (i, h) in self.mesh.half_edge_ends().into_iter().enumerate() {
+                if i % CANCEL_STRIDE == 0 {
+                    if self.control.is_cancelled() {
+                        return total + splits;
+                    }
+                    self.reclaim();
                 }
                 if self.mesh.face_count() >= self.max_faces {
                     return total + splits;
@@ -107,6 +118,8 @@ impl Pass<'_> {
                 if let Some(m) = self.mesh.split(h, mid) {
                     let s = 0.5 * (self.sizes[a as usize] + self.sizes[b as usize]);
                     if self.sizes.len() <= m as usize {
+                        let extra = m as usize + 1 - self.sizes.len();
+                        reserve_quarter(&mut self.sizes, extra);
                         self.sizes.resize(m as usize + 1, s);
                     }
                     self.sizes[m as usize] = s;
@@ -158,10 +171,17 @@ impl Pass<'_> {
         // faster convergence on dense input.
         let mut edges: Vec<(f64, HalfEdge)> =
             self.mesh.half_edges().into_iter().map(|h| (self.length(h), h)).collect();
-        edges.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
-        for (i, (_, h)) in edges.into_iter().enumerate() {
-            if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
-                break;
+        // Keys are distinct (ids are), so an unstable sort orders them the same
+        // way without a stable sort's scratch buffer.
+        edges.sort_unstable_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+        let edges: Vec<(u32, u32)> =
+            edges.into_iter().map(|(_, h)| (self.mesh.from(h), self.mesh.to(h))).collect();
+        for (i, h) in edges.into_iter().enumerate() {
+            if i % CANCEL_STRIDE == 0 {
+                if self.control.is_cancelled() {
+                    break;
+                }
+                self.reclaim();
             }
             let Some(h) = self.current(h) else { continue };
             let (a, b) = (self.mesh.from(h), self.mesh.to(h));
@@ -332,9 +352,12 @@ impl Pass<'_> {
     /// surface.
     pub fn equalize_valence(&mut self) -> usize {
         let mut flips = 0;
-        for (i, h) in self.mesh.half_edges().into_iter().enumerate() {
-            if i % CANCEL_STRIDE == 0 && self.control.is_cancelled() {
-                break;
+        for (i, h) in self.mesh.half_edge_ends().into_iter().enumerate() {
+            if i % CANCEL_STRIDE == 0 {
+                if self.control.is_cancelled() {
+                    break;
+                }
+                self.reclaim();
             }
             let Some(h) = self.current(h) else { continue };
             let Some(t) = self.mesh.twin(h) else { continue };

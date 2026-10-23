@@ -48,15 +48,14 @@ struct Binary {
     kind: [u32; 2],
 }
 
-/// Four children, their boxes lane by lane (`[axis][lane]`), and the boxes
-/// of the two binary halves they came from (children 0–1 and 2–3), which
-/// decide the visiting order.
+/// Four children and their boxes lane by lane (`[axis][lane]`). Children
+/// 0–1 and 2–3 are the two binary halves; a half's box, which decides the
+/// visiting order, is exactly the union of its children's.
 #[derive(Clone, Copy, Debug)]
 struct Node {
     min: [[f64; 4]; 3],
     max: [[f64; 4]; 3],
     child: [u32; 4],
-    halves: [Aabb; 2],
 }
 
 /// Four triangles lane by lane: `[corner][axis][lane]`.
@@ -81,8 +80,7 @@ impl TriangleBvh {
 
     /// A BVH whose queries run at SIMD `level`.
     fn with_level(positions: &[DVec3], triangles: &[[u32; 3]], level: Level) -> Self {
-        let corners: Vec<[DVec3; 3]> = triangles.iter().map(|t| t.map(|i| positions[i as usize])).collect();
-        let (binary, packets, ids) = build_binary(&corners);
+        let (binary, packets, ids) = build_binary(positions, triangles);
         let bounds = binary.first().map(|root| root.bounds);
         Self { nodes: flatten(&binary), packets, ids, bounds, level }
     }
@@ -157,7 +155,7 @@ impl TriangleBvh {
             // nearer child first (so ties between equally near triangles go
             // the same way). Pushed farthest first.
             let pair = |i: usize| if d2[i] <= d2[i + 1] { [i, i + 1] } else { [i + 1, i] };
-            let [left, right] = node.halves.map(|h| h.distance_squared(p));
+            let [left, right] = [0, 2].map(|k| node.half(k).distance_squared(p));
             let ([a, b], [c, d]) = if left <= right { (pair(0), pair(2)) } else { (pair(2), pair(0)) };
             for k in [d, c, b, a] {
                 if node.child[k] != NONE && d2[k] < best.1 {
@@ -173,27 +171,58 @@ impl TriangleBvh {
     }
 }
 
-/// The binary tree (root first), its leaves' packets and the packets' lane ids.
-fn build_binary(corners: &[[DVec3; 3]]) -> (Vec<Binary>, Vec<Packet>, Vec<u32>) {
-    let (mut packets, mut ids) = (Vec::new(), Vec::new());
-    if corners.is_empty() {
-        return (Vec::new(), packets, ids);
+/// Leaves of the median-split tree over `n` triangles. Each level has at
+/// most two distinct part sizes, so this takes O(log n).
+fn leaf_count(n: usize) -> usize {
+    let (mut leaves, mut level) = (0, vec![(n, 1usize)]);
+    while !level.is_empty() {
+        let mut next: Vec<(usize, usize)> = Vec::new();
+        for (size, count) in level {
+            if size <= LEAF_SIZE {
+                leaves += count;
+                continue;
+            }
+            for half in [size / 2, size - size / 2] {
+                match next.iter_mut().find(|(s, _)| *s == half) {
+                    Some((_, c)) => *c += count,
+                    None => next.push((half, count)),
+                }
+            }
+        }
+        level = next;
     }
-    let centroids: Vec<DVec3> = corners.iter().map(|[a, b, c]| (*a + *b + *c) / 3.0).collect();
-    let mut order: Vec<u32> = (0..corners.len() as u32).collect();
-    let mut nodes = vec![Binary { bounds: Aabb::EMPTY, kind: [NONE; 2] }];
+    leaves
+}
+
+/// The binary tree (root first), its leaves' packets and the packets' lane
+/// ids, each allocated at its final size.
+fn build_binary(positions: &[DVec3], triangles: &[[u32; 3]]) -> (Vec<Binary>, Vec<Packet>, Vec<u32>) {
+    if triangles.is_empty() {
+        return (Vec::new(), Vec::new(), Vec::new());
+    }
+    let corners = |t: u32| triangles[t as usize].map(|i| positions[i as usize]);
+    let leaves = leaf_count(triangles.len());
+    let (mut packets, mut ids) = (Vec::with_capacity(leaves), Vec::with_capacity(LEAF_SIZE * leaves));
+    let centroids: Vec<DVec3> = (0..triangles.len() as u32)
+        .map(|t| {
+            let [a, b, c] = corners(t);
+            (a + b + c) / 3.0
+        })
+        .collect();
+    let mut order: Vec<u32> = (0..triangles.len() as u32).collect();
+    let mut nodes = Vec::with_capacity(2 * leaves - 1);
+    nodes.push(Binary { bounds: Aabb::EMPTY, kind: [NONE; 2] });
     let mut work = vec![(0usize, 0usize, order.len())];
     while let Some((node, start, end)) = work.pop() {
         let slice = &mut order[start..end];
-        let bounds = slice
-            .iter()
-            .fold(Aabb::EMPTY, |acc, &t| corners[t as usize].iter().fold(acc, |acc, &p| acc.grow(p)));
+        let bounds =
+            slice.iter().fold(Aabb::EMPTY, |acc, &t| corners(t).into_iter().fold(acc, |acc, p| acc.grow(p)));
         if slice.len() <= LEAF_SIZE {
             let mut packet = Packet([[[0.0; 4]; 3]; 3]);
             for lane in 0..LEAF_SIZE {
                 // Spare lanes repeat the last triangle; their ids say to skip them.
                 let t = slice[lane.min(slice.len() - 1)];
-                for (corner, p) in corners[t as usize].iter().enumerate() {
+                for (corner, p) in corners(t).iter().enumerate() {
                     for axis in 0..3 {
                         packet.0[corner][axis][lane] = p[axis];
                     }
@@ -229,17 +258,22 @@ fn build_binary(corners: &[[DVec3; 3]]) -> (Vec<Binary>, Vec<Packet>, Vec<u32>) 
 /// Four-wide nodes, two binary levels each: a node's children are the binary
 /// node's grandchildren (or a child itself where that is a leaf).
 fn flatten(binary: &[Binary]) -> Vec<Node> {
-    let mut nodes = Vec::new();
     if binary.is_empty() {
-        return nodes;
+        return Vec::new();
     }
     let is_leaf = |x: u32| binary[x as usize].kind[0] & LEAF != 0;
-    let empty = Node {
-        min: [[f64::INFINITY; 4]; 3],
-        max: [[f64::NEG_INFINITY; 4]; 3],
-        child: [NONE; 4],
-        halves: [Aabb::EMPTY; 2],
-    };
+    // One node per inner binary node at an even depth (the root always).
+    let (mut count, mut depths) = (0, vec![(0u32, 0u32)]);
+    while let Some((x, depth)) = depths.pop() {
+        if depth % 2 == 0 && (depth == 0 || !is_leaf(x)) {
+            count += 1;
+        }
+        if !is_leaf(x) {
+            depths.extend(binary[x as usize].kind.map(|y| (y, depth + 1)));
+        }
+    }
+    let empty = Node { min: [[f64::INFINITY; 4]; 3], max: [[f64::NEG_INFINITY; 4]; 3], child: [NONE; 4] };
+    let mut nodes = Vec::with_capacity(count);
     nodes.push(empty);
     let mut work = vec![(0usize, 0u32)];
     while let Some((at, x)) = work.pop() {
@@ -249,7 +283,6 @@ fn flatten(binary: &[Binary]) -> Vec<Node> {
             if y == NONE {
                 continue;
             }
-            node.halves[h] = binary[y as usize].bounds;
             let slots = if is_leaf(y) { [y, NONE] } else { binary[y as usize].kind };
             for (s, &z) in slots.iter().enumerate() {
                 if z == NONE {
@@ -273,6 +306,17 @@ fn flatten(binary: &[Binary]) -> Vec<Node> {
         nodes[at] = node;
     }
     nodes
+}
+
+impl Node {
+    /// The box of the binary half made of children `k` and `k + 1`.
+    fn half(&self, k: usize) -> Aabb {
+        let lane = |b: &[[f64; 4]; 3], k: usize| DVec3::new(b[0][k], b[1][k], b[2][k]);
+        Aabb {
+            min: lane(&self.min, k).min(lane(&self.min, k + 1)),
+            max: lane(&self.max, k).max(lane(&self.max, k + 1)),
+        }
+    }
 }
 
 impl Packet {
@@ -445,6 +489,20 @@ mod tests {
     }
 
     #[test]
+    fn arrays_are_allocated_at_their_final_size() {
+        for n in [1usize, 4, 5, 7, 8, 9, 63, 64, 65, 1000, 4097, 99_999] {
+            let positions: Vec<DVec3> = (0..n + 2).map(|i| v(i as f64, (i * i % 7) as f64, 0.0)).collect();
+            let tris: Vec<[u32; 3]> = (0..n as u32).map(|i| [i, i + 1, i + 2]).collect();
+            let (binary, packets, ids) = build_binary(&positions, &tris);
+            assert_eq!((packets.len(), packets.capacity()), (leaf_count(n), leaf_count(n)), "n = {n}");
+            assert_eq!(binary.len(), binary.capacity(), "n = {n}");
+            assert_eq!(ids.len(), ids.capacity(), "n = {n}");
+            let nodes = flatten(&binary);
+            assert_eq!(nodes.len(), nodes.capacity(), "n = {n}");
+        }
+    }
+
+    #[test]
     fn empty_bvh_returns_none() {
         let bvh = TriangleBvh::new(&[], &[]);
         assert!(bvh.closest_point(DVec3::ZERO).is_none());
@@ -483,8 +541,8 @@ mod tests {
 
     /// The binary tree searched the plain way: what the flat SIMD search must
     /// reproduce exactly, ties included.
-    fn binary_search(corners: &[[DVec3; 3]], p: DVec3) -> Option<(DVec3, f64, u32)> {
-        let (nodes, _, ids) = build_binary(corners);
+    fn binary_search(positions: &[DVec3], tris: &[[u32; 3]], p: DVec3) -> Option<(DVec3, f64, u32)> {
+        let (nodes, _, ids) = build_binary(positions, tris);
         let mut best = (DVec3::ZERO, f64::INFINITY, 0u32);
         let mut stack = vec![(0u32, nodes.first()?.bounds.distance_squared(p))];
         while let Some((node, box_d2)) = stack.pop() {
@@ -495,7 +553,7 @@ mod tests {
                 [leaf, _] if leaf & LEAF != 0 => {
                     let packet = (leaf & !LEAF) as usize;
                     for &id in ids[4 * packet..4 * packet + 4].iter().take_while(|&&id| id != NONE) {
-                        let [a, b, c] = corners[id as usize];
+                        let [a, b, c] = tris[id as usize].map(|i| positions[i as usize]);
                         let q = closest_point_on_triangle(p, a, b, c);
                         let d2 = (q - p).length_squared();
                         if d2 < best.1 {
@@ -579,12 +637,11 @@ mod tests {
                 tris.extend([[i, i + 1, i + n as u32 + 1], [i, i + n as u32 + 1, i + n as u32]]);
             }
         }
-        let corners: Vec<[DVec3; 3]> = tris.iter().map(|t| t.map(|i| positions[i as usize])).collect();
         let fast = TriangleBvh::new(&positions, &tris);
         let baseline = TriangleBvh::with_level(&positions, &tris, Level::baseline());
         for i in 0..2000 {
             let p = v((i % 47) as f64 * 0.5, (i / 47) as f64 * 0.5, ((i % 7) as f64 - 3.0) * 0.4);
-            let want = bits(binary_search(&corners, p));
+            let want = bits(binary_search(&positions, &tris, p));
             assert_eq!(bits(fast.closest_triangle_where(p, |_| true)), want, "{p:?}");
             assert_eq!(bits(baseline.closest_triangle_where(p, |_| true)), want, "{p:?}");
         }

@@ -61,12 +61,19 @@ impl EdgeTable {
         }
     }
 
+    /// Empties the table, keeping its allocation.
+    fn clear(&mut self) {
+        self.table.clear();
+    }
+
     fn keys<'a>(&'a self, corners: &'a [[u32; 3]]) -> impl Iterator<Item = (u32, u32)> + 'a {
         self.table.iter().map(move |&h| ends(corners, h))
     }
 }
 
 const NONE: u32 = u32::MAX;
+/// Fewest dead face slots worth a [`EditMesh::compact_faces`].
+const COMPACT_MIN_DEAD: usize = 1 << 16;
 /// A vertex's fan or ring, or the faces of one edit: held inline up to 16
 /// (typical valence is 6), so the remesher's hot paths don't allocate.
 pub type Ring<T> = TinyVec<[T; 16]>;
@@ -111,6 +118,10 @@ pub struct EditMesh {
     references: Vec<DVec3>,
     face_alive: Vec<bool>,
     live_faces: usize,
+    /// Dead face slots dropped by [`compact_faces`](Self::compact_faces):
+    /// [`waste`](Self::waste) still counts them, so when a full rebuild
+    /// happens doesn't depend on compaction.
+    compacted: usize,
     /// `(from, to)` → half-edge.
     directed: EdgeTable,
     /// Feature edges as sorted vertex pairs.
@@ -119,6 +130,16 @@ pub struct EditMesh {
     /// released once the surface is clean enough to judge them (see
     /// [`release_flat_soft_features`](Self::release_flat_soft_features)).
     soft: HashSet<(u32, u32)>,
+}
+
+/// Room for `extra` more items, growing by a quarter instead of doubling.
+/// The mesh arrays start at the input's exact size, and doubling them at the
+/// first split left most of the new half unused (and briefly held both
+/// copies while it moved).
+pub(crate) fn reserve_quarter<T>(list: &mut Vec<T>, extra: usize) {
+    if list.len() + extra > list.capacity() {
+        list.reserve_exact(extra.max(list.len() / 4));
+    }
 }
 
 /// Drops repeats from a sorted list (`TinyVec` has no `dedup`).
@@ -152,6 +173,7 @@ impl EditMesh {
             references: Vec::with_capacity(triangles.len()),
             face_alive: Vec::with_capacity(triangles.len()),
             live_faces: 0,
+            compacted: 0,
             directed: EdgeTable::with_capacity(triangles.len() * 3),
             features: HashSet::default(),
             soft: HashSet::default(),
@@ -329,6 +351,12 @@ impl EditMesh {
                 Some(t) => h < t,
             })
             .collect()
+    }
+
+    /// [`half_edges`](Self::half_edges) as `(from, to)` pairs, which survive
+    /// [`compact_faces`](Self::compact_faces).
+    pub fn half_edge_ends(&self) -> Vec<(u32, u32)> {
+        self.half_edges().into_iter().map(|h| (self.from(h), self.to(h))).collect()
     }
 
     // --- Neighbourhoods ----------------------------------------------------
@@ -676,6 +704,9 @@ impl EditMesh {
             self.live_faces -= 1;
         }
         let first = self.corners.len() as u32;
+        reserve_quarter(&mut self.corners, add.len());
+        reserve_quarter(&mut self.references, add.len());
+        reserve_quarter(&mut self.face_alive, add.len());
         for t in add {
             let shared = |g: u32| self.corners[g as usize].iter().filter(|v| t.contains(v)).count();
             let most = remove.iter().map(|&g| shared(g)).max().unwrap_or(0);
@@ -725,6 +756,12 @@ impl EditMesh {
         let (a, b, c) = (self.from(h), self.to(h), self.from(self.prev(h)));
         let twin = self.twin(h);
         let m = self.positions.len() as u32;
+        reserve_quarter(&mut self.positions, 1);
+        reserve_quarter(&mut self.kinds, 1);
+        reserve_quarter(&mut self.vertex_alive, 1);
+        reserve_quarter(&mut self.out, 1);
+        reserve_quarter(&mut self.face_degree, 1);
+        reserve_quarter(&mut self.boundary_degree, 1);
         self.positions.push(at);
         self.kinds.push(VertexKind::Free);
         self.vertex_alive.push(true);
@@ -868,9 +905,52 @@ impl EditMesh {
 
     // --- Output and checks --------------------------------------------------
 
-    /// Dead face slots (left behind by operations) per live face.
+    /// Dead face slots (left behind by operations) per live face, including
+    /// those compacted away since the mesh was built.
     pub fn waste(&self) -> f64 {
-        (self.corners.len() - self.live_faces) as f64 / self.live_faces.max(1) as f64
+        (self.corners.len() + self.compacted - self.live_faces) as f64 / self.live_faces.max(1) as f64
+    }
+
+    /// Whether dead face slots outnumber live faces (and are worth reclaiming).
+    pub fn mostly_dead(&self) -> bool {
+        let dead = self.corners.len() - self.live_faces;
+        dead > self.live_faces.max(COMPACT_MIN_DEAD)
+    }
+
+    /// Drops dead face slots in place. Live faces keep their order (so any
+    /// comparison of face or half-edge ids comes out the same) and vertices
+    /// keep their ids; held [`HalfEdge`]s are invalidated, so callers keep
+    /// endpoints across it. Memory: a decimating pass appends replacement
+    /// faces for every collapse, and without this the slot arrays grow to
+    /// several times the live mesh before the next rebuild.
+    pub fn compact_faces(&mut self) {
+        let slots = self.corners.len();
+        let mut renumber = vec![NONE; slots];
+        let mut next = 0usize;
+        for (f, new) in renumber.iter_mut().enumerate() {
+            if self.face_alive[f] {
+                *new = next as u32;
+                self.corners[next] = self.corners[f];
+                self.references[next] = self.references[f];
+                next += 1;
+            }
+        }
+        self.corners.truncate(next);
+        self.references.truncate(next);
+        self.face_alive.clear();
+        self.face_alive.resize(next, true);
+        self.compacted += slots - next;
+        for h in &mut self.out {
+            if *h != NONE {
+                *h = renumber
+                    .get((*h / 3) as usize)
+                    .map_or(NONE, |&f| if f == NONE { NONE } else { 3 * f + *h % 3 });
+            }
+        }
+        self.directed.clear();
+        for h in 0..3 * next as u32 {
+            self.directed.insert(&self.corners, h);
+        }
     }
 
     /// A fresh copy without dead slots. Vertex kinds are carried over as they
@@ -1261,6 +1341,53 @@ mod tests {
         let p = [DVec3::ZERO, DVec3::X, DVec3::Y, -DVec3::X, -DVec3::Y];
         let err = EditMesh::from_triangles(&p, &[[0, 1, 2], [0, 3, 4]], &[]).unwrap_err();
         assert!(err.contains("non-manifold vertex"), "{err}");
+    }
+
+    #[test]
+    fn compacting_faces_changes_nothing_but_memory() {
+        // The same edits on two copies, one compacted after every few: they
+        // must stay identical (faces in order, references, waste, results).
+        let (p, t) = grid(10);
+        let mut plain = EditMesh::from_triangles(&p, &t, &[]).unwrap();
+        let mut compacted = plain.clone();
+        let edges = plain.half_edge_ends();
+        for (i, &(a, b)) in edges.iter().enumerate() {
+            for mesh in [&mut plain, &mut compacted] {
+                let Some(h) = mesh.find_half_edge(a, b).or_else(|| mesh.find_half_edge(b, a)) else {
+                    continue;
+                };
+                let (pa, pb) = (mesh.position(mesh.from(h)), mesh.position(mesh.to(h)));
+                match i % 3 {
+                    0 => drop(mesh.split(h, 0.5 * (pa + pb))),
+                    1 => drop(mesh.flip(h)),
+                    _ => drop(mesh.collapse(h, 0.5 * (pa + pb))),
+                }
+            }
+            if i % 7 == 0 {
+                compacted.compact_faces();
+                compacted.check_invariants().unwrap();
+            }
+        }
+        assert!(compacted.corners.len() < plain.corners.len(), "compaction dropped dead slots");
+        assert_eq!(compacted.waste(), plain.waste());
+        let faces =
+            |m: &EditMesh| m.faces().map(|f| (m.face_corners(f), m.reference_normal(f))).collect::<Vec<_>>();
+        assert_eq!(faces(&compacted), faces(&plain));
+        assert_eq!(compacted.half_edge_ends(), plain.half_edge_ends());
+        assert_eq!(compacted.compact(), plain.compact());
+        let fan = |m: &EditMesh| {
+            (0..m.vertex_slots() as u32).map(|v| m.faces_around(v).to_vec()).collect::<Vec<_>>()
+        };
+        let order = |m: &EditMesh, fans: Vec<Vec<u32>>| {
+            fans.into_iter()
+                .map(|f| f.iter().map(|&g| m.face_corners(g)).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            order(&compacted, fan(&compacted)),
+            order(&plain, fan(&plain)),
+            "fans start at the same face"
+        );
     }
 
     #[test]

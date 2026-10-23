@@ -50,16 +50,14 @@ impl HalfEdges {
     /// non-manifold and left untwinned.
     pub fn build(triangles: &[[u32; 3]], vertex_count: usize) -> Self {
         debug_assert!(triangles.iter().flatten().all(|&v| (v as usize) < vertex_count));
-        let mut keyed: Vec<(u32, u32, u32)> = triangles
-            .iter()
-            .enumerate()
-            .flat_map(|(f, t)| {
-                (0..3).map(move |i| {
-                    let (a, b) = (t[i], t[(i + 1) % 3]);
-                    (a.min(b), a.max(b), (3 * f + i) as u32)
-                })
+        // Sized up front: collecting a `flat_map` would grow by doubling.
+        let mut keyed: Vec<(u32, u32, u32)> = Vec::with_capacity(3 * triangles.len());
+        keyed.extend(triangles.iter().enumerate().flat_map(|(f, t)| {
+            (0..3).map(move |i| {
+                let (a, b) = (t[i], t[(i + 1) % 3]);
+                (a.min(b), a.max(b), (3 * f + i) as u32)
             })
-            .collect();
+        }));
         keyed.sort_unstable();
 
         let mut twin = vec![NO_TWIN; keyed.len()];

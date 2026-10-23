@@ -13,13 +13,11 @@ pub struct Component {
 /// ordered by their lowest face.
 pub fn split(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<Component> {
     debug_assert!(triangles.iter().flatten().all(|&v| (v as usize) < vertex_count));
-    let mut edges: Vec<(u32, u32, u32)> = triangles
-        .iter()
-        .enumerate()
-        .flat_map(|(f, t)| {
-            (0..3).map(move |i| (t[i].min(t[(i + 1) % 3]), t[i].max(t[(i + 1) % 3]), f as u32))
-        })
-        .collect();
+    // Sized up front: collecting a `flat_map` would grow by doubling.
+    let mut edges: Vec<(u32, u32, u32)> = Vec::with_capacity(3 * triangles.len());
+    edges.extend(triangles.iter().enumerate().flat_map(|(f, t)| {
+        (0..3).map(move |i| (t[i].min(t[(i + 1) % 3]), t[i].max(t[(i + 1) % 3]), f as u32))
+    }));
     edges.sort_unstable();
     let mut sets = UnionFind::new(triangles.len());
     for group in edges.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {

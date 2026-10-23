@@ -8,6 +8,7 @@
 use std::collections::VecDeque;
 
 pub use glam::DVec3;
+use tinyvec::TinyVec;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Orientation {
@@ -27,7 +28,7 @@ pub fn signed_volume(positions: &[DVec3], triangles: &[[u32; 3]]) -> f64 {
 
 /// A face across a manifold edge. `same_direction` means both faces traverse the
 /// edge the same way, i.e. they disagree about orientation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct Neighbour {
     face: u32,
     same_direction: bool,
@@ -36,18 +37,17 @@ struct Neighbour {
 
 pub fn orient(positions: &[DVec3], triangles: &[[u32; 3]]) -> Orientation {
     let n = triangles.len();
-    let mut neighbours: Vec<Vec<Neighbour>> = vec![Vec::new(); n];
+    // At most one neighbour per edge, so three per face, kept inline (one
+    // heap list per face cost more than the neighbours themselves).
+    let mut neighbours: Vec<TinyVec<[Neighbour; 3]>> = vec![TinyVec::new(); n];
     let mut boundary = vec![false; n];
-    let mut uses: Vec<(u32, u32, u32, u32)> = triangles
-        .iter()
-        .enumerate()
-        .flat_map(|(f, t)| {
-            (0..3).map(move |i| {
-                let (a, b) = (t[i], t[(i + 1) % 3]);
-                (a.min(b), a.max(b), f as u32, a)
-            })
+    let mut uses: Vec<(u32, u32, u32, u32)> = Vec::with_capacity(3 * n);
+    uses.extend(triangles.iter().enumerate().flat_map(|(f, t)| {
+        (0..3).map(move |i| {
+            let (a, b) = (t[i], t[(i + 1) % 3]);
+            (a.min(b), a.max(b), f as u32, a)
         })
-        .collect();
+    }));
     uses.sort_unstable();
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
         match group {

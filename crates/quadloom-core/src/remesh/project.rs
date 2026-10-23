@@ -40,6 +40,21 @@ impl Projector {
         max_distance: f64,
         sheet_window: f64,
     ) -> Self {
+        let surface = TriangleBvh::new(positions, triangles);
+        Self::with_surface(surface, positions, triangles, feature_edges, max_distance, sheet_window)
+    }
+
+    /// [`new`](Self::new) around an already built BVH of the same triangles
+    /// (the remesher builds it before its edit mesh, so the BVH's build
+    /// buffers are gone by the time the edit mesh exists).
+    pub fn with_surface(
+        surface: TriangleBvh,
+        positions: &[DVec3],
+        triangles: &[[u32; 3]],
+        feature_edges: &[[u32; 2]],
+        max_distance: f64,
+        sheet_window: f64,
+    ) -> Self {
         let segments: Vec<[u32; 3]> = feature_edges.iter().map(|&[a, b]| [a, b, b]).collect();
         let normals: Vec<DVec3> = triangles
             .iter()
@@ -48,23 +63,29 @@ impl Projector {
                 (b - a).cross(c - a).normalize_or_zero()
             })
             .collect();
-        let mut beside: hashbrown::HashMap<(u32, u32), Vec<u32>> = hashbrown::HashMap::new();
+        // The first two faces (in face order) beside each feature segment; only
+        // the segments are mapped, not every edge.
+        let mut beside: hashbrown::HashMap<(u32, u32), [u32; 2]> =
+            feature_edges.iter().map(|&[a, b]| ((a.min(b), a.max(b)), [u32::MAX; 2])).collect();
         for (f, t) in triangles.iter().enumerate() {
             for i in 0..3 {
                 let (a, b) = (t[i], t[(i + 1) % 3]);
-                beside.entry((a.min(b), a.max(b))).or_default().push(f as u32);
+                if let Some(faces) = beside.get_mut(&(a.min(b), a.max(b)))
+                    && let Some(slot) = faces.iter_mut().find(|g| **g == u32::MAX)
+                {
+                    *slot = f as u32;
+                }
             }
         }
         let segment_sides = feature_edges
             .iter()
             .map(|&[a, b]| {
-                let faces = beside.get(&(a.min(b), a.max(b))).map(Vec::as_slice).unwrap_or_default();
-                let side = |k: usize| faces.get(k).map_or(DVec3::ZERO, |&f| normals[f as usize]);
-                [side(0), side(1)]
+                let faces = beside.get(&(a.min(b), a.max(b))).copied().unwrap_or([u32::MAX; 2]);
+                faces.map(|f| normals.get(f as usize).copied().unwrap_or(DVec3::ZERO))
             })
             .collect();
         Self {
-            surface: TriangleBvh::new(positions, triangles),
+            surface,
             normals,
             segment_sides,
             features: TriangleBvh::new(positions, &segments),

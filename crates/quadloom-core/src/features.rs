@@ -125,17 +125,14 @@ pub fn detect(
         .collect();
 
     // (min, max, face, apex) for every face edge, grouped by undirected edge.
-    let mut uses: Vec<(u32, u32, u32, u32)> = mesh
-        .triangles
-        .iter()
-        .enumerate()
-        .flat_map(|(f, t)| {
-            (0..3).map(move |i| {
-                let (a, b) = (t[i], t[(i + 1) % 3]);
-                (a.min(b), a.max(b), f as u32, t[(i + 2) % 3])
-            })
+    // Sized up front: `flat_map` gives no exact size, so collecting would double.
+    let mut uses: Vec<(u32, u32, u32, u32)> = Vec::with_capacity(3 * mesh.triangles.len());
+    uses.extend(mesh.triangles.iter().enumerate().flat_map(|(f, t)| {
+        (0..3).map(move |i| {
+            let (a, b) = (t[i], t[(i + 1) % 3]);
+            (a.min(b), a.max(b), f as u32, t[(i + 2) % 3])
         })
-        .collect();
+    }));
     uses.sort_unstable();
 
     let group_of = |groups: &Option<Vec<i32>>| -> Option<Vec<i32>> {
@@ -147,7 +144,8 @@ pub fn detect(
     let cos_threshold = params.angle_deg.to_radians().cos();
 
     let region = Region::new(mesh, &normals, &uses);
-    let mut edges = Vec::new();
+    // Every edge first (marking looks edges up by vertex pair), most dropped below.
+    let mut edges = Vec::with_capacity(uses.len() / 2 + 1);
     let mut on_boundary = vec![false; positions.len()];
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
         let v = [group[0].0, group[0].1];
@@ -201,6 +199,8 @@ pub fn detect(
         mark(&input.seam_edges, source::SEAM);
     }
     edges.retain(|e| e.sources != 0);
+    // The set lives through the remesh; give back the room the other edges took.
+    edges.shrink_to_fit();
 
     let diagonal = {
         let (lo, hi) = positions
@@ -251,7 +251,9 @@ struct Region<'a> {
     normals: &'a [DVec3],
     area: Vec<f64>,
     centroid: Vec<DVec3>,
-    neighbours: Vec<Vec<u32>>,
+    /// Faces across each face's edges, in edge order, padded with `u32::MAX`
+    /// (at most one per edge, so a flat array instead of a list per face).
+    neighbours: Vec<[u32; 3]>,
 }
 
 impl<'a> Region<'a> {
@@ -263,11 +265,16 @@ impl<'a> Region<'a> {
             0.5 * (b - a).cross(c - a).length()
         });
         let centroid = triangles.iter().map(|t| corners(t).iter().sum::<DVec3>() / 3.0).collect();
-        let mut neighbours: Vec<Vec<u32>> = vec![Vec::new(); triangles.len()];
+        let mut neighbours = vec![[u32::MAX; 3]; triangles.len()];
+        let mut link = |f: u32, g: u32| {
+            if let Some(slot) = neighbours[f as usize].iter_mut().find(|s| **s == u32::MAX) {
+                *slot = g;
+            }
+        };
         for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
             if let [x, y] = group {
-                neighbours[x.2 as usize].push(y.2);
-                neighbours[y.2 as usize].push(x.2);
+                link(x.2, y.2);
+                link(y.2, x.2);
             }
         }
         Self { positions, triangles, normals, area: area.collect(), centroid, neighbours }
@@ -288,7 +295,7 @@ impl<'a> Region<'a> {
         for _ in 0..SALIENCE_RINGS {
             let mut next = Vec::new();
             for &f in &frontier {
-                for &g in &self.neighbours[f as usize] {
+                for &g in self.neighbours[f as usize].iter().take_while(|&&g| g != u32::MAX) {
                     if !seen.contains(&g) {
                         seen.push(g);
                         next.push(g);

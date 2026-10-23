@@ -12,6 +12,8 @@ pub use glam::DVec3;
 
 use crate::unionfind::UnionFind;
 
+const NONE: u32 = u32::MAX;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ManifoldSplit {
     pub positions: Vec<DVec3>,
@@ -89,18 +91,29 @@ fn choose_pair(group: &[(u32, u32, u32, u32)]) -> (u32, u32) {
     opposite.map_or((group[0].2, group[1].2), |(x, y)| (x.2, y.2))
 }
 
+/// The first edge of `t` (edge i joins corners i and i + 1) between `a` and `b`.
+fn edge_slot(t: &[u32; 3], a: u32, b: u32) -> Option<usize> {
+    (0..3).find(|&i| {
+        let (x, y) = (t[i], t[(i + 1) % 3]);
+        (x.min(y), x.max(y)) == (a.min(b), a.max(b))
+    })
+}
+
 fn edge_uses(triangles: &[[u32; 3]]) -> Vec<(u32, u32, u32, u32)> {
-    let mut uses: Vec<(u32, u32, u32, u32)> = triangles
-        .iter()
-        .enumerate()
-        .flat_map(|(f, t)| {
-            (0..3).map(move |i| {
-                let (a, b) = (t[i], t[(i + 1) % 3]);
-                (a.min(b), a.max(b), f as u32, a)
+    // Sized up front: collecting a `flat_map` would grow by doubling.
+    let mut uses: Vec<(u32, u32, u32, u32)> = Vec::with_capacity(3 * triangles.len());
+    uses.extend(
+        triangles
+            .iter()
+            .enumerate()
+            .flat_map(|(f, t)| {
+                (0..3).map(move |i| {
+                    let (a, b) = (t[i], t[(i + 1) % 3]);
+                    (a.min(b), a.max(b), f as u32, a)
+                })
             })
-        })
-        .filter(|u| u.0 != u.1)
-        .collect();
+            .filter(|u| u.0 != u.1),
+    );
     uses.sort_unstable();
     uses
 }
@@ -116,7 +129,9 @@ fn split_once(
 ) -> ManifoldSplit {
     let uses = edge_uses(triangles);
 
-    let mut links: HashMap<(u32, u32, u32), u32> = HashMap::new();
+    // Per face and edge (edge i joins corners i and i + 1): the face linked
+    // across it, or NONE. A flat array rather than a map keyed by (face, edge).
+    let mut links: Vec<[u32; 3]> = vec![[NONE; 3]; triangles.len()];
     let mut split_edges = 0;
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
         let key = (group[0].0, group[0].1);
@@ -133,26 +148,45 @@ fn split_once(
             }
         };
         if let Some((f, g)) = pair {
-            links.insert((f, key.0, key.1), g);
-            links.insert((g, key.0, key.1), f);
-        }
-    }
-
-    // Faces around each vertex, in face order.
-    let mut incident: Vec<Vec<u32>> = vec![Vec::new(); positions.len()];
-    for (f, t) in triangles.iter().enumerate() {
-        for &v in t {
-            if incident[v as usize].last() != Some(&(f as u32)) {
-                incident[v as usize].push(f as u32);
+            for (face, other) in [(f, g), (g, f)] {
+                if let Some(i) = edge_slot(&triangles[face as usize], key.0, key.1) {
+                    links[face as usize][i] = other;
+                }
             }
         }
     }
+
+    // Faces around each vertex, in face order, as compressed rows: vertex v's
+    // faces are `incident[start[v]..start[v + 1]]`.
+    let corners = |t: &[u32; 3]| {
+        let [a, b, c] = *t;
+        [Some(a), (b != a).then_some(b), (c != a && c != b).then_some(c)].into_iter().flatten()
+    };
+    let mut start = vec![0u32; positions.len() + 1];
+    for t in triangles {
+        for v in corners(t) {
+            start[v as usize + 1] += 1;
+        }
+    }
+    for v in 0..positions.len() {
+        start[v + 1] += start[v];
+    }
+    let mut incident = vec![0u32; start[positions.len()] as usize];
+    let mut fill = start.clone();
+    for (f, t) in triangles.iter().enumerate() {
+        for v in corners(t) {
+            incident[fill[v as usize] as usize] = f as u32;
+            fill[v as usize] += 1;
+        }
+    }
+    drop(fill);
 
     let mut out_positions = positions.to_vec();
     let mut parent: Vec<u32> = (0..positions.len() as u32).collect();
     let mut out_triangles = triangles.to_vec();
     let mut split_vertices = 0;
-    for (v, faces) in incident.iter().enumerate() {
+    for v in 0..positions.len() {
+        let faces = &incident[start[v] as usize..start[v + 1] as usize];
         if faces.len() < 2 {
             continue;
         }
@@ -160,8 +194,10 @@ fn split_once(
         let mut fans = UnionFind::new(faces.len());
         for (local, &f) in faces.iter().enumerate() {
             for &w in triangles[f as usize].iter().filter(|&&w| w != v) {
-                let partner = links.get(&(f, v.min(w), v.max(w)));
-                if let Some(other) = partner.and_then(|g| faces.binary_search(g).ok()) {
+                let partner = edge_slot(&triangles[f as usize], v.min(w), v.max(w))
+                    .map(|i| links[f as usize][i])
+                    .filter(|&g| g != NONE);
+                if let Some(other) = partner.and_then(|g| faces.binary_search(&g).ok()) {
                     fans.union(local as u32, other as u32);
                 }
             }

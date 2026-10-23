@@ -118,6 +118,8 @@ pub fn run(
         )
         .with_hint("lower 'Minimum Part Size' under Cleanup, or check the mesh for degenerate geometry"));
     }
+    // Everything downstream works on the repaired copy.
+    drop(mesh);
     timings_ms.push((Stage::Repair, elapsed_ms(started)));
 
     let started = Instant::now();
@@ -170,12 +172,36 @@ pub fn run(
     let feature_edges: Vec<[u32; 2]> = feature_set.edges.iter().map(|e| e.v).collect();
     let soft_edges: Vec<[u32; 2]> =
         feature_set.edges.iter().filter(|e| e.sources == features::source::ANGLE).map(|e| e.v).collect();
+    let component_count = components.len();
+    // From here on only the geometry is needed: the repair's vertex and face
+    // maps and the feature set are freed now, the geometry once the remesh
+    // has its own copies.
+    let RepairedMesh {
+        positions: clean_positions,
+        triangles: clean_triangles,
+        vertex_map,
+        vertex_copies,
+        face_origin,
+    } = repaired;
+    // (A partial move would keep the rest alive to the end of the run.)
+    drop((vertex_map, vertex_copies, face_origin, feature_set));
     let (positions, triangles, feature_edges, remesh_report) = if params.remesh.enabled {
-        remesh_parts(&repaired, &components, &feature_edges, &soft_edges, params, control)?
+        let remeshed = remesh_parts(
+            clean_positions,
+            clean_triangles,
+            &components,
+            &feature_edges,
+            &soft_edges,
+            params,
+            control,
+        )?;
+        drop((components, feature_edges, soft_edges));
+        remeshed
     } else {
-        let faces = repaired.triangles.len();
+        drop((components, soft_edges));
+        let faces = clean_triangles.len();
         let report = RemeshReport { input_faces: faces, output_faces: faces, ..RemeshReport::default() };
-        (repaired.positions, repaired.triangles, feature_edges, report)
+        (clean_positions, clean_triangles, feature_edges, report)
     };
     timings_ms.push((Stage::PrepRemesh, elapsed_ms(started)));
 
@@ -327,7 +353,7 @@ pub fn run(
         repair: repair_report,
         features: feature_report,
         feature_edges,
-        components: components.len(),
+        components: component_count,
         remesh: remesh_report,
         field,
         frame,
@@ -344,8 +370,11 @@ type Remeshed = (Vec<glam::DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>, RemeshReport);
 
 /// Remeshes every part independently (in parallel) at one shared target
 /// length, then concatenates the results in part order.
+/// Remeshes each part, consuming the cleaned mesh (freed as soon as the parts
+/// have their own copies).
 fn remesh_parts(
-    repaired: &RepairedMesh,
+    positions: Vec<glam::DVec3>,
+    triangles: Vec<[u32; 3]>,
     components: &[Component],
     feature_edges: &[[u32; 2]],
     soft_edges: &[[u32; 2]],
@@ -354,19 +383,18 @@ fn remesh_parts(
 ) -> Result<Remeshed, Error> {
     let stage = Stage::PrepRemesh;
     let release_angle = if params.features.use_angle { params.features.angle_deg } else { 0.0 };
-    let target = remesh::target_length(&repaired.positions, &repaired.triangles, &params.remesh);
+    let target = remesh::target_length(&positions, &triangles, &params.remesh);
     let scale = remesh::Scale {
         target,
-        tolerance: remesh::bbox_diagonal(&repaired.positions) * params.remesh.max_surface_distance_rel,
+        tolerance: remesh::bbox_diagonal(&positions) * params.remesh.max_surface_distance_rel,
         face_limit: params.max_faces,
     };
     // Refuse before allocating anything if the target alone (adaptivity only
     // refines) would exceed the face limit: too much memory would crash the host.
-    let area: f64 = repaired
-        .triangles
+    let area: f64 = triangles
         .iter()
         .map(|t| {
-            let [a, b, c] = t.map(|v| repaired.positions[v as usize]);
+            let [a, b, c] = t.map(|v| positions[v as usize]);
             0.5 * (b - a).cross(c - a).length()
         })
         .sum();
@@ -381,37 +409,57 @@ fn remesh_parts(
         )
         .with_hint("raise Triangle Size, or set it to 0 for an automatic size"));
     }
-    let results: Vec<Result<(remesh::RemeshedMesh, RemeshReport), Error>> = components
-        .par_iter()
-        .map(|component| {
-            let mut vertices: Vec<u32> =
-                component.faces.iter().flat_map(|&f| repaired.triangles[f as usize]).collect();
-            vertices.sort_unstable();
-            vertices.dedup();
-            let local = |v: u32| vertices.binary_search(&v).ok().map(|i| i as u32);
-            let positions: Vec<glam::DVec3> =
-                vertices.iter().map(|&v| repaired.positions[v as usize]).collect();
-            let triangles: Vec<[u32; 3]> = component
-                .faces
-                .iter()
-                .map(|&f| repaired.triangles[f as usize].map(|v| local(v).unwrap_or(0)))
-                .collect();
-            let to_local = |edges: &[[u32; 2]]| -> Vec<[u32; 2]> {
-                edges.iter().filter_map(|&[a, b]| Some([local(a)?, local(b)?])).collect()
-            };
-            let (features, soft) = (to_local(feature_edges), to_local(soft_edges));
-            remesh::remesh(
-                &positions,
-                &triangles,
-                &features,
-                &soft,
-                release_angle,
-                scale,
-                &params.remesh,
-                control,
-            )
-        })
-        .collect();
+    let whole = components.len() == 1
+        && components[0].faces.len() == triangles.len()
+        && uses_every_vertex(&triangles, positions.len());
+    let results: Vec<Result<(remesh::RemeshedMesh, RemeshReport), Error>> = if whole {
+        // One part that is the whole mesh: no copy, and the input goes as
+        // soon as the remesh has set up its own.
+        let prepared = remesh::prepare(
+            &positions,
+            &triangles,
+            feature_edges,
+            soft_edges,
+            scale,
+            &params.remesh,
+            control,
+        );
+        drop((positions, triangles));
+        vec![prepared.and_then(|p| p.run(release_angle, &params.remesh, control))]
+    } else {
+        components
+            .par_iter()
+            .map(|component| {
+                let mut vertices: Vec<u32> =
+                    component.faces.iter().flat_map(|&f| triangles[f as usize]).collect();
+                vertices.sort_unstable();
+                vertices.dedup();
+                let local = |v: u32| vertices.binary_search(&v).ok().map(|i| i as u32);
+                let part_positions: Vec<glam::DVec3> =
+                    vertices.iter().map(|&v| positions[v as usize]).collect();
+                let part_triangles: Vec<[u32; 3]> = component
+                    .faces
+                    .iter()
+                    .map(|&f| triangles[f as usize].map(|v| local(v).unwrap_or(0)))
+                    .collect();
+                let to_local = |edges: &[[u32; 2]]| -> Vec<[u32; 2]> {
+                    edges.iter().filter_map(|&[a, b]| Some([local(a)?, local(b)?])).collect()
+                };
+                let (features, soft) = (to_local(feature_edges), to_local(soft_edges));
+                let prepared = remesh::prepare(
+                    &part_positions,
+                    &part_triangles,
+                    &features,
+                    &soft,
+                    scale,
+                    &params.remesh,
+                    control,
+                );
+                drop((vertices, part_positions, part_triangles, features, soft));
+                prepared.and_then(|p| p.run(release_angle, &params.remesh, control))
+            })
+            .collect()
+    };
 
     let (mut positions, mut triangles, mut features) = (Vec::new(), Vec::new(), Vec::new());
     let mut total =
@@ -463,6 +511,17 @@ fn check_groups(input: &FeatureInput, faces: usize) -> Result<(), Error> {
 /// Refuses inputs that are too large, using only their sizes, so callers (the
 /// Python binding, the add-on) can check *before* copying any data.
 ///
+/// Whether every vertex is a corner of some triangle.
+fn uses_every_vertex(triangles: &[[u32; 3]], vertex_count: usize) -> bool {
+    let mut used = vec![false; vertex_count];
+    for &v in triangles.iter().flatten() {
+        if let Some(u) = used.get_mut(v as usize) {
+            *u = true;
+        }
+    }
+    used.iter().all(|&u| u)
+}
+
 /// The vertex limit is three per allowed face: no mesh within the face limit
 /// can use more, so anything beyond that is loose-vertex bloat.
 pub fn check_limits(vertex_count: usize, index_count: usize, params: &Params) -> Result<(), Error> {
