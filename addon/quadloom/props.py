@@ -488,9 +488,19 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         default=DEFAULT_MAX_FACES,
         min=1,
     )
+    worker_memory_mb: IntProperty(
+        name="Worker Memory (MiB)",
+        description="Memory limit for the isolated remesher, including Quick Re-run. "
+        "A run that reaches it stops safely; lower Density or raise this limit to retry. "
+        "At most half the available memory is used when the worker starts",
+        default=2048,
+        min=256,
+        max=65536,
+    )
     debug_fault: StringProperty(
         name="Inject Fault",
-        description="Developer builds only: panic:<stage>, error:<stage> or slow:<ms>",
+        description="Developer builds only: panic:<stage>, error:<stage>, oom:<stage>, slow:<ms>, "
+        "worker:abort, worker:oom or worker:stall",
         default="",
     )
 

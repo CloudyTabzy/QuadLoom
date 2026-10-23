@@ -338,6 +338,7 @@ class QUADLOOM_PT_system(_AdvancedChild, bpy.types.Panel):
         settings = context.scene.quadloom
         layout = _split(self.layout)
         layout.prop(settings, "max_faces")
+        layout.prop(settings, "worker_memory_mb")
         col = layout.column()
         col.use_property_split = False
         col.prop(settings, "quick_rerun")

@@ -36,19 +36,25 @@ impl InputMesh {
             return Err(Error::invalid_input(stage, "mesh has no faces"));
         }
 
-        let positions: Vec<DVec3> = positions
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|&[x, y, z]| DVec3::new(f64::from(x), f64::from(y), f64::from(z)))
-            .collect();
+        let mut converted = Vec::new();
+        crate::allocation::reserve(&mut converted, positions.len() / 3, stage)?;
+        converted.extend(
+            positions
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|&[x, y, z]| DVec3::new(f64::from(x), f64::from(y), f64::from(z))),
+        );
+        let positions = converted;
         if let Some(v) = positions.iter().position(|p| !p.is_finite()) {
             return Err(Error::invalid_input(stage, format!("vertex {v} has a non-finite position"))
                 .with_hint("check the mesh for NaN or infinite coordinates"));
         }
 
         let vertex_count = positions.len();
-        let triangles: Vec<[u32; 3]> = indices.as_chunks::<3>().0.to_vec();
+        let mut triangles = Vec::new();
+        crate::allocation::reserve(&mut triangles, indices.len() / 3, stage)?;
+        triangles.extend_from_slice(indices.as_chunks::<3>().0);
         for (face, tri) in triangles.iter().enumerate() {
             if let Some(&bad) = tri.iter().find(|&&i| i as usize >= vertex_count) {
                 return Err(Error::invalid_input(

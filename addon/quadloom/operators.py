@@ -2,7 +2,7 @@
 """Remesh and cancel operators.
 
 A run is a `Job`: the mesh is snapshotted on the main thread, the native call
-runs on a worker thread (the backend releases the GIL), and the result is
+runs in a memory-limited process managed by a worker thread, and the result is
 turned into a new object back on the main thread. At most one job runs at a time.
 """
 
@@ -12,23 +12,26 @@ import time
 
 import bpy
 
-from . import bridge, mesh_io, props, transfer, wording
+from . import bridge, mesh_io, props, transfer, wording, worker
 
 _active_job = None
 
 
 class Job:
-    def __init__(self, snapshot, kwargs, warnings=()):
+    def __init__(self, snapshot, kwargs, scene, warnings=()):
         self.snapshot = snapshot
         self.kwargs = kwargs
         # Set when the job is dropped (undo, file load, unregister): its result
         # must never reach the scene.
         self.discarded = False
+        self.collected = False
+        self.scene_name = scene.name
+        self.scene_pointer = scene.as_pointer()
         # Warnings found before the run (selection, transform), as (message, hint).
         self.preflight = list(warnings)
         # Also build the intermediate meshes (Show Intermediate Steps).
         self.show_steps = False
-        self.control = bridge.new_control()
+        self.control = worker.Control()
         self.result = None
         self.error = None
         # The attribute-transfer mapping, or why it failed (the result still lands).
@@ -39,29 +42,20 @@ class Job:
 
     def _work(self):
         try:
-            self.result = bridge.run_job(self.snapshot.positions, self.snapshot.indices, self.control, **self.kwargs)
+            data = self.snapshot.transfer
+            mapping = None if data is None else {
+                key: array.array("I", value.tobytes()) if value is not None else None
+                for key, value in (("corner_keys", data.corner_keys), ("face_keys", data.face_keys))
+            }
+            response = worker.run(self.snapshot.positions, self.snapshot.indices, self.control,
+                                  mapping=mapping, **self.kwargs)
+            self.result, self.mapping = response["result"], response["mapping"]
+            self.transfer_error = response["transfer_error"]
         except Exception as e:  # every failure is reported, never re-raised into Blender
             self.error = e
-            return
-        data = self.snapshot.transfer
-        if data is None:
-            return
-        try:
-            positions, offsets, corners = mesh_io.final_geometry(self.result)
-            self.mapping = bridge.transfer_map(
-                self.snapshot.positions,
-                self.snapshot.indices,
-                positions,
-                offsets,
-                corners,
-                self.control,
-                corner_keys=data.corner_keys,
-                face_keys=data.face_keys,
-            )
-        except bridge.CancelledError as e:
-            self.error = e
-        except Exception as e:  # the result still lands, with a warning
-            self.transfer_error = e
+
+    def matches_scene(self, scene):
+        return scene is not None and scene.as_pointer() == self.scene_pointer
 
     @property
     def done(self):
@@ -72,12 +66,11 @@ class Job:
 
 
 def job_running():
-    """True while a job's worker thread is still running.
-
-    A finished job whose modal operator never collected it (the handler was
-    dropped by a file load, say) doesn't count, so it can never lock the add-on.
-    """
-    return _active_job is not None and not _active_job.done
+    """Reserve the operator until the active result is collected or discarded."""
+    if _active_job is not None and not _active_job.matches_scene(bpy.context.scene):
+        discard_active_job()
+        clear_cache()
+    return _active_job is not None
 
 
 # The last run's work before the quad stage, for Quick Re-run. The backend
@@ -92,7 +85,7 @@ def _rerun_cache(settings):
         clear_cache()
         return None
     if _cache is None:
-        _cache = bridge.new_cache()
+        _cache = worker.Cache()
     return _cache
 
 
@@ -127,13 +120,15 @@ def start_job(context):
     preflight = preflight_warnings(context, settings)
     keep = transfer.Options.from_settings(settings) if settings.keep_attributes else None
     snapshot = mesh_io.extract(obj, context.evaluated_depsgraph_get(), settings.max_faces, keep)
-    kwargs = {"max_faces": settings.max_faces, "params": props.run_params(settings), **snapshot.feature_kwargs()}
+    kwargs = {"max_faces": settings.max_faces, "memory_limit_mb": settings.worker_memory_mb,
+              "runtime": (worker.python_executable(), worker.native_path()),
+              "params": props.run_params(settings), **snapshot.feature_kwargs()}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
     cache = _rerun_cache(settings)
     if cache is not None:
         kwargs["cache"] = cache
-    job = Job(snapshot, kwargs, preflight)
+    job = Job(snapshot, kwargs, context.scene, preflight)
     job.show_steps = settings.show_steps
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
@@ -145,22 +140,35 @@ def start_job(context):
     last.symmetry_summary = ""
     last.warnings = ""
     _active_job = job
-    job.thread.start()
+    try:
+        job.thread.start()
+    except Exception:
+        _active_job = None
+        last.status, last.message = "ERROR", "Could not start the worker thread"
+        raise
     return job
 
 
 def finish_job(context, job):
     """Applies a finished job's outcome on the main thread. Returns the operator result set."""
     global _active_job
+    if job.collected:
+        return {"CANCELLED"}, ("INFO", "QuadLoom: Run already collected")
+    if job.discarded or not job.matches_scene(context.scene):
+        if _active_job is job:
+            discard_active_job()
+        return {"CANCELLED"}, ("INFO", "QuadLoom: Run dropped")
+    if not job.done:
+        job.control.cancel()
+        return {"CANCELLED"}, ("INFO", "QuadLoom: Run still stopping")
+    job.collected = True
     if _active_job is job:
         _active_job = None
     last = context.scene.quadloom_last_run
     last.elapsed_ms = job.elapsed_ms()
-    if job.discarded:
-        # Dropped by undo, a file load or unregistering: its result never lands.
-        last.status, last.message = "CANCELLED", "The run was dropped (undo or file change)"
-        return {"CANCELLED"}, ("INFO", "QuadLoom: Run dropped")
     error = job.error
+    if job.control.is_cancelled():
+        error = worker.WorkerCancelled("cancelled by user", job.control.progress()[0])
     if error is None:
         try:
             obj = mesh_io.build_result(job.snapshot, job.result, context.scene)
@@ -198,7 +206,7 @@ def finish_job(context, job):
                 return {"FINISHED"}, ("WARNING", f"{title}: {wording.sentence(warnings[0][0])}{more}")
             return {"FINISHED"}, ("INFO", f"{title}: {last.message} ({last.faces_out:,} faces)")
 
-    cancelled = isinstance(error, bridge.CancelledError)
+    cancelled = isinstance(error, (bridge.CancelledError, worker.WorkerCancelled))
     last.status = "CANCELLED" if cancelled else "ERROR"
     last.message = wording.sentence(str(error))
     last.stage = getattr(error, "stage", None) or ""
@@ -385,6 +393,10 @@ def discard_active_job(join_timeout=5.0):
     """Cancels, waits for, and forgets the active job; its result is never used."""
     if _active_job is not None:
         _active_job.discarded = True
+        scene = bpy.data.scenes.get(_active_job.scene_name)
+        if _active_job.matches_scene(scene) and hasattr(scene, "quadloom_last_run"):
+            scene.quadloom_last_run.status = "CANCELLED"
+            scene.quadloom_last_run.message = "The run was dropped (undo or file change)"
     _discard(join_timeout)
 
 
@@ -460,18 +472,27 @@ class QUADLOOM_OT_remesh(bpy.types.Operator):
             last.status, last.message, last.stage, last.hint = "ERROR", str(e), "validate", ""
             self.report({"ERROR"}, f"QuadLoom could not start: {e}")
             return {"CANCELLED"}
-        wm = context.window_manager
-        self._timer = wm.event_timer_add(0.1, window=context.window)
-        wm.modal_handler_add(self)
+        try:
+            wm = context.window_manager
+            self._timer = wm.event_timer_add(0.1, window=context.window)
+            wm.modal_handler_add(self)
+        except Exception as e:
+            self._remove_timer(context)
+            discard_active_job()
+            self.report({"ERROR"}, f"QuadLoom could not start its progress timer: {e}")
+            return {"CANCELLED"}
         return {"RUNNING_MODAL"}
 
     def modal(self, context, event):
         job = self._job
+        if not job.matches_scene(context.scene) and _active_job is job:
+            discard_active_job()
+            clear_cache()
         if job.discarded:
             # Dropped by undo, a file load or unregistering: never build its result.
             self._remove_timer(context)
             return {"CANCELLED"}
-        if _active_job is not job and not job.done:
+        if _active_job is not job:
             # The job was discarded underneath us (add-on disabled, file loaded).
             self._remove_timer(context)
             return {"CANCELLED"}
@@ -544,6 +565,7 @@ def register_handlers():
 
 
 def unregister_handlers():
+    discard_active_job()
     clear_cache()
     if _on_load_pre in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.remove(_on_load_pre)

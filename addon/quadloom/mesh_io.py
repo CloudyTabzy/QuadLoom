@@ -8,9 +8,22 @@ from dataclasses import dataclass
 import bpy
 from mathutils import Matrix
 
-from . import transfer
+from . import transfer, worker_limits
 
 RESULT_SUFFIX = "_QuadLoom"
+BLENDER_INDEX_MAX = 2**31 - 1
+
+
+def check_blender_counts(vertices, corners, faces):
+    if any(count < 0 or count > BLENDER_INDEX_MAX for count in (vertices, corners, faces)):
+        raise ValueError("mesh exceeds Blender's signed 32-bit index limits")
+
+
+def _check_positions(positions):
+    import numpy as np
+
+    if not np.isfinite(np.frombuffer(positions, dtype=np.float32)).all():
+        raise ValueError("mesh positions must be finite (no NaN or infinity)")
 
 
 class MeshTooLarge(ValueError):
@@ -101,10 +114,17 @@ def _extract(obj, depsgraph, max_faces, keep, resting):
             raise MeshTooLarge(f"mesh has {triangles} faces, above the limit {max_faces}")
         if len(mesh.vertices) > 3 * max_faces:
             raise MeshTooLarge(f"mesh has {len(mesh.vertices)} vertices, above the limit {3 * max_faces}")
+        check_blender_counts(len(mesh.vertices), 3 * triangles, triangles)
+        # Snapshot, triangulation, sharp flags, NumPy scratch, and optional
+        # attributes coexist. Also account for attribute layers, not just faces.
+        estimate = len(mesh.vertices) * 96 + triangles * 256 + len(mesh.edges) * 24
+        estimate += sum(len(attr.data) * 32 for attr in mesh.attributes) if keep is not None else 0
+        worker_limits.admit_host_memory(estimate)
         mesh.calc_loop_triangles()
-        positions = array("f", bytes(4 * 3 * len(mesh.vertices)))
+        positions = array("f", [0.0]) * (3 * len(mesh.vertices))
         mesh.vertices.foreach_get("co", positions)
-        indices = array("i", bytes(4 * 3 * len(mesh.loop_triangles)))
+        _check_positions(positions)
+        indices = array("i", [0]) * (3 * len(mesh.loop_triangles))
         mesh.loop_triangles.foreach_get("vertices", indices)
 
         sharp_edges = _flagged_edge_pairs(mesh, "use_edge_sharp")
@@ -146,6 +166,9 @@ def decode_result(result):
     This is the last line of defence before data reaches Blender's C code:
     a malformed index here would otherwise be a native crash, not an error.
     """
+    check_blender_counts(len(result["positions"]) // 12, len(result["face_indices"]) // 4,
+                         len(result["face_offsets"]) // 4 - 1)
+    worker_limits.admit_host_memory(sum(len(result[key]) for key in ("positions", "face_offsets", "face_indices")) * 8)
     positions = array("f")
     positions.frombytes(result["positions"])
     offsets = array("I")
@@ -154,6 +177,7 @@ def decode_result(result):
     corners.frombytes(result["face_indices"])
     if len(positions) % 3:
         raise ValueError("result positions are not xyz triples")
+    _check_positions(positions)
     vertex_count = len(positions) // 3
     if len(offsets) < 2 or offsets[0] != 0 or offsets[-1] != len(corners):
         raise ValueError("result face offsets don't cover the face indices")
@@ -198,6 +222,11 @@ def frame_per_quad(frame, field_faces, trace, quad_patch):
     if len(tri_patch) != len(size):
         raise ValueError("layout patch ids don't match its faces")
     quad_patch = np.asarray(quad_patch, dtype=np.int64)
+    # A layout cannot have more patches than faces. Check before bincount:
+    # an invalid id must never turn into an unbounded host allocation.
+    if (tri_patch.size and (tri_patch.min() < 0 or tri_patch.max() >= field_faces)
+            or quad_patch.size and (quad_patch.min() < 0 or quad_patch.max() >= field_faces)):
+        raise ValueError("layout or quad patch id exceeds its patch count")
     patches = int(max(tri_patch.max(initial=0), quad_patch.max(initial=0))) + 1
     counts = np.bincount(tri_patch, minlength=patches).astype(np.float64)
     counts[counts == 0] = 1.0
@@ -242,6 +271,9 @@ def decode_layout(trace):
     Returns (positions, face offsets, face corners, patch ids, feature edges);
     raises ValueError if it's inconsistent.
     """
+    check_blender_counts(len(trace["positions"]) // 12, len(trace["triangles"]) // 4,
+                         len(trace["triangles"]) // 12)
+    worker_limits.admit_host_memory((len(trace["positions"]) + len(trace["triangles"])) * 8)
     positions = array("f")
     positions.frombytes(trace["positions"])
     corners = array("I")
@@ -250,6 +282,7 @@ def decode_layout(trace):
     patch.frombytes(trace["patch_of_face"])
     if len(positions) % 3 or len(corners) % 3:
         raise ValueError("layout mesh buffers are not triples")
+    _check_positions(positions)
     face_count = len(corners) // 3
     if len(patch) != face_count:
         raise ValueError("layout has a patch id count different from its face count")
@@ -341,6 +374,7 @@ def build_steps(snapshot, result, scene):
         meshes.append(("Layout", positions, offsets, corners, feature_edges, patch))
     steps = _steps_collection(snapshot, scene)
     made = []
+    allocated = []
     try:
         for label, positions, offsets, corners, feature_edges, patch in meshes:
             name = f"{snapshot.source_name}{RESULT_SUFFIX}_{label}"
@@ -351,6 +385,7 @@ def build_steps(snapshot, result, scene):
                 if old_mesh is not None and old_mesh.users == 0:
                     bpy.data.meshes.remove(old_mesh)
             mesh = bpy.data.meshes.new(name)
+            allocated.append(mesh)
             mesh.vertices.add(len(positions) // 3)
             mesh.vertices.foreach_set("co", positions)
             mesh.loops.add(len(corners))
@@ -365,10 +400,10 @@ def build_steps(snapshot, result, scene):
                 color.data.foreach_set("color", _patch_colors(patch, offsets))
                 mesh.color_attributes.active_color = color
             obj = bpy.data.objects.new(name, mesh)
+            made.append(obj)
             obj["quadloom_step"] = label
             obj.matrix_world = snapshot.matrix_world
             steps.objects.link(obj)
-            made.append(obj)
             obj.hide_render = True
             try:
                 obj.hide_set(True)
@@ -376,9 +411,10 @@ def build_steps(snapshot, result, scene):
                 pass
     except Exception:
         for obj in made:
-            mesh = obj.data
-            bpy.data.objects.remove(obj)
-            bpy.data.meshes.remove(mesh)
+            bpy.data.objects.remove(obj, do_unlink=True)
+        for mesh in allocated:
+            if mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
         raise
     return made
 

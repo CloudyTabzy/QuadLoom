@@ -1,11 +1,11 @@
 # Open and deferred items
 
-Everything known to be unfinished, in one place. Last updated 2026-10-23 (after attribute transfer, commit 4b39989). The details live in the decision records named here. When you finish an item, move it to "Done" with its decision number.
+Everything known to be unfinished, in one place. Last updated 2026-10-24 (crash containment, decision 0021). The details live in the decision records named here. When you finish an item, move it to "Done" with its decision number.
 
 ## Next up
 
 1. **Release attribute transfer.** It's committed after 0.2.0 but not version-bumped, built or installed. Bump to 0.3.0 (a feature), build the release zip, and test on real assets (glTF characters, rigged and posed meshes, Smart UV Project maps).
-2. **Out-of-memory safety.** Use `try_reserve` on big buffers, and optionally run the backend in a separate worker process (design §6). Rust aborts on allocation failure, and that takes Blender down.
+2. **Validate crash containment on larger real assets.** Decision 0021 isolates the backend and attribute mapping, with OS memory limits. Profile IPC/startup overhead and host allocations on dense meshes; Blender modifier evaluation and output allocation still run in Blender.
 3. **Target quad count.** "About N quads" as an alternative to Density: a scale on the existing size targets.
 4. **M9: v0.1 release.** A full benchmark comparison against QRemeshify on quad output, then the GitHub release.
 
@@ -39,12 +39,14 @@ Everything known to be unfinished, in one place. Last updated 2026-10-23 (after 
 |---|---|
 | Linux and macOS wheels, CI | Plus a Blender 4.2–5.1 test matrix (design §11). |
 | Progress across parallel parts | Not monotonic. |
-| Stale "running" state | Seen after switching scenes. |
+| Worker portability | Windows tested; validate Unix memory limits and Blender bundled-Python discovery when packaging Linux/macOS wheels. |
+| Scene renamed during a run | Discard still stops the worker and drops the result, but the renamed scene's last-run status can remain "Running". |
 | Main-thread freeze | 1–2 s marking sharp edges at 1M triangles. |
 | Memory on 87355 / 105762 | +3 MB since 0.1.7; not profiled (performance journal). |
 
 ## Done
 
+- Backend OOM/abort containment, bounded worker IPC, scene-switch and construction safety: decision 0021 (full gate passed: 93 Python tests, 47 Blender scenarios).
 - Crowded patches: 0.2.0, decision 0018.
 - Attribute transfer (UVs, materials, vertex groups, colours, rig): decision 0019, not yet released.
 - Starved and spur-blocked patches: 0.1.10, decision 0017.

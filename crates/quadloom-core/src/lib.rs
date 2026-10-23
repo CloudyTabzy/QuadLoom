@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+mod allocation;
 pub mod components;
 pub mod control;
 pub mod edit;

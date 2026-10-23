@@ -332,7 +332,9 @@ fn base_params(py: Python<'_>, max_faces: usize, fault: Option<&str>) -> PyResul
         parse_fault(spec).ok_or_else(|| {
             errors::invalid_argument(
                 py,
-                format!("unknown fault {spec:?} (expected panic:<stage>, error:<stage> or slow:<ms>)"),
+                format!(
+                    "unknown fault {spec:?} (expected panic:<stage>, error:<stage>, oom:<stage> or slow:<ms>)"
+                ),
             )
         })
     });
@@ -354,6 +356,7 @@ fn parse_fault(spec: &str) -> Option<quadloom_core::Fault> {
     match kind {
         "panic" => Stage::from_name(arg).map(Fault::Panic),
         "error" => Stage::from_name(arg).map(Fault::Error),
+        "oom" => Stage::from_name(arg).map(Fault::OutOfMemory),
         "slow" => arg.parse().ok().map(Fault::SlowMillis),
         _ => None,
     }
