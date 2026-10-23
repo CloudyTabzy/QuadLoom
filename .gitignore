@@ -1,5 +1,6 @@
 # Build output
 /target/
+/tools/diag/patchprobe/target/
 /dist/
 /addon/quadloom/wheels/
 *.pyd
