@@ -20,13 +20,13 @@ impl InputMesh {
     /// Builds a mesh from flat `xyz` positions and flat triangle indices.
     pub fn from_buffers(positions: &[f32], indices: &[u32]) -> Result<Self, Error> {
         let stage = Stage::Validate;
-        if positions.len() % 3 != 0 {
+        if !positions.len().is_multiple_of(3) {
             return Err(Error::invalid_input(
                 stage,
                 format!("positions length {} is not a multiple of 3", positions.len()),
             ));
         }
-        if indices.len() % 3 != 0 {
+        if !indices.len().is_multiple_of(3) {
             return Err(Error::invalid_input(
                 stage,
                 format!("indices length {} is not a multiple of 3", indices.len()),
@@ -37,8 +37,10 @@ impl InputMesh {
         }
 
         let positions: Vec<DVec3> = positions
-            .chunks_exact(3)
-            .map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])))
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|&[x, y, z]| DVec3::new(f64::from(x), f64::from(y), f64::from(z)))
             .collect();
         if let Some(v) = positions.iter().position(|p| !p.is_finite()) {
             return Err(Error::invalid_input(stage, format!("vertex {v} has a non-finite position"))
@@ -46,7 +48,7 @@ impl InputMesh {
         }
 
         let vertex_count = positions.len();
-        let triangles: Vec<[u32; 3]> = indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect();
+        let triangles: Vec<[u32; 3]> = indices.as_chunks::<3>().0.to_vec();
         for (face, tri) in triangles.iter().enumerate() {
             if let Some(&bad) = tri.iter().find(|&&i| i as usize >= vertex_count) {
                 return Err(Error::invalid_input(

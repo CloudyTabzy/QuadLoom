@@ -1139,11 +1139,11 @@ impl<'s> Layout<'s> {
                 // other paths at its ends: no collision test. It must strictly
                 // improve the patch, or seams could cut lenses into lenses forever.
                 let seam_found = self.repair_seam(info);
-                if let Some(seam) = seam_found {
-                    if self.try_accept_if(seam, true, std::cmp::Ordering::is_lt) {
-                        self.tally.seams += 1;
-                        added += 1;
-                    }
+                if let Some(seam) = seam_found
+                    && self.try_accept_if(seam, true, std::cmp::Ordering::is_lt)
+                {
+                    self.tally.seams += 1;
+                    added += 1;
                 }
             }
             if added == 0 {

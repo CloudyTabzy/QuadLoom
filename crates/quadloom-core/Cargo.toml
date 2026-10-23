@@ -19,6 +19,7 @@ serde = ["dep:serde"]
 glam.workspace = true
 hashbrown.workspace = true
 tinyvec.workspace = true
+fearless_simd.workspace = true
 rayon.workspace = true
 faer.workspace = true
 microlp.workspace = true

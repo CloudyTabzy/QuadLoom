@@ -253,8 +253,10 @@ mod tests {
             0, 1, 0, 5, 0, 5, 3, 4, 2, 2, 5, 5, 3, 2, 1, 1, 0, 2, 1, 1, 0, 0, 4, 0, 4,
         ];
         let triangles: Vec<[u32; 3]> = flat
-            .chunks_exact(3)
-            .map(|t| [t[0], t[1], t[2]])
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .copied()
             .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
             .collect();
         let s = split(&positions, &triangles, &[]);

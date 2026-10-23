@@ -331,23 +331,23 @@ fn layout_part(
     for (f, &p) in partition.patch_of_face().iter().enumerate() {
         let next = ids.len() as u32;
         let id = *ids.entry(p).or_insert(next);
-        if id == next {
-            if let Some(info) = partition.info(p) {
-                patches.push(Patch {
-                    corners: info.corners.iter().map(|&v| original(v)).collect(),
-                    sides: info
-                        .sides
-                        .iter()
-                        .map(|s| Side {
-                            vertices: s.vertices.iter().map(|&v| original(v)).collect(),
-                            length: s.length,
-                        })
-                        .collect(),
-                    singularities: info.singularities.iter().map(|&(v, k)| (original(v), k)).collect(),
-                    kind: info.kind,
-                    cc_margin: info.cc_margin,
-                });
-            }
+        if id == next
+            && let Some(info) = partition.info(p)
+        {
+            patches.push(Patch {
+                corners: info.corners.iter().map(|&v| original(v)).collect(),
+                sides: info
+                    .sides
+                    .iter()
+                    .map(|s| Side {
+                        vertices: s.vertices.iter().map(|&v| original(v)).collect(),
+                        length: s.length,
+                    })
+                    .collect(),
+                singularities: info.singularities.iter().map(|&(v, k)| (original(v), k)).collect(),
+                kind: info.kind,
+                cc_margin: info.cc_margin,
+            });
         }
         patch_of_face[f] = id;
     }
@@ -362,10 +362,10 @@ fn layout_part(
                     chain.push(v);
                 }
             }
-            if c.path.closed {
-                if let Some(&first) = chain.first() {
-                    chain.push(first);
-                }
+            if c.path.closed
+                && let Some(&first) = chain.first()
+            {
+                chain.push(first);
             }
             chain
         })

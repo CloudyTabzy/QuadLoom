@@ -66,7 +66,7 @@ pub fn edge_pairs(py: Python<'_>, obj: Option<&Bound<'_, PyAny>>, name: &str) ->
             format!("{name} must hold vertex pairs (got {} values)", flat.len()),
         ));
     }
-    Ok(flat.chunks_exact(2).map(|p| [p[0], p[1]]).collect())
+    Ok(flat.as_chunks::<2>().0.to_vec())
 }
 
 /// Reads an optional per-triangle `int32` group buffer (material, face set).

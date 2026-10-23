@@ -77,8 +77,10 @@ pub fn load_poly(path: &Path) -> Result<PolyMesh, IoError> {
             u32::try_from(mesh.positions.len()).map_err(|_| IoError::Invalid("too many vertices".into()))?;
         mesh.positions.extend(
             m.positions
-                .chunks_exact(3)
-                .map(|p| DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]))),
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|&[x, y, z]| DVec3::new(f64::from(x), f64::from(y), f64::from(z))),
         );
         // tobj leaves `face_arities` empty when every face is a triangle.
         let arities: Vec<u32> =

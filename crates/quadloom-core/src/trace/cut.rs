@@ -199,10 +199,10 @@ impl CutMesh {
     pub fn neighbours(&self, v: u32) -> Vec<u32> {
         let fan = self.fan(v);
         let mut ring: Vec<u32> = fan.iter().map(|&h| self.head(h)).collect();
-        if self.boundary[v as usize] {
-            if let Some(&last) = fan.last() {
-                ring.push(self.tail(Self::prev(last)));
-            }
+        if self.boundary[v as usize]
+            && let Some(&last) = fan.last()
+        {
+            ring.push(self.tail(Self::prev(last)));
         }
         ring
     }

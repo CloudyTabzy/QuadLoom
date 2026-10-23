@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.7"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/CloudyTabzy/QuadLoom"
 authors = ["CloudyTabzy"]
@@ -23,6 +23,8 @@ hashbrown = { version = "0.17.1", default-features = false, features = ["default
 # Inline small vectors (a vertex's fan and ring) so mesh edits don't allocate;
 # tinyvec rather than smallvec because it is itself forbid(unsafe_code).
 tinyvec = { version = "1.13.3", features = ["alloc", "rustc_1_61"] }
+# Portable SIMD with runtime dispatch (SSE2 up to AVX-512, NEON) for the BVH queries.
+fearless_simd = "1.1.0"
 thiserror = "2.0.21"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

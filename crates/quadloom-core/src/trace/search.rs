@@ -254,7 +254,7 @@ impl<'g> Search<'g> {
                 continue;
             }
             pops += 1;
-            if pops % CANCEL_INTERVAL == 0 {
+            if pops.is_multiple_of(CANCEL_INTERVAL) {
                 control.checkpoint(Stage::Trace)?;
             }
             let here = Node(node);
@@ -287,7 +287,7 @@ impl<'g> Search<'g> {
                 break;
             }
             pops += 1;
-            if pops % CANCEL_INTERVAL == 0 {
+            if pops.is_multiple_of(CANCEL_INTERVAL) {
                 control.checkpoint(Stage::Trace)?;
             }
             let here = Node(node);

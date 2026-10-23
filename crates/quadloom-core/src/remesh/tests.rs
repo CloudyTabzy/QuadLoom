@@ -343,7 +343,7 @@ fn corrugated_strip() -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
     let (mut p, t) = sliver_strip(n);
     for (i, q) in p.iter_mut().enumerate() {
         let rib = (i as u32) % (n + 1);
-        q.z = if rib % 2 == 0 { 0.0002 } else { -0.0002 };
+        q.z = if rib.is_multiple_of(2) { 0.0002 } else { -0.0002 };
     }
     let ribs = (1..n).map(|i| [i, n + 1 + i]).collect();
     (p, t, ribs)

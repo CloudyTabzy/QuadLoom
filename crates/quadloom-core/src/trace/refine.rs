@@ -77,7 +77,7 @@ pub(crate) fn split_edges(
     let mut directions = Vec::with_capacity(mesh.triangles.len());
     let mut parents = Vec::with_capacity(mesh.triangles.len());
     for (f, &t) in mesh.triangles.iter().enumerate() {
-        if f as u32 % CANCEL_EVERY == 0 {
+        if (f as u32).is_multiple_of(CANCEL_EVERY) {
             control.checkpoint(Stage::Trace)?;
         }
         let marked = [0, 1, 2].map(|i| split(t[i], t[(i + 1) % 3]));

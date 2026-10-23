@@ -137,7 +137,7 @@ impl Ticker<'_> {
     /// Call once per item with the number of items done so far.
     pub fn tick(&mut self, done: usize) -> Result<(), Error> {
         self.calls += 1;
-        if self.calls % TICK_INTERVAL != 0 {
+        if !self.calls.is_multiple_of(TICK_INTERVAL) {
             return Ok(());
         }
         self.control.set_progress(self.stage, done as f32 / self.total as f32);
@@ -210,7 +210,7 @@ mod tests {
             loop {
                 ticker.tick(i)?;
                 i += 1;
-                if i % 4096 == 0 {
+                if i.is_multiple_of(4096) {
                     std::thread::yield_now();
                 }
             }

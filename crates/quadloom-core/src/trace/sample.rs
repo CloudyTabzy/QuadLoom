@@ -70,7 +70,7 @@ impl DistanceField {
         let mut pops = 0u32;
         while let Some(Entry { dist, v }) = heap.pop() {
             pops = pops.wrapping_add(1);
-            if pops % CANCEL_EVERY == 0 && control.is_cancelled() {
+            if pops.is_multiple_of(CANCEL_EVERY) && control.is_cancelled() {
                 return;
             }
             if dist > self.dist[v as usize] {

@@ -172,7 +172,7 @@ pub fn aspect_targets(
 
 /// Checks for cancellation every `CANCEL_EVERY` items.
 fn tick(i: usize, control: &Control) -> Result<(), Error> {
-    if i % (CANCEL_EVERY as usize) == 0 { control.checkpoint(Stage::Frame) } else { Ok(()) }
+    if i.is_multiple_of(CANCEL_EVERY as usize) { control.checkpoint(Stage::Frame) } else { Ok(()) }
 }
 
 #[cfg(test)]

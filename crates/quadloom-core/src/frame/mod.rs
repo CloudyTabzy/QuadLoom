@@ -195,20 +195,20 @@ pub fn compute(
     for &[a, b] in feature_edges {
         let holders = parts_of_vertex.get(a as usize).map(Vec::as_slice).unwrap_or(&[]);
         for &k in holders {
-            if part_vertices.get(k).is_some_and(|vs| vs.binary_search(&b).is_ok()) {
-                if let Some(bucket) = part_features.get_mut(k) {
-                    bucket.push([a, b]);
-                }
+            if part_vertices.get(k).is_some_and(|vs| vs.binary_search(&b).is_ok())
+                && let Some(bucket) = part_features.get_mut(k)
+            {
+                bucket.push([a, b]);
             }
         }
     }
 
     let mut singular = vec![false; nv];
     for &(v, k) in &field.singularities {
-        if k != 0 {
-            if let Some(flag) = singular.get_mut(v as usize) {
-                *flag = true;
-            }
+        if k != 0
+            && let Some(flag) = singular.get_mut(v as usize)
+        {
+            *flag = true;
         }
     }
 

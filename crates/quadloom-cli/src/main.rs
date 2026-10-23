@@ -176,10 +176,12 @@ fn dispatch(args: &[&str]) -> Result<(), Failure> {
 fn field_index(mesh: &Path, rosy: &Path) -> Result<(), Failure> {
     let (positions, indices) = io::load(mesh)?;
     let positions: Vec<quadloom_core::mesh::DVec3> = positions
-        .chunks_exact(3)
-        .map(|c| quadloom_core::mesh::DVec3::new(f64::from(c[0]), f64::from(c[1]), f64::from(c[2])))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|&[x, y, z]| quadloom_core::mesh::DVec3::new(f64::from(x), f64::from(y), f64::from(z)))
         .collect();
-    let triangles: Vec<[u32; 3]> = indices.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let triangles: Vec<[u32; 3]> = indices.as_chunks::<3>().0.to_vec();
     let directions = io::read_rosy(rosy, triangles.len())?;
     let frames = quadloom_core::field::FaceFrames::new(&positions, &triangles);
     let powers: Vec<_> = (0..triangles.len() as u32)
@@ -214,10 +216,12 @@ fn load_triangles(mesh: &Path) -> Result<Triangles, Failure> {
     }
     let (positions, indices) = io::load(mesh)?;
     let positions = positions
-        .chunks_exact(3)
-        .map(|c| quadloom_core::mesh::DVec3::new(f64::from(c[0]), f64::from(c[1]), f64::from(c[2])))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|&[x, y, z]| quadloom_core::mesh::DVec3::new(f64::from(x), f64::from(y), f64::from(z)))
         .collect();
-    Ok((positions, indices.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()))
+    Ok((positions, indices.as_chunks::<3>().0.to_vec()))
 }
 
 /// Traces a mesh with a given field and features, as the pipeline's stage 4

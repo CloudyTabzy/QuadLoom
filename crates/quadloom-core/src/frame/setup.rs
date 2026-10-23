@@ -297,7 +297,7 @@ fn triangle_area(positions: &[DVec3], t: &[u32; 3]) -> f64 {
 
 /// Checks for cancellation every [`CANCEL_EVERY`] items.
 fn poll(control: &Control, stage: Stage, i: usize) -> Result<(), Error> {
-    if i % CANCEL_EVERY as usize == 0 { control.checkpoint(stage) } else { Ok(()) }
+    if i.is_multiple_of(CANCEL_EVERY as usize) { control.checkpoint(stage) } else { Ok(()) }
 }
 
 /// The position of vertex `v` in triangle `t`.
@@ -366,10 +366,10 @@ fn corner_signs(
         }
         for &f in fan {
             let fi = f as usize;
-            if seen[fi] != 0 {
-                if let Some(c) = corner_of(&triangles[fi], vertex) {
-                    sign[fi][c] = seen[fi];
-                }
+            if seen[fi] != 0
+                && let Some(c) = corner_of(&triangles[fi], vertex)
+            {
+                sign[fi][c] = seen[fi];
             }
         }
         for &f in &touched {

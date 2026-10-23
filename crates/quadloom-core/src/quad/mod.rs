@@ -409,7 +409,7 @@ impl<'a> Assembly<'a> {
             // Sampled at its mesh vertices (even k) and its edge midpoints (odd k),
             // matching the kept patch's triangles split into quads.
             let k = k as usize;
-            if k % 2 == 0 {
+            if k.is_multiple_of(2) {
                 return self.mesh_vertex(segment.vertices[(k / 2).min(last)]);
             }
             let j = (k / 2).min(last.saturating_sub(1));
