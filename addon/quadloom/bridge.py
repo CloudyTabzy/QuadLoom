@@ -34,7 +34,7 @@ unavailable_reason = None
 
 # Must equal the backend's build_info()["api"]. Blender can't unload a native
 # module, so after an update the old backend stays loaded until a restart.
-API_VERSION = 6
+API_VERSION = 7
 
 
 def _load(import_module=importlib.import_module):
@@ -85,6 +85,13 @@ def new_control():
     if native is None:
         raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
     return native.Control()
+
+
+def new_cache():
+    """A store for one run's work before the quad stage (Quick Re-run)."""
+    if native is None:
+        raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
+    return native.Cache()
 
 
 def run_job(positions, indices, control, **kwargs):

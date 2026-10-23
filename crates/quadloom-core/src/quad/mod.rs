@@ -49,6 +49,10 @@ pub struct QuadParams {
     pub regularity: f64,
     /// Rounds of smoothing on the surface (0 = none).
     pub smoothing: usize,
+    /// How hard the integer program searches for better counts: a multiple
+    /// of its branch-and-bound node limits (1 = the default limits). The
+    /// limits are node counts, not time, so results stay deterministic.
+    pub solver_effort: f64,
     /// How much quad size follows the prep remesh's local detail: 0 keeps
     /// every quad the same size, 1 follows it fully (geometric blend between).
     pub adaptivity: f64,
@@ -61,6 +65,7 @@ impl Default for QuadParams {
             edge_scale: 0.75,
             regularity: quantize::DEFAULT_REGULARITY,
             smoothing: 20,
+            solver_effort: 1.0,
             adaptivity: 0.5,
         }
     }
@@ -87,7 +92,7 @@ pub struct QuadReport {
 }
 
 /// The quad mesh.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct QuadOutput {
     pub mesh: PolyMesh,
     /// The layout patch of each output face.
@@ -143,7 +148,7 @@ pub fn compute(
     }
     let segs = if excluded.contains(&true) { segments::build(trace, &excluded) } else { first };
     let targets = targets(trace, &segs, sizing, edge);
-    let counts = quantize::quantize(&segs, &targets, params.regularity, control)?;
+    let counts = quantize::quantize(&segs, &targets, params.regularity, params.solver_effort, control)?;
     control.set_progress(stage, 1.0);
 
     control.checkpoint(Stage::Patterns)?;

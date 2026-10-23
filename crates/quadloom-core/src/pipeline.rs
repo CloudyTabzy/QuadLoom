@@ -79,11 +79,8 @@ pub struct RunOutput {
 }
 
 /// Runs the pipeline on flat `xyz` positions and flat triangle indices, with
-/// feature hints in the same (input) vertex and triangle ids.
-///
-/// Currently: validate → repair → features → prep remesh (per part, in
-/// parallel), then the remeshed triangles are re-emitted; the quad stages slot
-/// in before the output.
+/// feature hints in the same (input) vertex and triangle ids: [`run_upstream`]
+/// (validate through the patch layout), then [`finish`] (quads and output).
 pub fn run(
     positions: &[f32],
     indices: &[u32],
@@ -91,6 +88,51 @@ pub fn run(
     params: &Params,
     control: &Control,
 ) -> Result<RunOutput, Error> {
+    let upstream = run_upstream(positions, indices, feature_input, params, control)?;
+    finish(upstream, params, control)
+}
+
+/// What a run computes before the quad stage. [`finish`] builds the quads
+/// from it; a host that keeps a copy can re-run only the quad stage when
+/// nothing but `params.quad` changed (a quick re-run).
+#[derive(Clone, Debug)]
+pub struct Upstream {
+    /// The prep-remeshed surface (one side of the symmetry planes, if any).
+    positions: Vec<glam::DVec3>,
+    triangles: Vec<[u32; 3]>,
+    feature_edges: Vec<[u32; 2]>,
+    validation: ValidationReport,
+    repair: RepairReport,
+    features: FeatureReport,
+    components: usize,
+    remesh: RemeshReport,
+    field: Option<FieldOutput>,
+    frame: Option<FrameOutput>,
+    trace: Option<TraceOutput>,
+    planes: Vec<symmetry::Plane>,
+    symmetry: Option<SymmetryReport>,
+    warnings: Vec<Warning>,
+    timings_ms: Vec<(Stage, f64)>,
+}
+
+impl Upstream {
+    /// Drops the stage timings, for a copy reused by a quick re-run (those
+    /// stages didn't run again).
+    pub fn without_timings(mut self) -> Self {
+        self.timings_ms.clear();
+        self
+    }
+}
+
+/// The stages before the quads: validate, repair, symmetry cut, features,
+/// prep remesh (per part, in parallel), cross field, frame and patch layout.
+pub fn run_upstream(
+    positions: &[f32],
+    indices: &[u32],
+    feature_input: &FeatureInput,
+    params: &Params,
+    control: &Control,
+) -> Result<Upstream, Error> {
     control.checkpoint(Stage::Validate)?;
     params.check()?;
     check_limits(positions.len() / 3, indices.len(), params)?;
@@ -252,6 +294,46 @@ pub fn run(
         _ => None,
     };
 
+    Ok(Upstream {
+        positions,
+        triangles,
+        feature_edges,
+        validation,
+        repair: repair_report,
+        features: feature_report,
+        components: component_count,
+        remesh: remesh_report,
+        field,
+        frame,
+        trace,
+        planes,
+        symmetry: symmetry_report,
+        warnings,
+        timings_ms,
+    })
+}
+
+/// The quad stage, symmetry mirroring and output, from [`run_upstream`]'s
+/// result and the quad settings in `params`.
+pub fn finish(upstream: Upstream, params: &Params, control: &Control) -> Result<RunOutput, Error> {
+    params.check()?;
+    let Upstream {
+        positions,
+        triangles,
+        feature_edges,
+        validation,
+        repair: repair_report,
+        features: feature_report,
+        components: component_count,
+        remesh: remesh_report,
+        field,
+        frame,
+        trace,
+        planes,
+        symmetry: symmetry_report,
+        mut warnings,
+        mut timings_ms,
+    } = upstream;
     let mut quad_error = None;
     let quads = match &trace {
         Some(layout) if params.quad.enabled => {
@@ -695,6 +777,30 @@ mod tests {
 
     fn ran(out: &RunOutput, stage: Stage) -> bool {
         out.timings_ms.iter().any(|(s, _)| *s == stage)
+    }
+
+    #[test]
+    fn finishing_a_kept_upstream_matches_a_full_run() {
+        // A quick re-run: the upstream kept from one run, finished with other
+        // quad settings, must give exactly what a full run with them gives.
+        let (p, t) = torus(24, 16);
+        let positions: Vec<f32> = p.iter().flat_map(|v| [v.x as f32, v.y as f32, v.z as f32]).collect();
+        let indices: Vec<u32> = t.iter().flatten().copied().collect();
+        let input = FeatureInput::default();
+        let control = Control::default();
+        let kept = run_upstream(&positions, &indices, &input, &Params::default(), &control).unwrap();
+        for (edge_scale, regularity, smoothing) in [(0.75, 50.0, 20), (0.5, 100.0, 5), (1.2, 25.0, 0)] {
+            let mut params = Params::default();
+            params.quad.edge_scale = edge_scale;
+            params.quad.regularity = regularity;
+            params.quad.smoothing = smoothing;
+            let quick = finish(kept.clone().without_timings(), &params, &control).unwrap();
+            let full = run(&positions, &indices, &input, &params, &control).unwrap();
+            assert_eq!(quick.quads, full.quads, "edge_scale {edge_scale}");
+            assert_eq!(quick.mesh, full.mesh);
+            assert_eq!(quick.warnings, full.warnings);
+            assert!(!ran(&quick, Stage::Field) && ran(&quick, Stage::Quantize), "only the quad stage ran");
+        }
     }
 
     #[test]

@@ -83,7 +83,10 @@ def _draw_result(layout, last):
             headline = f"{last.faces_out:,} Faces ({last.quads_out:,} Quads) in {seconds:.1f} s"
         box.label(text=headline, icon=STATUS_ICONS["OK"])
         col = box.column(align=True)
-        col.label(text=last.message, icon="BLANK1")
+        for line in _wrap(last.message):
+            col.label(text=line, icon="BLANK1")
+        if last.reused:
+            col.label(text="Quick Re-run: Reused the Patch Layout", icon="FILE_REFRESH")
         if last.symmetry_summary:
             col.label(text=last.symmetry_summary, icon="MOD_MIRROR")
     else:
@@ -179,7 +182,9 @@ class QUADLOOM_PT_quads(_AdvancedChild, bpy.types.Panel):
             layout.label(text="Needs the Cross Field and Patch Layout", icon="INFO")
         layout.prop(settings, "density")
         layout.prop(settings, "quad_adaptivity")
+        layout.prop(settings, "quad_regularity")
         layout.prop(settings, "quad_smoothing")
+        layout.prop(settings, "quad_solver_effort")
 
 
 class QUADLOOM_PT_symmetry(_AdvancedChild, bpy.types.Panel):
@@ -310,6 +315,10 @@ class QUADLOOM_PT_system(_AdvancedChild, bpy.types.Panel):
         settings = context.scene.quadloom
         layout = _split(self.layout)
         layout.prop(settings, "max_faces")
+        col = layout.column()
+        col.use_property_split = False
+        col.prop(settings, "quick_rerun")
+        col.prop(settings, "show_steps")
         layout.label(text=f"Backend {bridge.version()}", icon="SETTINGS")
         if bridge.build_info().get("fault_injection"):
             box = layout.box()

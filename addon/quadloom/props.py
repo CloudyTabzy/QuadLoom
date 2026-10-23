@@ -6,16 +6,31 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, Po
 
 DEFAULT_MAX_FACES = 2_000_000
 
-# Presets: what each sets. Symmetry is never touched by a preset.
+# Presets: what each sets, which is every setting on the main panel plus the
+# quad-stage settings that change the result. Symmetry and the System
+# toggles (Quick Re-run, Show Intermediate Steps) are never touched.
+_COMMON = {"quad_regularity": 0.5, "quad_solver_effort": "BALANCED"}
 PRESETS = {
     "BALANCED": {"density": 1.0, "quad_adaptivity": 0.5, "use_angle": True, "angle_deg": 35.0, "quad_smoothing": 20},
     "ORGANIC": {"density": 1.0, "quad_adaptivity": 0.6, "use_angle": False, "angle_deg": 35.0, "quad_smoothing": 25},
     "HARD_SURFACE": {"density": 1.0, "quad_adaptivity": 0.3, "use_angle": True, "angle_deg": 30.0, "quad_smoothing": 12},
+    "REGULAR_QUADS": {"density": 1.0, "quad_adaptivity": 0.3, "use_angle": True, "angle_deg": 35.0, "quad_smoothing": 25,
+                      "quad_regularity": 1.0},
     "LOW_POLY": {"density": 0.5, "quad_adaptivity": 0.3, "use_angle": True, "angle_deg": 40.0, "quad_smoothing": 20},
     "HIGH_DETAIL": {"density": 2.0, "quad_adaptivity": 0.7, "use_angle": True, "angle_deg": 35.0, "quad_smoothing": 20},
 }
+PRESETS = {name: {**_COMMON, **values} for name, values in PRESETS.items()}
 # Quad edge length at Density 1, as a multiple of the prep remesh's edge.
 BASE_EDGE_SCALE = 0.75
+
+# Solver Effort: multiples of the quad-count solver's node limits.
+SOLVER_EFFORT = {"FAST": 0.25, "BALANCED": 1.0, "THOROUGH": 4.0}
+
+# Regularity 0–1 maps onto the quantizer's weight 25–100 (0.5 → its default 50).
+# Below 25 patches start needing uneven patterns; above 100 nothing changes.
+def regularity_weight(value):
+    return 25.0 * 4.0 ** min(max(value, 0.0), 1.0)
+
 
 _applying_preset = False
 
@@ -51,6 +66,7 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
             ("BALANCED", "Balanced", "Good all-round settings"),
             ("ORGANIC", "Organic / Sculpt", "Characters, sculpts and scans: no creases from surface noise, more detail where needed"),
             ("HARD_SURFACE", "Hard Surface", "Mechanical and modelled objects: keeps sharp edges crisp"),
+            ("REGULAR_QUADS", "Regular Quads", "Evenly divided patches and even quad sizes, at the cost of matching the size exactly"),
             ("LOW_POLY", "Low Poly", "Fewer, larger quads"),
             ("HIGH_DETAIL", "High Detail", "More quads, concentrated on detail"),
             ("CUSTOM", "Custom", "Your own settings"),
@@ -298,6 +314,29 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=2,
         update=_mark_custom,
     )
+    quad_regularity: FloatProperty(
+        name="Regularity",
+        description=(
+            "How evenly patches are divided: higher gives regular grids everywhere (and a few more quads), "
+            "lower matches the quad size more closely"
+        ),
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        precision=2,
+        update=_mark_custom,
+    )
+    quad_solver_effort: EnumProperty(
+        name="Solver Effort",
+        description="How hard the quad-count solver searches. The result is the same on every run either way",
+        items=[
+            ("FAST", "Fast", "About 3x quicker quad sizing on large layouts, usually the same result: good for previews"),
+            ("BALANCED", "Balanced", "The default search"),
+            ("THOROUGH", "Thorough", "A 4x longer search for difficult layouts; rarely changes the result, much slower on large ones"),
+        ],
+        default="BALANCED",
+        update=_mark_custom,
+    )
     quad_smoothing: IntProperty(
         name="Smoothing",
         description="Rounds of relaxing the quads on the surface (more is smoother, 0 is none)",
@@ -382,6 +421,23 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
     )
 
     # --- Advanced ------------------------------------------------------------
+    quick_rerun: BoolProperty(
+        name="Quick Re-run",
+        description=(
+            "Keep the last run's cleanup, cross field and patch layout. When only quad settings change "
+            "(Density, Adaptive Detail, Regularity, Smoothing, Solver Effort) the next run starts at the quads, "
+            "which is much faster. Anything else changing runs everything again"
+        ),
+        default=True,
+    )
+    show_steps: BoolProperty(
+        name="Show Intermediate Steps",
+        description=(
+            "Also create the prep remesh and the patch layout (each patch in its own color) as hidden objects "
+            "in a \"QuadLoom Steps\" collection, to see where a result went wrong"
+        ),
+        default=False,
+    )
     max_faces: IntProperty(
         name="Face Limit",
         description="Inputs with more triangles than this are refused before any work starts. "
@@ -414,6 +470,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     faces_in: IntProperty(name="Faces In")
     faces_out: IntProperty(name="Faces Out")
     quads_out: IntProperty(name="Quads Out")
+    reused: BoolProperty(name="Reused the Layout")
     elapsed_ms: FloatProperty(name="Time (ms)")
     report_json: StringProperty(name="Report")
     repair_summary: StringProperty(name="Cleanup")
@@ -497,6 +554,8 @@ def run_params(settings):
             "enabled": settings.quad_enabled,
             "edge_scale": BASE_EDGE_SCALE / max(settings.density, 1e-3),
             "adaptivity": settings.quad_adaptivity,
+            "regularity": regularity_weight(settings.quad_regularity),
+            "solver_effort": SOLVER_EFFORT[settings.quad_solver_effort],
             "smoothing": settings.quad_smoothing,
         },
         "symmetry": {

@@ -11,12 +11,13 @@ mod convert;
 mod errors;
 mod settings;
 
+use std::hash::{BuildHasher, Hash, Hasher, RandomState};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
 /// Bump it whenever either side changes.
-pub const API_VERSION: u32 = 6;
+pub const API_VERSION: u32 = 7;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -50,6 +51,105 @@ impl Control {
     }
 }
 
+/// One run's work before the quad stage, and what it was computed from.
+struct Kept {
+    /// Hash of the input buffers and feature hints.
+    input: u64,
+    /// The run's settings with `quad` reset (only `quad` may differ on reuse).
+    params: quadloom_core::Params,
+    upstream: quadloom_core::Upstream,
+}
+
+struct CacheInner {
+    kept: Mutex<Option<Kept>>,
+    hasher: RandomState,
+}
+
+impl CacheInner {
+    fn input_key(
+        &self,
+        positions: &[f32],
+        indices: &[u32],
+        features: &quadloom_core::features::FeatureInput,
+    ) -> u64 {
+        let mut h = self.hasher.build_hasher();
+        positions.len().hash(&mut h);
+        for x in positions {
+            h.write_u32(x.to_bits());
+        }
+        indices.hash(&mut h);
+        features.hash(&mut h);
+        h.finish()
+    }
+}
+
+/// The settings that decide the stages before the quads.
+fn upstream_params(params: &quadloom_core::Params) -> quadloom_core::Params {
+    quadloom_core::Params { quad: quadloom_core::QuadParams::default(), ..params.clone() }
+}
+
+/// Keeps the last run's work before the quad stage (cleanup, features, prep
+/// remesh, field, layout). A run given this cache, on the same mesh with the
+/// same settings outside `params["quad"]`, starts at the quad stage. Safe to
+/// share between threads; holds one run at a time.
+#[pyclass(frozen, module = "quadloom_native")]
+struct Cache {
+    inner: Arc<CacheInner>,
+}
+
+#[pymethods]
+impl Cache {
+    #[new]
+    fn new() -> Self {
+        Self { inner: Arc::new(CacheInner { kept: Mutex::new(None), hasher: RandomState::new() }) }
+    }
+
+    /// Forgets the kept run (frees its memory).
+    fn clear(&self) {
+        if let Ok(mut kept) = self.inner.kept.lock() {
+            *kept = None;
+        }
+    }
+
+    /// Whether a run is kept.
+    fn filled(&self) -> bool {
+        self.inner.kept.lock().map(|kept| kept.is_some()).unwrap_or(false)
+    }
+}
+
+/// The pipeline, starting at the quad stage when `cache` holds this input's
+/// upstream stages. Returns the output and whether the cache was used.
+fn run_cached(
+    positions: &[f32],
+    indices: &[u32],
+    features: &quadloom_core::features::FeatureInput,
+    params: &quadloom_core::Params,
+    control: &quadloom_core::Control,
+    cache: Option<&CacheInner>,
+) -> Result<(quadloom_core::RunOutput, bool), quadloom_core::Error> {
+    let Some(cache) = cache else {
+        return quadloom_core::run(positions, indices, features, params, control).map(|out| (out, false));
+    };
+    let input = cache.input_key(positions, indices, features);
+    let wanted = upstream_params(params);
+    let hit = cache.kept.lock().ok().and_then(|mut kept| {
+        let reusable = kept.as_ref().is_some_and(|k| k.input == input && k.params == wanted);
+        if !reusable {
+            // Free the old run before computing a new one.
+            *kept = None;
+        }
+        kept.as_ref().filter(|_| reusable).map(|k| k.upstream.clone())
+    });
+    if let Some(upstream) = hit {
+        return quadloom_core::finish(upstream.without_timings(), params, control).map(|out| (out, true));
+    }
+    let upstream = quadloom_core::run_upstream(positions, indices, features, params, control)?;
+    if let Ok(mut kept) = cache.kept.lock() {
+        *kept = Some(Kept { input, params: wanted, upstream: upstream.clone() });
+    }
+    quadloom_core::finish(upstream, params, control).map(|out| (out, false))
+}
+
 #[pymodule]
 mod quadloom_native {
     use super::*;
@@ -58,7 +158,7 @@ mod quadloom_native {
     use crate::errors::{CancelledError, InternalError, InvalidInputError, QuadLoomError};
 
     #[pymodule_export]
-    use super::Control;
+    use super::{Cache, Control};
 
     /// The crate version, e.g. `"0.1.0"`.
     #[pyfunction]
@@ -83,7 +183,7 @@ mod quadloom_native {
     #[pyo3(signature = (
         positions, indices, control, *,
         sharp_edges = None, seam_edges = None, material = None, face_set = None, params = None,
-        max_faces = quadloom_core::params::DEFAULT_MAX_FACES, fault = None,
+        max_faces = quadloom_core::params::DEFAULT_MAX_FACES, fault = None, cache = None,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn run<'py>(
@@ -98,6 +198,7 @@ mod quadloom_native {
         params: Option<&Bound<'py, PyDict>>,
         max_faces: usize,
         fault: Option<&str>,
+        cache: Option<&Bound<'py, Cache>>,
     ) -> PyResult<Bound<'py, PyDict>> {
         let mut core_params = base_params(py, max_faces, fault)?;
         settings::apply(py, &mut core_params, params)?;
@@ -116,16 +217,21 @@ mod quadloom_native {
             face_set: convert::groups(py, face_set, "face_set")?,
         };
         let control = Arc::clone(&control.get().inner);
+        let cache = cache.map(|c| Arc::clone(&c.get().inner));
 
         let outcome = py.detach(move || {
             catch_unwind(AssertUnwindSafe(|| {
-                quadloom_core::run(&positions, &indices, &feature_input, &params, &control)
+                run_cached(&positions, &indices, &feature_input, &params, &control, cache.as_deref())
             }))
             .map_err(|payload| (payload, control.progress().0))
         });
 
         match outcome {
-            Ok(Ok(output)) => convert::run_output(py, &output),
+            Ok(Ok((output, reused))) => {
+                let dict = convert::run_output(py, &output)?;
+                dict.set_item("reused", reused)?;
+                Ok(dict)
+            }
             Ok(Err(error)) => Err(errors::to_py_err(py, &error)),
             Err((payload, stage)) => Err(errors::from_panic(py, payload.as_ref(), stage)),
         }

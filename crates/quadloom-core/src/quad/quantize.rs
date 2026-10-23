@@ -40,6 +40,7 @@ pub fn quantize(
     segments: &Segments,
     targets: &[f64],
     regularity: f64,
+    effort: f64,
     control: &Control,
 ) -> Result<Vec<u32>, Error> {
     let q = Problem::new(segments, targets, regularity);
@@ -53,7 +54,7 @@ pub fn quantize(
     q.fix_parity(&mut n);
     control.checkpoint(Stage::Quantize)?;
     // The integer program, seeded with these counts, keeps only real improvements.
-    let spec = super::ilp::Spec { segments, targets, fixed: &q.fixed, regularity };
+    let spec = super::ilp::Spec { segments, targets, fixed: &q.fixed, regularity, effort };
     if let Some(candidate) = super::ilp::refine(spec, &n)
         && q.all_even(&candidate)
         && q.total(&candidate) < q.total(&n) - 1e-9

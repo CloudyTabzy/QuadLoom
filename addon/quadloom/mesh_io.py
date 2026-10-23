@@ -267,6 +267,86 @@ def _frame_report(frame):
     return {key: value for key, value in frame.items() if key not in ("size", "stretch")}
 
 
+STEPS_COLLECTION = "QuadLoom Steps"
+
+
+def _patch_colors(patch, offsets):
+    """A distinct, stable color per patch id (golden-ratio hues), as RGBA on
+    each face corner (Blender shows color attributes on points or corners)."""
+    import colorsys
+
+    colors = array("f")
+    for face, p in enumerate(patch):
+        rgba = (*colorsys.hsv_to_rgb((p * 0.6180339887) % 1.0, 0.55, 0.9), 1.0)
+        colors.extend(rgba * (offsets[face + 1] - offsets[face]))
+    return colors
+
+
+def _steps_collection(snapshot, scene):
+    """The "QuadLoom Steps" collection, made if needed and placed beside the result."""
+    steps = bpy.data.collections.get(STEPS_COLLECTION)
+    if steps is None or steps.library is not None:
+        steps = bpy.data.collections.new(STEPS_COLLECTION)
+    if steps not in scene.collection.children_recursive:
+        _target_collection(snapshot, scene).children.link(steps)
+    return steps
+
+
+def build_steps(snapshot, result, scene):
+    """The run's intermediate meshes as hidden objects in the "QuadLoom Steps"
+    collection: the prep remesh (feature lines as Sharp edges), and the patch
+    layout with each patch in its own color. A previous run's steps of the
+    same object are replaced. Returns the new objects.
+    """
+    positions, offsets, corners = decode_result(result)
+    meshes = [("Remesh", positions, offsets, corners, result.get("feature_edges", b""), None)]
+    if result.get("trace"):
+        positions, offsets, corners, patch, feature_edges = decode_layout(result["trace"])
+        meshes.append(("Layout", positions, offsets, corners, feature_edges, patch))
+    steps = _steps_collection(snapshot, scene)
+    made = []
+    try:
+        for label, positions, offsets, corners, feature_edges, patch in meshes:
+            name = f"{snapshot.source_name}{RESULT_SUFFIX}_{label}"
+            old = bpy.data.objects.get(name)
+            if old is not None and old.get("quadloom_step"):
+                old_mesh = old.data
+                bpy.data.objects.remove(old)
+                if old_mesh is not None and old_mesh.users == 0:
+                    bpy.data.meshes.remove(old_mesh)
+            mesh = bpy.data.meshes.new(name)
+            mesh.vertices.add(len(positions) // 3)
+            mesh.vertices.foreach_set("co", positions)
+            mesh.loops.add(len(corners))
+            mesh.loops.foreach_set("vertex_index", array("i", corners))
+            mesh.polygons.add(len(offsets) - 1)
+            mesh.polygons.foreach_set("loop_start", array("i", offsets[:-1]))
+            mesh.update(calc_edges=True)
+            _mark_feature_edges(mesh, feature_edges)
+            if patch is not None:
+                mesh.attributes.new("quadloom_patch", "INT", "FACE").data.foreach_set("value", array("i", patch))
+                color = mesh.color_attributes.new("quadloom_patch_color", "FLOAT_COLOR", "CORNER")
+                color.data.foreach_set("color", _patch_colors(patch, offsets))
+                mesh.color_attributes.active_color = color
+            obj = bpy.data.objects.new(name, mesh)
+            obj["quadloom_step"] = label
+            obj.matrix_world = snapshot.matrix_world
+            steps.objects.link(obj)
+            made.append(obj)
+            obj.hide_render = True
+            try:
+                obj.hide_set(True)
+            except RuntimeError:  # not in the active view layer: hidden there anyway
+                pass
+    except Exception:
+        for obj in made:
+            mesh = obj.data
+            bpy.data.objects.remove(obj)
+            bpy.data.meshes.remove(mesh)
+        raise
+    return made
+
+
 def build_result(snapshot, result, scene):
     """Creates a new object from a run result. Never touches the source object.
 

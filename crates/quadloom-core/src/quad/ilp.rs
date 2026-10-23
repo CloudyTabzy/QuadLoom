@@ -32,6 +32,8 @@ pub struct Spec<'a> {
     /// Segments whose count is fixed (polylines).
     pub fixed: &'a [Option<u32>],
     pub regularity: f64,
+    /// Multiple of the node limits ([`NODE_LIMIT`], [`LOCAL_NODE_LIMIT`]).
+    pub effort: f64,
 }
 
 /// A side's count: variable terms, a constant, and its value in the warm start.
@@ -48,7 +50,7 @@ pub fn refine(spec: Spec<'_>, start: &[u32]) -> Option<Vec<u32>> {
         return None;
     }
     let full = build(spec, start, Mode::Integer(None));
-    run(&full.problem, &full.count, Some(full.warm), start, NODE_LIMIT)
+    run(&full.problem, &full.count, Some(full.warm), start, scaled(NODE_LIMIT, spec.effort))
 }
 
 /// Largest problem (free segments) solved as one integer program.
@@ -142,7 +144,13 @@ pub fn neighbourhoods(
                     local_fixed[s] = None;
                 }
                 let local = build(Spec { fixed: &local_fixed, ..spec }, current, Mode::Integer(None));
-                run(&local.problem, &local.count, Some(local.warm), current, LOCAL_NODE_LIMIT)
+                run(
+                    &local.problem,
+                    &local.count,
+                    Some(local.warm),
+                    current,
+                    scaled(LOCAL_NODE_LIMIT, spec.effort),
+                )
             })
             .collect();
         let mut improved = false;
@@ -183,6 +191,11 @@ enum Mode<'a> {
     Integer(Option<&'a [Option<(i32, i32)>]>),
 }
 
+/// A node limit times the effort, at least one node.
+fn scaled(limit: u64, effort: f64) -> u64 {
+    (limit as f64 * effort).round().max(1.0) as u64
+}
+
 /// Solves `problem` within the node limit and reads the counts.
 fn run(
     problem: &Problem,
@@ -212,7 +225,7 @@ fn run(
 
 /// The program for `mode`, with a warm start from `start`.
 fn build(spec: Spec<'_>, start: &[u32], mode: Mode<'_>) -> Built {
-    let Spec { segments, targets, fixed, regularity } = spec;
+    let Spec { segments, targets, fixed, regularity, .. } = spec;
     let m = segments.segments.len();
     let mut problem = Problem::new(OptimizationDirection::Minimize);
     let mut warm: Vec<(Variable, f64)> = Vec::new();

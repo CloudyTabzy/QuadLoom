@@ -38,7 +38,7 @@ pub use field::{CurvatureAlignment, FieldOutput, FieldParams, FieldReport};
 pub use frame::{FrameOutput, FrameParams, FrameReport};
 pub use mesh::{InputMesh, PolyMesh};
 pub use params::Params;
-pub use pipeline::{RunOutput, Warning, check_limits, run};
+pub use pipeline::{RunOutput, Upstream, Warning, check_limits, finish, run, run_upstream};
 pub use quad::{QuadOutput, QuadParams, QuadReport};
 pub use remesh::{RemeshParams, RemeshReport};
 pub use repair::{RepairParams, RepairReport, RepairedMesh, repair};

@@ -166,6 +166,9 @@ impl Params {
         if !(q.regularity.is_finite() && (0.0..=1000.0).contains(&q.regularity)) {
             return bad(format!("quad.regularity must be between 0 and 1000 (got {})", q.regularity));
         }
+        if !(q.solver_effort.is_finite() && (0.05..=20.0).contains(&q.solver_effort)) {
+            return bad(format!("quad.solver_effort must be between 0.05 and 20 (got {})", q.solver_effort));
+        }
         if !(q.adaptivity.is_finite() && (0.0..=1.0).contains(&q.adaptivity)) {
             return bad(format!("quad.adaptivity must be between 0 and 1 (got {})", q.adaptivity));
         }

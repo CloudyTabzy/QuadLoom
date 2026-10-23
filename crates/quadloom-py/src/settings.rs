@@ -132,6 +132,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("edge_scale", Field::F64(&mut qd.edge_scale)),
                 ("regularity", Field::F64(&mut qd.regularity)),
                 ("smoothing", Field::Usize(&mut qd.smoothing)),
+                ("solver_effort", Field::F64(&mut qd.solver_effort)),
                 ("adaptivity", Field::F64(&mut qd.adaptivity)),
             ],
             "symmetry" => {

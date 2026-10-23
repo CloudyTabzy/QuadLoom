@@ -26,6 +26,8 @@ class Job:
         self.discarded = False
         # Warnings found before the run (selection, transform), as (message, hint).
         self.preflight = list(warnings)
+        # Also build the intermediate meshes (Show Intermediate Steps).
+        self.show_steps = False
         self.control = bridge.new_control()
         self.result = None
         self.error = None
@@ -55,6 +57,29 @@ def job_running():
     return _active_job is not None and not _active_job.done
 
 
+# The last run's work before the quad stage, for Quick Re-run. The backend
+# checks it matches (same mesh, same settings outside the quad stage) before
+# reusing it. Freed on file load, unregister, or when Quick Re-run is off.
+_cache = None
+
+
+def _rerun_cache(settings):
+    global _cache
+    if not settings.quick_rerun:
+        clear_cache()
+        return None
+    if _cache is None:
+        _cache = bridge.new_cache()
+    return _cache
+
+
+def clear_cache():
+    global _cache
+    if _cache is not None:
+        _cache.clear()
+    _cache = None
+
+
 def start_job(context):
     """Snapshots the active object and starts a job. Raises on bad input."""
     global _active_job
@@ -70,11 +95,16 @@ def start_job(context):
     kwargs = {"max_faces": settings.max_faces, "params": props.run_params(settings), **snapshot.feature_kwargs()}
     if settings.debug_fault and bridge.build_info().get("fault_injection"):
         kwargs["fault"] = settings.debug_fault
+    cache = _rerun_cache(settings)
+    if cache is not None:
+        kwargs["cache"] = cache
     job = Job(snapshot, kwargs, preflight)
+    job.show_steps = settings.show_steps
     last = context.scene.quadloom_last_run
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.quads_out = 0
+    last.reused = False
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
     last.symmetry_summary = ""
@@ -108,6 +138,7 @@ def finish_job(context, job):
             obj.data.polygons.foreach_get("loop_total", sides)
             last.quads_out = sides.count(4)
             last.report_json = obj["quadloom_report"]
+            last.reused = bool(job.result.get("reused"))
             last.repair_summary = repair_summary(job.result["repair"])
             last.feature_summary = feature_summary(job.result["features"])
             last.remesh_summary = remesh_summary(job.result.get("remesh"), job.kwargs["params"]["remesh"]["enabled"])
@@ -117,6 +148,13 @@ def finish_job(context, job):
             last.quad_summary = quad_summary(job.result.get("quads"), job.result.get("quad_error"))
             last.symmetry_summary = symmetry_summary(job.result.get("symmetry"))
             warnings = job.preflight + [(w["message"], w.get("hint") or "") for w in job.result.get("warnings", [])]
+            if job.show_steps:
+                try:
+                    steps = mesh_io.build_steps(job.snapshot, job.result, context.scene)
+                except Exception as e:  # the steps are extras: report, keep the result
+                    warnings.append((f"The intermediate steps could not be shown ({e})", ""))
+                else:
+                    last.message += f" and {len(steps)} hidden steps in \"{mesh_io.STEPS_COLLECTION}\""
             last.warnings = "\n".join(f"{m}\t{h}" for m, h in warnings)
             if warnings:
                 more = f" (+{len(warnings) - 1} more, see the panel)" if len(warnings) > 1 else ""
@@ -314,6 +352,7 @@ def _discard(join_timeout=5.0):
 @bpy.app.handlers.persistent
 def _on_load_pre(*_args):
     discard_active_job()
+    clear_cache()
 
 
 @bpy.app.handlers.persistent
@@ -456,6 +495,7 @@ def register_handlers():
 
 
 def unregister_handlers():
+    clear_cache()
     if _on_load_pre in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.remove(_on_load_pre)
     for handlers in (bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):

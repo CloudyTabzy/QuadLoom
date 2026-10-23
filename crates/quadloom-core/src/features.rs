@@ -22,7 +22,7 @@ pub mod source {
 }
 
 /// Feature hints from the host application, in *input* vertex/triangle ids.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FeatureInput {
     /// Edges the user marked sharp.
     pub sharp_edges: Vec<[u32; 2]>,
