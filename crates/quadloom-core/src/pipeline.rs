@@ -352,7 +352,11 @@ pub fn finish(upstream: Upstream, params: &Params, control: &Control) -> Result<
                 .then(|| local_size(&positions, &triangles, base, params.quad.adaptivity));
             let sizing =
                 quad::Sizing { scales: frame.as_ref().map(|f| f.scales.as_slice()), local: local.as_deref() };
-            let built = quad::compute(layout, sizing, base * params.quad.edge_scale, &params.quad, control);
+            let built = if params.quad.target_quads > 0 {
+                quad::target::compute(layout, sizing, &params.quad, 1usize << planes.len(), control)
+            } else {
+                quad::compute(layout, sizing, base * params.quad.edge_scale, &params.quad, control)
+            };
             timings_ms.push((Stage::Quantize, elapsed_ms(started)));
             match built {
                 Ok(q) => Some(q),
@@ -418,6 +422,19 @@ pub fn finish(upstream: Upstream, params: &Params, control: &Control) -> Result<
         Some(q) if !planes.is_empty() => Some(mirror_quads(q, &planes)),
         other => other,
     };
+    if let Some(q) = &quads
+        && q.report.target_quads > 0
+        && !quad::target::within_tolerance(q.report.target_quads, q.report.quads)
+    {
+        warnings.push(Warning::new(
+            Stage::Quantize,
+            format!(
+                "target requested {} quads; the result has {} ({} bounded sizing trials)",
+                q.report.target_quads, q.report.quads, q.report.target_attempts
+            ),
+            "feature boundaries, fixed patches and integer subdivisions can limit the achievable count",
+        ));
+    }
 
     let started = Instant::now();
     control.checkpoint(Stage::Output)?;

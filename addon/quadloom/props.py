@@ -74,6 +74,22 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         default="BALANCED",
         update=_apply_preset,
     )
+    sizing_mode: EnumProperty(
+        name="Sizing",
+        description="Choose relative Density or an approximate total number of output quads",
+        items=[("DENSITY", "Density", "Relative quad density"),
+               ("TARGET", "Target Quads", "Aim for a total quad count, including all parts and symmetry")],
+        default="DENSITY",
+    )
+    target_quads: IntProperty(
+        name="Target Quads",
+        description="Approximate total output quads, including all parts and symmetry. "
+        "Feature boundaries and integer subdivisions can limit accuracy; the achieved count is reported",
+        default=10_000,
+        min=1,
+        max=2_000_000,
+        soft_max=100_000,
+    )
     density: FloatProperty(
         name="Density",
         description="How many quads: 2 gives about four times as many as 1, 0.5 about a quarter",
@@ -523,6 +539,7 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     faces_in: IntProperty(name="Faces In")
     faces_out: IntProperty(name="Faces Out")
     quads_out: IntProperty(name="Quads Out")
+    target_quads: IntProperty(name="Requested Quads")
     reused: BoolProperty(name="Reused the Layout")
     elapsed_ms: FloatProperty(name="Time (ms)")
     report_json: StringProperty(name="Report")
@@ -605,7 +622,8 @@ def run_params(settings):
         },
         "quad": {
             "enabled": settings.quad_enabled,
-            "edge_scale": BASE_EDGE_SCALE / max(settings.density, 1e-3),
+            "target_quads": settings.target_quads if settings.sizing_mode == "TARGET" else 0,
+            "edge_scale": BASE_EDGE_SCALE if settings.sizing_mode == "TARGET" else BASE_EDGE_SCALE / max(settings.density, 1e-3),
             "adaptivity": settings.quad_adaptivity,
             "regularity": regularity_weight(settings.quad_regularity),
             "solver_effort": SOLVER_EFFORT[settings.quad_solver_effort],

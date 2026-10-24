@@ -22,7 +22,10 @@
 use hashbrown::HashMap;
 use std::f64::consts::TAU;
 
+use crate::{Control, Error, Stage};
 use glam::DVec2;
+
+const TARGET_SPLIT_CHECKS: usize = 250_000;
 
 /// What a pattern point is, so patches agree on shared vertices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -159,21 +162,166 @@ fn fillable(l: &[u32]) -> Option<PatternKind> {
 /// The best pattern for side counts `l` (3–6 sides, all ≥ 1), or `None` if
 /// the boundary count is odd (no quad mesh exists).
 pub fn build(l: &[u32]) -> Option<Pattern> {
+    build_impl(l, usize::MAX, None).ok().flatten()
+}
+
+/// Builds a target-mode pattern with bounded allocation and split-search work.
+pub fn build_limited(l: &[u32], max_quads: usize, control: &Control) -> Result<Option<Pattern>, Error> {
+    control.checkpoint(Stage::Patterns)?;
+    build_impl(l, max_quads, Some(control))
+}
+
+fn limit_error(message: &str) -> Error {
+    Error::invalid_input(Stage::Patterns, message)
+        .with_hint("lower the target quad count or use a less constrained layout")
+}
+
+/// Exact face count of a directly fillable grid/center, checking its grid indices.
+fn fill_count(l: &[u32]) -> Result<Option<usize>, Error> {
+    let Some(kind) = fillable(l) else { return Ok(None) };
+    let dimensions = if kind == PatternKind::Grid {
+        vec![(l[0], l[1])]
+    } else {
+        let Some(splits) = center_splits(l) else { return Ok(None) };
+        (0..splits.len()).map(|i| (splits[(i + 1) % splits.len()].0, splits[i].1)).collect()
+    };
+    let mut total = 0usize;
+    for (nu, nv) in dimensions {
+        let vertices = (u64::from(nu) + 1).checked_mul(u64::from(nv) + 1);
+        if vertices.is_none_or(|v| v > u64::from(u32::MAX)) {
+            return Err(limit_error("pattern grid index limit exceeded"));
+        }
+        let quads = (nu as usize)
+            .checked_mul(nv as usize)
+            .ok_or_else(|| limit_error("pattern allocation limit exceeded"))?;
+        total = total.checked_add(quads).ok_or_else(|| limit_error("pattern allocation limit exceeded"))?;
+    }
+    Ok(Some(total))
+}
+
+/// Feasible chord lengths for a directly fillable piece whose last side is k.
+/// Closed-form split numerators are affine in k, with positivity and parity
+/// constraints; intersect those instead of enumerating every possible k.
+fn chord_interval(l: &[u32], max: u32) -> Option<(i64, i64, Option<i64>)> {
     let n = l.len();
-    if !(3..=6).contains(&n) || l.contains(&0) || l.iter().sum::<u32>() % 2 == 1 {
+    if !(3..=6).contains(&n) || l[..n - 1].contains(&0) || max == 0 {
         return None;
+    }
+    if n == 4 {
+        return (l[0] == l[2] && l[1] <= max).then_some((l[1] as i64, l[1] as i64, None));
+    }
+    let numerators = |k: i64| {
+        let mut lengths: Vec<i64> = l.iter().map(|&v| i64::from(v)).collect();
+        lengths[n - 1] = k;
+        let mut x = vec![0i64; n];
+        for start in 0..(if n.is_multiple_of(2) { 2 } else { 1 }) {
+            let (mut alternating, mut sign, mut j) = (0i64, 1i64, start);
+            loop {
+                alternating += sign * lengths[j];
+                sign = -sign;
+                j = (j + 2) % n;
+                if j == start {
+                    break;
+                }
+            }
+            x[start] = alternating;
+            let mut j = start;
+            loop {
+                let next = (j + 2) % n;
+                if next == start {
+                    break;
+                }
+                x[next] = 2 * lengths[j] - x[j];
+                j = next;
+            }
+        }
+        (0..n).flat_map(|i| [x[i], 2 * lengths[i] - x[i]]).collect::<Vec<_>>()
+    };
+    let (zero, one) = (numerators(0), numerators(1));
+    let (mut lo, mut hi, mut parity) = (1i64, i64::from(max), None);
+    for (b, value) in zero.into_iter().zip(one) {
+        let a = value - b;
+        if a > 0 {
+            lo = lo.max(-(-(2 - b)).div_euclid(a));
+        } else if a < 0 {
+            hi = hi.min((b - 2).div_euclid(-a));
+        } else if b < 2 {
+            return None;
+        }
+        if a.rem_euclid(2) == 0 {
+            if b.rem_euclid(2) != 0 {
+                return None;
+            }
+        } else {
+            let needed = b.rem_euclid(2);
+            if parity.is_some_and(|p| p != needed) {
+                return None;
+            }
+            parity = Some(needed);
+        }
+    }
+    (lo <= hi).then_some((lo, hi, parity))
+}
+
+fn best_chord_count(a: &[u32], b: &[u32], ideal: f64, max: u32) -> Option<u32> {
+    let (al, ah, ap) = chord_interval(a, max)?;
+    let (bl, bh, bp) = chord_interval(b, max)?;
+    if ap.is_some() && bp.is_some() && ap != bp {
+        return None;
+    }
+    let (lo, hi, parity) = (al.max(bl), ah.min(bh), ap.or(bp));
+    if lo > hi {
+        return None;
+    }
+    let near = (ideal.floor() as i64).clamp(lo, hi);
+    let mut candidates = [lo, hi, near - 1, near, near + 1];
+    candidates.sort_unstable();
+    let mut best: Option<(u32, f64)> = None;
+    for k in candidates {
+        if k < lo || k > hi || parity.is_some_and(|p| k.rem_euclid(2) != p) {
+            continue;
+        }
+        let score = (k as f64 - ideal).abs();
+        if best.is_none_or(|(_, old)| score < old - 1e-12) {
+            best = Some((k as u32, score));
+        }
+    }
+    best.map(|(k, _)| k)
+}
+
+fn build_impl(l: &[u32], max_quads: usize, control: Option<&Control>) -> Result<Option<Pattern>, Error> {
+    let n = l.len();
+    if !(3..=6).contains(&n) || l.contains(&0) {
+        return Ok(None);
+    }
+    let perimeter = l
+        .iter()
+        .try_fold(0u32, |sum, &v| sum.checked_add(v))
+        .ok_or_else(|| limit_error("pattern perimeter limit exceeded"))?;
+    if perimeter % 2 == 1 {
+        return Ok(None);
+    }
+    if perimeter as usize > max_quads.saturating_mul(2).saturating_add(4) {
+        return Err(limit_error("pattern boundary exceeds the output limit"));
     }
     let mut b = Builder::new(l);
     let whole: Vec<Edge> = (0..n).map(|i| Edge::Run { side: i as u8, from: 0, len: l[i] }).collect();
-    if let Some(kind) = b.fill(&whole) {
-        return Some(b.finish(kind));
+    if fill_count(l)?.is_some_and(|count| count > max_quads) {
+        return Err(limit_error("pattern exceeds the quad output limit"));
     }
-    if b.split() {
-        return Some(b.finish(PatternKind::Split));
+    if let Some(kind) = b.fill(&whole) {
+        return Ok(Some(b.finish(kind)));
+    }
+    if b.split(max_quads, control)? {
+        return Ok(Some(b.finish(PatternKind::Split)));
+    }
+    let fan_count = if perimeter == 4 { 1 } else { perimeter as usize / 2 };
+    if fan_count > max_quads {
+        return Err(limit_error("pattern exceeds the quad output limit"));
     }
     let mut b = Builder::new(l);
     b.fan();
-    Some(b.finish(PatternKind::Fan))
+    Ok(Some(b.finish(PatternKind::Fan)))
 }
 
 /// An edge of a (sub-)polygon.
@@ -442,12 +590,26 @@ impl<'a> Builder<'a> {
         self.boundary(side, ring[i].1).1 * (l.iter().sum::<f64>() / perimeter)
     }
 
-    fn split(&mut self) -> bool {
+    fn split(&mut self, max_quads: usize, control: Option<&Control>) -> Result<bool, Error> {
         let ring = self.ring();
         let t = ring.len();
         let mut best: Option<(f64, usize, usize, u32)> = None;
+        let mut checks = 0usize;
+        let mut tick = || -> Result<(), Error> {
+            if let Some(control) = control {
+                checks += 1;
+                if checks > TARGET_SPLIT_CHECKS {
+                    return Err(limit_error("target pattern search limit exceeded"));
+                }
+                if checks.is_multiple_of(256) {
+                    control.checkpoint(Stage::Patterns)?;
+                }
+            }
+            Ok(())
+        };
         for a in 0..t {
             for b in (a + 1)..t {
+                tick()?;
                 let (run_ab, run_ba) = (self.run(&ring, a, b), self.run(&ring, b, a));
                 // Each piece needs at least two boundary edges (a patch corner inside its run).
                 if run_ab.len() < 2 || run_ba.len() < 2 || run_ab.len() > 5 || run_ba.len() > 5 {
@@ -457,7 +619,17 @@ impl<'a> Builder<'a> {
                 // Every chord length is tried (the closed forms decide), up to half the boundary.
                 let mut la: Vec<u32> = run_ab.iter().map(|&e| Self::edge_len(e)).chain([0]).collect();
                 let mut lb: Vec<u32> = run_ba.iter().map(|&e| Self::edge_len(e)).chain([0]).collect();
-                for k in 1..=(t as u32 / 2).max(1) {
+                let max_k = (t as u32 / 2).max(1);
+                let range = if control.is_some() {
+                    match best_chord_count(&la, &lb, ideal, max_k) {
+                        Some(k) => k..=k,
+                        None => continue,
+                    }
+                } else {
+                    1..=max_k
+                };
+                for k in range {
+                    tick()?;
                     if let Some(last) = la.last_mut() {
                         *last = k;
                     }
@@ -475,14 +647,20 @@ impl<'a> Builder<'a> {
                 }
             }
         }
-        let Some((_, a, b, k)) = best else { return false };
+        let Some((_, a, b, k)) = best else { return Ok(false) };
         let id = self.chords.len() as u32;
         self.chords.push((ring[a], ring[b]));
         let mut piece_a = self.run(&ring, a, b);
         piece_a.push(Edge::Chord { id, k, forward: false });
         let mut piece_b = self.run(&ring, b, a);
         piece_b.push(Edge::Chord { id, k, forward: true });
-        self.fill(&piece_a).is_some() && self.fill(&piece_b).is_some()
+        let sizes = |piece: &[Edge]| piece.iter().map(|&e| Self::edge_len(e)).collect::<Vec<_>>();
+        let count_a = fill_count(&sizes(&piece_a))?.unwrap_or(0);
+        let count_b = fill_count(&sizes(&piece_b))?.unwrap_or(0);
+        if count_a.checked_add(count_b).is_none_or(|count| count > max_quads) {
+            return Err(limit_error("split pattern exceeds the quad output limit"));
+        }
+        Ok(self.fill(&piece_a).is_some() && self.fill(&piece_b).is_some())
     }
 
     /// One quad for a 4-edge boundary, else a center vertex and a quad per two
@@ -509,6 +687,65 @@ impl<'a> Builder<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limited_pattern_rejects_huge_grid_before_allocating() {
+        let error = build_limited(&[100_000; 4], 1000, &crate::Control::default()).unwrap_err();
+        assert!(error.message.contains("limit"));
+    }
+
+    #[test]
+    fn limited_pattern_preserves_normal_pattern_and_obeys_cancel() {
+        let control = crate::Control::default();
+        let limited = build_limited(&[2, 3, 2, 3], 6, &control).unwrap().unwrap();
+        let original = build(&[2, 3, 2, 3]).unwrap();
+        assert_eq!(limited.kind, original.kind);
+        assert_eq!(limited.points, original.points);
+        assert_eq!(limited.quads, original.quads);
+        control.cancel();
+        let error = build_limited(&[2, 3, 2, 3], 6, &control).unwrap_err();
+        assert_eq!(error.kind, crate::ErrorKind::Cancelled);
+    }
+
+    #[test]
+    fn target_split_search_is_bounded() {
+        let error = build_limited(&[1, 1, 1, 1001], 2_000_000, &crate::Control::default()).unwrap_err();
+        assert!(error.message.contains("search"), "{error}");
+    }
+
+    #[test]
+    fn analytic_chord_length_matches_exhaustive_feasibility() {
+        for na in 3..=6 {
+            for nb in 3..=6 {
+                for sample in 0..80usize {
+                    let make = |n: usize, offset: usize| {
+                        (0..n)
+                            .map(|i| {
+                                if i + 1 == n {
+                                    0
+                                } else {
+                                    1 + ((sample * 17 + i * 13 + sample / (i + 1) + offset) % 7) as u32
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let (a, b) = (make(na, 0), make(nb, 3));
+                    let ideal = sample as f64 / 5.0 + 0.5;
+                    let expected = (1..=20u32)
+                        .filter(|&k| {
+                            let (mut a, mut b) = (a.clone(), b.clone());
+                            a[na - 1] = k;
+                            b[nb - 1] = k;
+                            fillable(&a).is_some() && fillable(&b).is_some()
+                        })
+                        .min_by(|&a, &b| {
+                            (a as f64 - ideal).abs().total_cmp(&(b as f64 - ideal).abs()).then(a.cmp(&b))
+                        });
+                    assert_eq!(best_chord_count(&a, &b, ideal, 20), expected, "{a:?} {b:?} {ideal}");
+                }
+            }
+        }
+    }
 
     fn check(p: &Pattern, l: &[u32]) {
         let n = l.len();

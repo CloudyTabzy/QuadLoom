@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 /// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
 /// Bump it whenever either side changes.
-pub const API_VERSION: u32 = 8;
+pub const API_VERSION: u32 = 9;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

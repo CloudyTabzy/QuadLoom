@@ -1,0 +1,808 @@
+{
+  "build": {
+    "version": "0.4.0",
+    "api": 9,
+    "fault_injection": true,
+    "profile": "release"
+  },
+  "environment": "Windows / Blender 5.2.2; single-pass timings while other validation ran; not a controlled speed comparison",
+  "tolerance": "max(4 quads, 5% of requested target)",
+  "within_tolerance": 13,
+  "total_target_cases": 18,
+  "median_error_percent": 2.8,
+  "worst_error_percent": 232.0,
+  "density_comparisons": [
+    {
+      "case": "cube",
+      "quads": 8214,
+      "fingerprint_030": "2d6726d6e4e6cadf67dceebb22723a3138e6f77e8c103a9a0d404e39dbed4273",
+      "fingerprint_040": "2d6726d6e4e6cadf67dceebb22723a3138e6f77e8c103a9a0d404e39dbed4273",
+      "identical": true
+    },
+    {
+      "case": "torus",
+      "quads": 13696,
+      "fingerprint_030": "4100b9607b615c2dbf5084c05e9e14342623310f01d360c05b606cca0f07598c",
+      "fingerprint_040": "4100b9607b615c2dbf5084c05e9e14342623310f01d360c05b606cca0f07598c",
+      "identical": true
+    },
+    {
+      "case": "plane",
+      "quads": 139916,
+      "fingerprint_030": "998bcb13a64043055815feb837c700958a42adae7c46abbbc4678f9c11ea14fc",
+      "fingerprint_040": "998bcb13a64043055815feb837c700958a42adae7c46abbbc4678f9c11ea14fc",
+      "identical": true
+    },
+    {
+      "case": "common3d/fandisk/fandisk.obj",
+      "quads": 12298,
+      "fingerprint_030": "1c7bfe435caff8eaee2d087c1d23117c65033e67e175a0ab86aa758755630957",
+      "fingerprint_040": "1c7bfe435caff8eaee2d087c1d23117c65033e67e175a0ab86aa758755630957",
+      "identical": true
+    },
+    {
+      "case": "common3d/stanford-bunny/stanford-bunny.obj",
+      "quads": 14338,
+      "fingerprint_030": "c3c10956de97e3b1a9e93a52571572fef0571a56a64a1241967319f844e9da53",
+      "fingerprint_040": "c3c10956de97e3b1a9e93a52571572fef0571a56a64a1241967319f844e9da53",
+      "identical": true
+    },
+    {
+      "case": "common3d/armadillo/armadillo.obj",
+      "quads": 18233,
+      "fingerprint_030": "0c87c0e1c66b79d6d37732ddaefb9d00b17b250a6b6f7953bb7e93ae5b4c6e93",
+      "fingerprint_040": "0c87c0e1c66b79d6d37732ddaefb9d00b17b250a6b6f7953bb7e93ae5b4c6e93",
+      "identical": true
+    }
+  ],
+  "target_measurements": [
+    {
+      "target": 500,
+      "quads": 486,
+      "error_percent": 2.8,
+      "within_tolerance": true,
+      "wall_seconds": 0.02445240004453808,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9999981708017132,
+      "sj_p5": 0.9999996105793637,
+      "sj_median": 0.9999999568261589,
+      "inverted": 0,
+      "report": {
+        "quads": 486,
+        "target_quads": 500,
+        "target_attempts": 1,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 12,
+        "grid_patches": 6,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.10856314376500176
+      },
+      "warnings": [],
+      "case": "cube",
+      "density_at_selected_edge": {
+        "quads": 486,
+        "sj_p5": 0.9999996105793637,
+        "inverted": 0,
+        "wall_seconds": 0.031059900007676333,
+        "edge_length": 0.10856314376500176
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 2000,
+      "quads": 1944,
+      "error_percent": 2.8,
+      "within_tolerance": true,
+      "wall_seconds": 0.03147689998149872,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9999715704531209,
+      "sj_p5": 0.9999974402460887,
+      "sj_median": 0.9999997930613609,
+      "inverted": 0,
+      "report": {
+        "quads": 1944,
+        "target_quads": 2000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 12,
+        "grid_patches": 6,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.0564893586160794
+      },
+      "warnings": [],
+      "case": "cube",
+      "density_at_selected_edge": {
+        "quads": 1944,
+        "sj_p5": 0.9999974402460887,
+        "inverted": 0,
+        "wall_seconds": 0.04221970000071451,
+        "edge_length": 0.05648935861607939
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 8000,
+      "quads": 7776,
+      "error_percent": 2.8,
+      "within_tolerance": true,
+      "wall_seconds": 0.03830860002199188,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9996120984625476,
+      "sj_p5": 0.9999875158062445,
+      "sj_median": 0.9999994356209283,
+      "inverted": 0,
+      "report": {
+        "quads": 7776,
+        "target_quads": 8000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 12,
+        "grid_patches": 6,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.0282446793080397
+      },
+      "warnings": [],
+      "case": "cube",
+      "density_at_selected_edge": {
+        "quads": 7776,
+        "sj_p5": 0.9999875158062445,
+        "inverted": 0,
+        "wall_seconds": 0.0969203999848105,
+        "edge_length": 0.028244679308039696
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 500,
+      "quads": 492,
+      "error_percent": 1.6,
+      "within_tolerance": true,
+      "wall_seconds": 0.03914080001413822,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.982759618113383,
+      "sj_p5": 0.9926073672202731,
+      "sj_median": 0.9974586438945693,
+      "inverted": 0,
+      "report": {
+        "quads": 492,
+        "target_quads": 500,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 8,
+        "grid_patches": 4,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.2344387175469529
+      },
+      "warnings": [],
+      "case": "torus",
+      "density_at_selected_edge": {
+        "quads": 492,
+        "sj_p5": 0.9926073672202731,
+        "inverted": 0,
+        "wall_seconds": 0.03688349999720231,
+        "edge_length": 0.2344387175469529
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 2000,
+      "quads": 1968,
+      "error_percent": 1.6,
+      "within_tolerance": true,
+      "wall_seconds": 0.037421699962578714,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9651092242701629,
+      "sj_p5": 0.9859410461354797,
+      "sj_median": 0.9987746258891533,
+      "inverted": 0,
+      "report": {
+        "quads": 1968,
+        "target_quads": 2000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 8,
+        "grid_patches": 4,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.11664333878250835
+      },
+      "warnings": [],
+      "case": "torus",
+      "density_at_selected_edge": {
+        "quads": 1968,
+        "sj_p5": 0.9859410461354797,
+        "inverted": 0,
+        "wall_seconds": 0.04930020001484081,
+        "edge_length": 0.11664333878250835
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 8000,
+      "quads": 8036,
+      "error_percent": 0.45,
+      "within_tolerance": true,
+      "wall_seconds": 0.04587909998372197,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9450125509593965,
+      "sj_p5": 0.9784174382081279,
+      "sj_median": 0.9990085384356144,
+      "inverted": 0,
+      "report": {
+        "quads": 8036,
+        "target_quads": 8000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 8,
+        "grid_patches": 4,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.05895105384570738
+      },
+      "warnings": [],
+      "case": "torus",
+      "density_at_selected_edge": {
+        "quads": 8036,
+        "sj_p5": 0.9784174382081279,
+        "inverted": 0,
+        "wall_seconds": 0.10298490000423044,
+        "edge_length": 0.05895105384570738
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 500,
+      "quads": 512,
+      "error_percent": 2.4,
+      "within_tolerance": true,
+      "wall_seconds": 0.8922012000111863,
+      "border_edges": 96,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.999999936051959,
+      "sj_p5": 0.9999999579393595,
+      "sj_median": 0.9999999919535729,
+      "inverted": 0,
+      "report": {
+        "quads": 512,
+        "target_quads": 500,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 4,
+        "grid_patches": 1,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.06712003949877267
+      },
+      "warnings": [],
+      "case": "plane",
+      "density_at_selected_edge": {
+        "quads": 512,
+        "sj_p5": 0.9999999579393595,
+        "inverted": 0,
+        "wall_seconds": 0.9029989999835379,
+        "edge_length": 0.06712003949877267
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 2000,
+      "quads": 1953,
+      "error_percent": 2.35,
+      "within_tolerance": true,
+      "wall_seconds": 0.9237220999784768,
+      "border_edges": 188,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9999996731244327,
+      "sj_p5": 0.9999998787546484,
+      "sj_median": 0.9999999839137871,
+      "inverted": 0,
+      "report": {
+        "quads": 1953,
+        "target_quads": 2000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 4,
+        "grid_patches": 1,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.033805883986842235
+      },
+      "warnings": [],
+      "case": "plane",
+      "density_at_selected_edge": {
+        "quads": 1953,
+        "sj_p5": 0.9999998787546484,
+        "inverted": 0,
+        "wall_seconds": 0.9737812000093982,
+        "edge_length": 0.033805883986842235
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 8000,
+      "quads": 8001,
+      "error_percent": 0.0125,
+      "within_tolerance": true,
+      "wall_seconds": 0.8698912000400014,
+      "border_edges": 380,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": 0.9999982509042745,
+      "sj_p5": 0.9999995782162711,
+      "sj_median": 0.9999999546370028,
+      "inverted": 0,
+      "report": {
+        "quads": 8001,
+        "target_quads": 8000,
+        "target_attempts": 2,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 4,
+        "grid_patches": 1,
+        "center_patches": 0,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.016841588099519585
+      },
+      "warnings": [],
+      "case": "plane",
+      "density_at_selected_edge": {
+        "quads": 8001,
+        "sj_p5": 0.9999995782162711,
+        "inverted": 0,
+        "wall_seconds": 0.9863559000077657,
+        "edge_length": 0.016841588099519585
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 500,
+      "quads": 1459,
+      "error_percent": 191.8,
+      "within_tolerance": false,
+      "wall_seconds": 0.1749724000110291,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.32232242698907626,
+      "sj_p5": 6.633905042879286e-06,
+      "sj_median": 0.7955766939464146,
+      "inverted": 57,
+      "report": {
+        "quads": 1459,
+        "target_quads": 500,
+        "target_attempts": 1,
+        "target_refinements": 8,
+        "triangles": 0,
+        "segments": 64,
+        "grid_patches": 11,
+        "center_patches": 8,
+        "split_patches": 2,
+        "fan_patches": 4,
+        "kept_patches": 1,
+        "edge_length": 24.10379356274656
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "5 of 26 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        },
+        {
+          "stage": "quantize",
+          "message": "target requested 500 quads; the result has 1459 (1 bounded sizing trials)",
+          "hint": "feature boundaries, fixed patches and integer subdivisions can limit the achievable count"
+        }
+      ],
+      "case": "common3d/fandisk/fandisk.obj",
+      "matched_density_unavailable": "chosen size exceeds legacy Density range"
+    },
+    {
+      "target": 2000,
+      "quads": 2205,
+      "error_percent": 10.25,
+      "within_tolerance": false,
+      "wall_seconds": 0.5766069999663159,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.32382327596642724,
+      "sj_p5": 0.14582810645942812,
+      "sj_median": 0.8131370125722278,
+      "inverted": 55,
+      "report": {
+        "quads": 2205,
+        "target_quads": 2000,
+        "target_attempts": 8,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 64,
+        "grid_patches": 11,
+        "center_patches": 9,
+        "split_patches": 2,
+        "fan_patches": 3,
+        "kept_patches": 1,
+        "edge_length": 1.6163208185622644
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "4 of 26 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        },
+        {
+          "stage": "quantize",
+          "message": "target requested 2000 quads; the result has 2205 (8 bounded sizing trials)",
+          "hint": "feature boundaries, fixed patches and integer subdivisions can limit the achievable count"
+        }
+      ],
+      "case": "common3d/fandisk/fandisk.obj",
+      "density_at_selected_edge": {
+        "quads": 2205,
+        "sj_p5": 0.14582810645942812,
+        "inverted": 55,
+        "wall_seconds": 0.23159310000482947,
+        "edge_length": 1.6163208185622644
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 8000,
+      "quads": 8322,
+      "error_percent": 4.025,
+      "within_tolerance": true,
+      "wall_seconds": 0.10579900001175702,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.9531674545348617,
+      "sj_p5": 0.5708457198698856,
+      "sj_median": 0.9792638824939018,
+      "inverted": 2,
+      "report": {
+        "quads": 8322,
+        "target_quads": 8000,
+        "target_attempts": 4,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 64,
+        "grid_patches": 15,
+        "center_patches": 10,
+        "split_patches": 0,
+        "fan_patches": 0,
+        "kept_patches": 1,
+        "edge_length": 0.13062708495104255
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "1 of 26 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        }
+      ],
+      "case": "common3d/fandisk/fandisk.obj",
+      "density_at_selected_edge": {
+        "quads": 8322,
+        "sj_p5": 0.5708457198698856,
+        "inverted": 2,
+        "wall_seconds": 0.19458000001031905,
+        "edge_length": 0.13062708495104255
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 500,
+      "quads": 1178,
+      "error_percent": 135.6,
+      "within_tolerance": false,
+      "wall_seconds": 36.70614449999994,
+      "border_edges": 146,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.9973602215906341,
+      "sj_p5": 0.0019056128104296358,
+      "sj_median": 0.7359556508287644,
+      "inverted": 52,
+      "report": {
+        "quads": 1178,
+        "target_quads": 500,
+        "target_attempts": 8,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 1146,
+        "grid_patches": 301,
+        "center_patches": 28,
+        "split_patches": 43,
+        "fan_patches": 110,
+        "kept_patches": 0,
+        "edge_length": 0.09493562626349687
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "110 of 482 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        },
+        {
+          "stage": "quantize",
+          "message": "target requested 500 quads; the result has 1178 (8 bounded sizing trials)",
+          "hint": "feature boundaries, fixed patches and integer subdivisions can limit the achievable count"
+        }
+      ],
+      "case": "common3d/stanford-bunny/stanford-bunny.obj",
+      "matched_density_unavailable": "chosen size exceeds legacy Density range"
+    },
+    {
+      "target": 2000,
+      "quads": 1560,
+      "error_percent": 22.0,
+      "within_tolerance": false,
+      "wall_seconds": 39.91014960000757,
+      "border_edges": 146,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.9600803621540639,
+      "sj_p5": 0.09907390407413598,
+      "sj_median": 0.8216216319847836,
+      "inverted": 47,
+      "report": {
+        "quads": 1560,
+        "target_quads": 2000,
+        "target_attempts": 8,
+        "target_refinements": 6,
+        "triangles": 0,
+        "segments": 1146,
+        "grid_patches": 300,
+        "center_patches": 39,
+        "split_patches": 40,
+        "fan_patches": 103,
+        "kept_patches": 0,
+        "edge_length": 0.017780168495062545
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "103 of 482 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        },
+        {
+          "stage": "quantize",
+          "message": "target requested 2000 quads; the result has 1560 (8 bounded sizing trials)",
+          "hint": "feature boundaries, fixed patches and integer subdivisions can limit the achievable count"
+        }
+      ],
+      "case": "common3d/stanford-bunny/stanford-bunny.obj",
+      "density_at_selected_edge": {
+        "quads": 1503,
+        "sj_p5": 0.08831897799523884,
+        "inverted": 44,
+        "wall_seconds": 4.907583500025794,
+        "edge_length": 0.017780168495062545
+      },
+      "same_geometry_as_matched_density": false
+    },
+    {
+      "target": 8000,
+      "quads": 8259,
+      "error_percent": 3.2375,
+      "within_tolerance": true,
+      "wall_seconds": 6.38388090004446,
+      "border_edges": 224,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.724221816358575,
+      "sj_p5": 0.5174889443529016,
+      "sj_median": 0.9597305943715718,
+      "inverted": 38,
+      "report": {
+        "quads": 8259,
+        "target_quads": 8000,
+        "target_attempts": 5,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 1146,
+        "grid_patches": 376,
+        "center_patches": 105,
+        "split_patches": 1,
+        "fan_patches": 0,
+        "kept_patches": 0,
+        "edge_length": 0.004599090197909455
+      },
+      "warnings": [],
+      "case": "common3d/stanford-bunny/stanford-bunny.obj",
+      "density_at_selected_edge": {
+        "quads": 8259,
+        "sj_p5": 0.5174889443529016,
+        "inverted": 38,
+        "wall_seconds": 1.2149500999948941,
+        "edge_length": 0.004599090197909455
+      },
+      "same_geometry_as_matched_density": true
+    },
+    {
+      "target": 500,
+      "quads": 1660,
+      "error_percent": 232.0,
+      "within_tolerance": false,
+      "wall_seconds": 83.04691139998613,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.9509622304234363,
+      "sj_p5": -0.0015893172844328965,
+      "sj_median": 0.6984143056567392,
+      "inverted": 95,
+      "report": {
+        "quads": 1660,
+        "target_quads": 500,
+        "target_attempts": 8,
+        "target_refinements": 2,
+        "triangles": 0,
+        "segments": 1161,
+        "grid_patches": 197,
+        "center_patches": 70,
+        "split_patches": 77,
+        "fan_patches": 149,
+        "kept_patches": 0,
+        "edge_length": 1667.8317538574147
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "149 of 493 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        },
+        {
+          "stage": "quantize",
+          "message": "target requested 500 quads; the result has 1660 (8 bounded sizing trials)",
+          "hint": "feature boundaries, fixed patches and integer subdivisions can limit the achievable count"
+        }
+      ],
+      "case": "common3d/armadillo/armadillo.obj",
+      "matched_density_unavailable": "chosen size exceeds legacy Density range"
+    },
+    {
+      "target": 2000,
+      "quads": 1901,
+      "error_percent": 4.95,
+      "within_tolerance": true,
+      "wall_seconds": 82.57088989997283,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.9681127386266216,
+      "sj_p5": 0.003809482205742597,
+      "sj_median": 0.731540467008558,
+      "inverted": 87,
+      "report": {
+        "quads": 1901,
+        "target_quads": 2000,
+        "target_attempts": 6,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 1161,
+        "grid_patches": 187,
+        "center_patches": 97,
+        "split_patches": 79,
+        "fan_patches": 130,
+        "kept_patches": 0,
+        "edge_length": 57.682229421970106
+      },
+      "warnings": [
+        {
+          "stage": "patterns",
+          "message": "130 of 493 patches used a fallback pattern, which can look uneven",
+          "hint": "a higher Density or more Adaptive Detail gives the patterns more room"
+        }
+      ],
+      "case": "common3d/armadillo/armadillo.obj",
+      "density_at_selected_edge": {
+        "quads": 5677,
+        "sj_p5": 0.27837129413121353,
+        "inverted": 82,
+        "wall_seconds": 10.655332700000145,
+        "edge_length": 57.68222942197011
+      },
+      "same_geometry_as_matched_density": false
+    },
+    {
+      "target": 8000,
+      "quads": 7979,
+      "error_percent": 0.2625,
+      "within_tolerance": true,
+      "wall_seconds": 131.0299794000457,
+      "border_edges": 0,
+      "nonmanifold_edges": 0,
+      "orientation_errors": 0,
+      "nonfinite": 0,
+      "sj_min": -0.7998335280971713,
+      "sj_p5": 0.5029011580742292,
+      "sj_median": 0.944368925054731,
+      "inverted": 48,
+      "report": {
+        "quads": 7979,
+        "target_quads": 8000,
+        "target_attempts": 8,
+        "target_refinements": 0,
+        "triangles": 0,
+        "segments": 1161,
+        "grid_patches": 290,
+        "center_patches": 202,
+        "split_patches": 0,
+        "fan_patches": 1,
+        "kept_patches": 0,
+        "edge_length": 5.185892080762003
+      },
+      "warnings": [],
+      "case": "common3d/armadillo/armadillo.obj",
+      "density_at_selected_edge": {
+        "quads": 7979,
+        "sj_p5": 0.5029011580742292,
+        "inverted": 48,
+        "wall_seconds": 10.130142599984538,
+        "edge_length": 5.185892080762003
+      },
+      "same_geometry_as_matched_density": true
+    }
+  ]
+}

@@ -22,6 +22,7 @@ pub mod pattern;
 pub mod quantize;
 pub mod segments;
 pub mod smooth;
+pub mod target;
 #[cfg(test)]
 mod tests;
 
@@ -42,6 +43,8 @@ use segments::Segments;
 pub struct QuadParams {
     /// Build the quad mesh (needs the patch layout).
     pub enabled: bool,
+    /// Requested total output quads, including symmetry; 0 keeps Density sizing.
+    pub target_quads: usize,
     /// Quad edge length as a multiple of the prep remesh's edge length.
     pub edge_scale: f64,
     /// How strongly quantization prefers regular patterns over matching the
@@ -62,6 +65,7 @@ impl Default for QuadParams {
     fn default() -> Self {
         Self {
             enabled: true,
+            target_quads: 0,
             edge_scale: 0.75,
             regularity: quantize::DEFAULT_REGULARITY,
             smoothing: 20,
@@ -76,6 +80,9 @@ impl Default for QuadParams {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct QuadReport {
     pub quads: usize,
+    pub target_quads: usize,
+    pub target_attempts: usize,
+    pub target_refinements: usize,
     /// Triangles of patches that kept them.
     pub triangles: usize,
     pub segments: usize,
@@ -126,61 +133,118 @@ pub fn compute(
     if !(edge.is_finite() && edge > 0.0) {
         return Err(Error::invalid_input(stage, "the quad size must be positive"));
     }
-    let mut faces_of: Vec<Vec<u32>> = vec![Vec::new(); trace.patches.len()];
-    for (f, &p) in trace.patch_of_face.iter().enumerate() {
-        if let Some(list) = faces_of.get_mut(p as usize) {
-            list.push(f as u32);
-        }
-    }
-    // Patches whose triangles can't be mapped onto their polygon keep them; find
-    // them first, so their neighbours sample at their mesh vertices.
-    let first = segments::build(trace, &[]);
-    let mut excluded = vec![false; trace.patches.len()];
-    for (p, sides) in first.sides.iter().enumerate() {
-        if p % 256 == 0 {
-            control.checkpoint(stage)?;
-        }
-        if let Some(sides) = sides
-            && !mappable(trace, &first, sides, &faces_of[p])
-        {
-            excluded[p] = true;
-        }
-    }
-    let segs = if excluded.contains(&true) { segments::build(trace, &excluded) } else { first };
-    let targets = targets(trace, &segs, sizing, edge);
-    let counts = quantize::quantize(&segs, &targets, params.regularity, params.solver_effort, control)?;
-    control.set_progress(stage, 1.0);
+    let prepared = Prepared::new(trace, control)?;
+    let targets = targets(trace, &prepared.segs, sizing, edge);
+    let counts =
+        quantize::quantize(&prepared.segs, &targets, params.regularity, params.solver_effort, control)?;
+    prepared.assemble(trace, &counts, edge, params, None, control)
+}
 
-    control.checkpoint(Stage::Patterns)?;
-    let mut out = Assembly::new(trace, &segs, &counts);
-    let mut report = QuadReport { segments: segs.segments.len(), edge_length: edge, ..QuadReport::default() };
-    for (p, faces) in faces_of.iter().enumerate() {
-        if p % 64 == 0 {
-            control.checkpoint(Stage::Patterns)?;
-            control.set_progress(Stage::Patterns, p as f32 / trace.patches.len().max(1) as f32);
-        }
-        match out.fill(p, faces) {
-            Some(kind) => match kind {
-                PatternKind::Grid => report.grid_patches += 1,
-                PatternKind::Center => report.center_patches += 1,
-                PatternKind::Split => report.split_patches += 1,
-                PatternKind::Fan => report.fan_patches += 1,
-            },
-            None => {
-                out.split_triangles(p, faces);
-                report.kept_patches += 1;
+struct Prepared {
+    faces_of: Vec<Vec<u32>>,
+    segs: Segments,
+}
+
+impl Prepared {
+    fn new(trace: &TraceOutput, control: &Control) -> Result<Self, Error> {
+        let stage = Stage::Quantize;
+        let mut faces_of: Vec<Vec<u32>> = vec![Vec::new(); trace.patches.len()];
+        for (f, &p) in trace.patch_of_face.iter().enumerate() {
+            if let Some(list) = faces_of.get_mut(p as usize) {
+                list.push(f as u32);
             }
         }
+        // Patches whose triangles can't be mapped onto their polygon keep them; find
+        // them first, so their neighbours sample at their mesh vertices.
+        let first = segments::build(trace, &[]);
+        let mut excluded = vec![false; trace.patches.len()];
+        for (p, sides) in first.sides.iter().enumerate() {
+            if p % 256 == 0 {
+                control.checkpoint(stage)?;
+            }
+            if let Some(sides) = sides
+                && !mappable(trace, &first, sides, &faces_of[p])
+            {
+                excluded[p] = true;
+            }
+        }
+        let segs = if excluded.contains(&true) { segments::build(trace, &excluded) } else { first };
+        Ok(Self { faces_of, segs })
     }
-    let feature_edges = out.feature_edges();
-    let (mut mesh, patch_of_face, fixed, quads, triangles) = out.finish();
-    control.checkpoint(Stage::Smooth)?;
-    smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing, control);
-    check_output(&mesh)?;
-    report.quads = quads;
-    report.triangles = triangles;
-    control.set_progress(Stage::Patterns, 1.0);
-    Ok(QuadOutput { mesh, patch_of_face, feature_edges, report })
+
+    fn assemble(
+        &self,
+        trace: &TraceOutput,
+        counts: &[u32],
+        edge: f64,
+        params: &QuadParams,
+        patterns: Option<(&[Option<pattern::Pattern>], usize)>,
+        control: &Control,
+    ) -> Result<QuadOutput, Error> {
+        let segs = &self.segs;
+        let faces_of = &self.faces_of;
+        let stage = Stage::Quantize;
+        control.set_progress(stage, 1.0);
+
+        control.checkpoint(Stage::Patterns)?;
+        let mut out = Assembly::new(trace, segs, counts);
+        let mut report =
+            QuadReport { segments: segs.segments.len(), edge_length: edge, ..QuadReport::default() };
+        for (p, faces) in faces_of.iter().enumerate() {
+            if p % 64 == 0 {
+                control.checkpoint(Stage::Patterns)?;
+                control.set_progress(Stage::Patterns, p as f32 / trace.patches.len().max(1) as f32);
+            }
+            let kind = match patterns {
+                Some((planned, limit)) => {
+                    let pattern = planned.get(p).and_then(Option::as_ref);
+                    if pattern.is_some_and(|pattern| {
+                        out.quads.checked_add(pattern.quads.len()).is_none_or(|total| total > limit)
+                    }) {
+                        return Err(Error::invalid_input(
+                            Stage::Patterns,
+                            "target pattern exceeds the cumulative quad output limit",
+                        ));
+                    }
+                    pattern.and_then(|pattern| out.fill_pattern(p, faces, pattern))
+                }
+                None => out.fill(p, faces),
+            };
+            match kind {
+                Some(kind) => match kind {
+                    PatternKind::Grid => report.grid_patches += 1,
+                    PatternKind::Center => report.center_patches += 1,
+                    PatternKind::Split => report.split_patches += 1,
+                    PatternKind::Fan => report.fan_patches += 1,
+                },
+                None => {
+                    if let Some((_, limit)) = patterns
+                        && faces
+                            .len()
+                            .checked_mul(3)
+                            .and_then(|n| out.quads.checked_add(n))
+                            .is_none_or(|total| total > limit)
+                    {
+                        return Err(Error::invalid_input(
+                            Stage::Patterns,
+                            "target fallback exceeds the quad output limit",
+                        ));
+                    }
+                    out.split_triangles(p, faces);
+                    report.kept_patches += 1;
+                }
+            }
+        }
+        let feature_edges = out.feature_edges();
+        let (mut mesh, patch_of_face, fixed, quads, triangles) = out.finish();
+        control.checkpoint(Stage::Smooth)?;
+        smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing, control);
+        check_output(&mesh)?;
+        report.quads = quads;
+        report.triangles = triangles;
+        control.set_progress(Stage::Patterns, 1.0);
+        Ok(QuadOutput { mesh, patch_of_face, feature_edges, report })
+    }
 }
 
 /// Whether a patch's triangles map onto its polygon (pins by arc length).
@@ -445,11 +509,18 @@ impl<'a> Assembly<'a> {
     /// Fills patch `p` with quads; `None` if it must keep its triangles.
     fn fill(&mut self, p: usize, faces: &[u32]) -> Option<PatternKind> {
         let sides = self.segs.sides.get(p)?.as_ref()?;
+        let l: Vec<u32> =
+            sides.iter().map(|side| side.iter().map(|&(s, _)| self.counts[s as usize]).sum()).collect();
+        let pattern = pattern::build(&l)?;
+        self.fill_pattern(p, faces, &pattern)
+    }
+
+    fn fill_pattern(&mut self, p: usize, faces: &[u32], pattern: &pattern::Pattern) -> Option<PatternKind> {
+        let sides = self.segs.sides.get(p)?.as_ref()?;
         let patch = self.trace.patches.get(p)?;
         let n = sides.len();
         let l: Vec<u32> =
             sides.iter().map(|side| side.iter().map(|&(s, _)| self.counts[s as usize]).sum()).collect();
-        let pattern = pattern::build(&l)?;
 
         // Pin every boundary mesh vertex at its domain position.
         let mut boundary: HashMap<u32, DVec2> = HashMap::new();

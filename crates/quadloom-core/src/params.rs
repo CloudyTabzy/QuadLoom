@@ -160,6 +160,13 @@ impl Params {
             return bad(format!("trace.sub_passes must be at most 10 (got {})", t.sub_passes));
         }
         let q = &self.quad;
+        if q.target_quads > crate::quad::target::MAX_TARGET_QUADS {
+            return bad(format!(
+                "quad.target_quads must be at most {} (got {})",
+                crate::quad::target::MAX_TARGET_QUADS,
+                q.target_quads
+            ));
+        }
         if !(q.edge_scale.is_finite() && (0.25..=20.0).contains(&q.edge_scale)) {
             return bad(format!("quad.edge_scale must be between 0.25 and 20 (got {})", q.edge_scale));
         }

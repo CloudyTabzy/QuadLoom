@@ -129,6 +129,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
             ],
             "quad" => vec![
                 ("enabled", Field::Bool(&mut qd.enabled)),
+                ("target_quads", Field::Usize(&mut qd.target_quads)),
                 ("edge_scale", Field::F64(&mut qd.edge_scale)),
                 ("regularity", Field::F64(&mut qd.regularity)),
                 ("smoothing", Field::Usize(&mut qd.smoothing)),

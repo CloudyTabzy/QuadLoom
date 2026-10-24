@@ -85,6 +85,34 @@ pub fn quantize(
     Ok(n)
 }
 
+/// Target-only move candidates. A chord is only a proposal: callers must
+/// recheck complete side sums, parity, fixed counts and pattern validity.
+pub(super) fn target_moves(
+    segments: &Segments,
+    counts: &[u32],
+    targets: &[f64],
+    control: &Control,
+) -> Result<Vec<Vec<usize>>, Error> {
+    let problem = Problem::new(segments, targets, 0.0);
+    let seeds = counts.len().min(256);
+    let mut moves = Vec::new();
+    for i in 0..seeds {
+        control.checkpoint(Stage::Quantize)?;
+        let s = if seeds > 1 { i * (counts.len() - 1) / (seeds - 1) } else { 0 };
+        if problem.fixed[s].is_some() {
+            continue;
+        }
+        moves.push(vec![s]);
+        let mut chord = problem.chord(counts, s);
+        chord.sort_unstable();
+        chord.dedup();
+        moves.push(chord);
+    }
+    moves.sort();
+    moves.dedup();
+    Ok(moves)
+}
+
 struct Problem<'a> {
     segments: &'a Segments,
     targets: &'a [f64],

@@ -134,6 +134,7 @@ def start_job(context):
     last.status, last.message, last.stage, last.hint = "RUNNING", "Starting…", "", ""
     last.faces_in, last.faces_out, last.elapsed_ms, last.report_json = snapshot.face_count, 0, 0.0, ""
     last.quads_out = 0
+    last.target_quads = 0
     last.reused = False
     last.repair_summary, last.feature_summary, last.remesh_summary, last.field_summary = "", "", "", ""
     last.trace_summary, last.frame_summary, last.quad_summary = "", "", ""
@@ -180,6 +181,7 @@ def finish_job(context, job):
             sides = array.array("i", [0]) * len(obj.data.polygons)
             obj.data.polygons.foreach_get("loop_total", sides)
             last.quads_out = sides.count(4)
+            last.target_quads = (job.result.get("quads") or {}).get("report", {}).get("target_quads", 0)
             last.report_json = obj["quadloom_report"]
             last.reused = bool(job.result.get("reused"))
             last.repair_summary = repair_summary(job.result["repair"])
@@ -327,6 +329,7 @@ def quad_summary(quads, error=None):
     if not quads:
         return "Quads: Off"
     report = quads["report"]
+    target = report.get("target_quads", 0)
     parts = [f"{report['grid_patches']:,} grid", f"{report['center_patches']:,} center"]
     if report["split_patches"]:
         parts.append(f"{report['split_patches']:,} split")
@@ -336,6 +339,9 @@ def quad_summary(quads, error=None):
     if report["kept_patches"]:
         kept = report["kept_patches"]
         text += f"; {_count(kept, 'patch')} kept as triangles"
+    if target:
+        delta = 100.0 * (report["quads"] - target) / target
+        text += f"; Target {target:,}, {delta:+.1f}%"
     return wording.title(text)
 
 

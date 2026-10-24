@@ -184,6 +184,9 @@ fn quads<'py>(py: Python<'py>, q: &QuadOutput) -> PyResult<Bound<'py, PyDict>> {
     let r = &q.report;
     for (key, value) in [
         ("quads", r.quads),
+        ("target_quads", r.target_quads),
+        ("target_attempts", r.target_attempts),
+        ("target_refinements", r.target_refinements),
         ("triangles", r.triangles),
         ("segments", r.segments),
         ("grid_patches", r.grid_patches),

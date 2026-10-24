@@ -74,6 +74,105 @@ fn cube_becomes_a_closed_quad_mesh() {
 }
 
 #[test]
+fn target_cube_count_preserves_features_and_closed_topology() {
+    let (p, t, _) = cube(2);
+    let mut params = Params::default();
+    params.remesh.enabled = false;
+    params.quad.target_quads = 600;
+    let out = run_mesh(&p, &t, &params);
+    assert_closed_quads(&out, 2);
+    let q = out.quads.as_ref().unwrap();
+    assert!(q.report.quads.abs_diff(600) <= 30, "{:?}", q.report);
+    assert_eq!(q.report.target_quads, 600);
+    assert!((1..=8).contains(&q.report.target_attempts));
+    let feature_length: f64 = q
+        .feature_edges
+        .iter()
+        .map(|&[a, b]| (q.mesh.positions[a as usize] - q.mesh.positions[b as usize]).length())
+        .sum();
+    assert!((feature_length - 12.0).abs() < 1e-6);
+}
+
+#[test]
+fn target_request_limits_are_checked_up_front() {
+    let mut params = Params::default();
+    params.quad.target_quads = 2_000_001;
+    let error = params.check().unwrap_err();
+    assert!(error.message.contains("target_quads"));
+}
+
+#[test]
+fn target_output_cap_includes_early_mapping_fallback_before_later_success() {
+    use super::{
+        Prepared, QuadParams, pattern,
+        segments::{Segment, SegmentUse, Segments},
+    };
+    use crate::trace::{Patch, TraceOutput};
+    let mut trace = TraceOutput::default();
+    trace.mesh.positions = vec![
+        DVec3::ZERO,
+        DVec3::X,
+        DVec3::Y,
+        DVec3::new(3.0, 0.0, 0.0),
+        DVec3::new(4.0, 0.0, 0.0),
+        DVec3::new(4.0, 1.0, 0.0),
+        DVec3::new(3.0, 1.0, 0.0),
+    ];
+    trace.mesh.triangles = vec![[0, 1, 2], [3, 4, 5], [3, 5, 6]];
+    trace.patches = vec![
+        Patch {
+            corners: vec![],
+            sides: vec![],
+            singularities: vec![],
+            kind: crate::PatchKind::Ok,
+            cc_margin: 0.0,
+        },
+        Patch {
+            corners: vec![3, 4, 5, 6],
+            sides: vec![],
+            singularities: vec![],
+            kind: crate::PatchKind::Ok,
+            cc_margin: 0.0,
+        },
+    ];
+    let pairs = [[0, 1], [1, 2], [2, 0], [3, 4], [4, 5], [5, 6], [6, 3]];
+    let segments = pairs
+        .iter()
+        .enumerate()
+        .map(|(s, v)| Segment {
+            vertices: v.to_vec(),
+            uses: vec![SegmentUse {
+                patch: if s < 3 { 0 } else { 1 },
+                side: if s < 3 { s as u8 } else { (s - 3) as u8 },
+                reversed: false,
+            }],
+            polyline: false,
+        })
+        .collect();
+    let prepared = Prepared {
+        faces_of: vec![vec![0], vec![1, 2]],
+        segs: Segments {
+            segments,
+            sides: vec![
+                Some((0..3).map(|s| vec![(s, false)]).collect()),
+                Some((3..7).map(|s| vec![(s, false)]).collect()),
+            ],
+        },
+    };
+    let patterns = vec![pattern::build(&[1, 2, 1]), pattern::build(&[2; 4])];
+    let counts = [1, 2, 1, 2, 2, 2, 2];
+    let params = QuadParams { smoothing: 0, ..Default::default() };
+    let output =
+        prepared.assemble(&trace, &counts, 1.0, &params, Some((&patterns, 7)), &Control::default()).unwrap();
+    assert_eq!(output.report.kept_patches, 1);
+    assert_eq!(output.report.quads, 7); // first planned 1 becomes 3, then 4 succeeds.
+    let error = prepared
+        .assemble(&trace, &counts, 1.0, &params, Some((&patterns, 5)), &Control::default())
+        .unwrap_err();
+    assert!(error.message.contains("limit"));
+}
+
+#[test]
 fn cube_feature_edges_are_quad_edges() {
     let (p, t, _) = cube(6);
     let out = run_mesh(&p, &t, &Params::default());

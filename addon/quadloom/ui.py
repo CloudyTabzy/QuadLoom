@@ -40,7 +40,7 @@ class QUADLOOM_PT_main(bpy.types.Panel):
 
         layout.prop(settings, "preset")
         col = layout.column(align=True)
-        col.prop(settings, "density")
+        _sizing(col, settings)
         col.prop(settings, "quad_adaptivity")
         row = layout.row(heading="Sharp Edges")
         row.prop(settings, "use_angle", text="")
@@ -65,6 +65,11 @@ class QUADLOOM_PT_main(bpy.types.Panel):
         _draw_result(layout, context.scene.quadloom_last_run)
 
 
+def _sizing(layout, settings):
+    layout.prop(settings, "sizing_mode")
+    layout.prop(settings, "target_quads" if settings.sizing_mode == "TARGET" else "density")
+
+
 def _draw_result(layout, last):
     """The outcome of the last run: status, the key numbers, warnings."""
     if last.status == "NONE":
@@ -82,6 +87,9 @@ def _draw_result(layout, last):
         else:
             headline = f"{last.faces_out:,} Faces ({last.quads_out:,} Quads) in {seconds:.1f} s"
         box.label(text=headline, icon=STATUS_ICONS["OK"])
+        if last.target_quads:
+            delta = 100.0 * (last.quads_out - last.target_quads) / last.target_quads
+            box.label(text=f"Target {last.target_quads:,} Quads ({delta:+.1f}%)", icon="BLANK1")
         col = box.column(align=True)
         for line in _wrap(last.message):
             col.label(text=line, icon="BLANK1")
@@ -203,7 +211,7 @@ class QUADLOOM_PT_quads(_AdvancedChild, bpy.types.Panel):
         layout.active = settings.quad_enabled and settings.trace_enabled and settings.field_enabled
         if not (settings.trace_enabled and settings.field_enabled):
             layout.label(text="Needs the Cross Field and Patch Layout", icon="INFO")
-        layout.prop(settings, "density")
+        _sizing(layout, settings)
         layout.prop(settings, "quad_adaptivity")
         layout.prop(settings, "quad_regularity")
         layout.prop(settings, "quad_smoothing")
