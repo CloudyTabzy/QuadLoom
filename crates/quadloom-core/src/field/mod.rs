@@ -4,7 +4,7 @@
 //! *Globally Optimal Direction Fields*, SIGGRAPH 2013) in dual, per-face form:
 //! each face stores `z = e^{4iθ}` in its own frame, so the four directions of
 //! a cross share one value, and smoothness is a quadratic energy over the
-//! faces' shared edges. See `docs/superpowers/plans/2026-10-23-m4-cross-field.md`.
+//! faces' shared edges. See decision 0005 (complex-power cross field).
 
 pub mod constraints;
 pub mod frames;

@@ -60,7 +60,7 @@ Add **stage 3b, "frame"** (`crates/quadloom-core/src/frame/`), between the cross
 
 ## Where QuadLoom differs from the paper and its MATLAB code
 
-- **Own discretization, verified.** ρ above is the exact integral of Eq. 10's right-hand side over each half dual edge (circumcenter to midpoint), for piecewise-linear u, v. The pairing of cotangents printed in the paper (Eq. 17) does not match that integral; the MATLAB code does, and so does ours. The check (`.superpowers/tools/rsp/`):
+- **Own discretization, verified.** ρ above is the exact integral of Eq. 10's right-hand side over each half dual edge (circumcenter to midpoint), for piecewise-linear u, v. The pairing of cotangents printed in the paper (Eq. 17) does not match that integral; the MATLAB code does, and so does ours. The verification check:
   - a manufactured rectangular map gives second-order convergence (rms 8.8e-4 → 2.4e-4 → 6.9e-5 under refinement);
   - the conformal map e^z with θ sampled at circumcenters gives a residual of 1e-15;
   - the analytic Jacobian and Hessian match finite differences to 1e-10.

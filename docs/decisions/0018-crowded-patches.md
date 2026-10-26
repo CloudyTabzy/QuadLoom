@@ -49,7 +49,7 @@ All variants were run behind a temporary environment switch, on 7 models × 3 se
 | Bunny, Density 2 | 0.9% → 0% | 0.60 → 0.62 | 3.3% → 2.9% | 47.8k → 46.4k |
 | Ogre, Organic | 1.3% (most 3) → 0.2% | 0.68 → 0.64 | 2.0% → 2.3% | 14.5k → 14.6k |
 
-**`benchmark/stress_quads.py`** (CLI defaults, 10 models): 9 are byte-identical to 0.1.10. The armadillo is laid out again:
+**Stress harness** (CLI defaults, 10 models): 9 are byte-identical to 0.1.10. The armadillo is laid out again:
 
 | Armadillo | 0.1.10 | This |
 |---|---|---|

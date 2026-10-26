@@ -67,7 +67,7 @@ Every output is manifold (no edge in more than two faces).
 - **Untangling.** After smoothing, quads with a reflex or flipped corner against the surface get full Laplacian rounds on their free vertices, projected (up to 30 rounds). Optimising each vertex for its worst corner was tried and rejected: it disagreed with the measured quality.
 - **Patterns.** The chord split tries every chord length and judges proportions in count space: a 4-sided patch is laid out as a rectangle of its mean side counts, so long thin patches split correctly. For example, (3,47,1,47) becomes a 1×47 grid plus the closed-form triangle (47,2,47).
 - **Quantization.** The global program has a 2,000-node budget (was 400). Armadillo's fallback patterns drop from 78 to 10, for about 3 s.
-- **Stress harness:** `benchmark/stress_quads.py`, raw input to quads through the full pipeline. 10 detailed models:
+- **Stress harness:** raw input to quads through the full pipeline. 10 detailed models:
   - every one 100% quads, watertight where the input is, no non-manifold edges;
   - 1–10 s each (igea, 269k triangles in, takes 6.5 s);
   - armadillo: fallbacks 86 → 10, p5 SJ 0.22 → 0.56, inverted 206 → 81.

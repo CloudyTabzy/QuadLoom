@@ -1,6 +1,6 @@
 # QuadLoom benchmark
 
-A fixed set of public meshes used to compare QuadLoom against the oracle (QRemeshify 1.5.0 / QuadWild-BiMDF) and against its own previous runs.
+A fixed set of public meshes used for the published comparisons against the oracle (QRemeshify 1.5.0 / QuadWild-BiMDF) and against previous QuadLoom runs.
 
 ## Contents
 
@@ -9,8 +9,11 @@ A fixed set of public meshes used to compare QuadLoom against the oracle (QRemes
 | `sources.json` | The curated list: source, model, tags, license notes. Edit this to change the set. |
 | `fetch_meshes.py` | Downloads everything in `sources.json` into `meshes/` (stdlib only, idempotent; `--force` re-downloads). |
 | `meshes/` | Downloaded files, **gitignored**. `meshes/MANIFEST.json` records URL, license, tags, size and SHA-256 per file. |
-| `ab_compare.py` | Interleaved A/B of two `quadloom` builds on the stress models plus a 1M-triangle sphere: best stage and total times, peak memory, byte-identical outputs. See `docs/performance-journal.md`. |
-| `stress_quads.py` | Full-pipeline quality check (quads, open edges, scaled Jacobian) on detailed models. |
+| `reports/` | Published measurement reports. Metrics only; meshes and renders are not committed. |
+
+The benchmark runners and oracle comparison scripts are development-only and are
+not included in the public repository yet. The inventory, downloader and published
+results are sufficient to identify the models and read the measurements.
 
 ## Fetch
 

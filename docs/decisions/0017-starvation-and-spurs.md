@@ -39,7 +39,7 @@ The owner tested 0.1.9 on the armadillo and reported three things.
 - Quad shape is neutral or better nearly everywhere: the bunny's p5 scaled Jacobian at Density 2 goes 0.58 → 0.60.
 - The exception is the armadillo under Organic, whose multi-singularity patches get worse.
 
-**`benchmark/stress_quads.py`**, default settings, previous build → this one:
+**Stress harness**, default settings, previous build → this one:
 
 | Model | Previous | This |
 |---|---|---|

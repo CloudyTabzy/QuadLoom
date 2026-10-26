@@ -1,13 +1,13 @@
 # Open and deferred items
 
-Everything known to be unfinished, in one place. Last updated 2026-10-24 (0.3.0 and 0.4.0 releases, decisions 0021/0022). The details live in the decision records named here. When you finish an item, move it to "Done" with its decision number.
+Everything known to be unfinished, in one place. Last updated 2026-10-26 (public repository preparation; 0.3.0 and 0.4.0 releases, decisions 0021/0022). The details live in the decision records named here. When you finish an item, move it to "Done" with its decision number.
 
 ## Next up
 
 1. **Improve coarse target accuracy and quality.** 0.4.0 ships approximate target count. Five coarse real-asset requests missed tolerance (bunny 2,000 → 1,560; worst 500 → 1,660 on armadillo), with poor coarse element quality. Existing layout/fixed patches and quantization discontinuities need further work; see decision 0022 and `../benchmark/reports/2026-10-24-target-count.md`.
 2. **Validate crash containment on larger real assets.** Decision 0021 isolates the backend and attribute mapping, with OS memory limits. Profile IPC/startup overhead and host allocations on dense meshes; Blender modifier evaluation and output allocation still run in Blender.
 3. **More real attribute assets.** Test additional glTF characters, posed rigs and Smart UV Project maps beyond the automated synthetic rig/UV/material scenarios.
-4. **M9: benchmark and GitHub release.** A full benchmark comparison against QRemeshify on quad output, then the hosted release (no Git remote configured yet).
+4. **M9: full benchmark and public release.** A full benchmark comparison against QRemeshify on quad output, then the public release.
 
 ## Output quality
 
@@ -48,8 +48,8 @@ Everything known to be unfinished, in one place. Last updated 2026-10-24 (0.3.0 
 
 ## Done
 
-- 0.4.0 approximate target quad count: decision 0022; research, resource/accuracy/cache/symmetry tests, 117 Python tests, 49 Blender scenarios, production ZIP and local tag. Coarse constrained cases remain above.
-- 0.3.0 OOM-hardening release: decisions 0019/0021; production ZIP and local tag, full gate plus seven production smoke scenarios passed. See `releases/0.3.0.md`.
+- 0.4.0 approximate target quad count: decision 0022; research, resource/accuracy/cache/symmetry tests, 117 Python tests, 49 Blender scenarios, production ZIP and tag. Coarse constrained cases remain above.
+- 0.3.0 OOM-hardening release: decisions 0019/0021; production ZIP and tag, full gate plus seven production smoke scenarios passed. See `releases/0.3.0.md`.
 - Crowded patches: 0.2.0, decision 0018.
 - Attribute transfer (UVs, materials, vertex groups, colours, rig): decision 0019, released in 0.3.0.
 - Starved and spur-blocked patches: 0.1.10, decision 0017.

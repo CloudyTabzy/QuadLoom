@@ -47,7 +47,7 @@ host admission checks and original-object safety from 0.3.0 remain.
 
 ## Why this approach
 
-Primary sources and derivations are in the [design](../superpowers/specs/2026-10-24-target-quad-count-design.md).
+Primary sources and derivations are summarized below.
 Instant Meshes/QuadriFlow initialize quad size from area/N; Blender calls the
 goal approximate and accounts for symmetry. QuadWild/Bi-MDF preserve constrained
 shared integer subdivisions. The 2026 target-face-number research motivates

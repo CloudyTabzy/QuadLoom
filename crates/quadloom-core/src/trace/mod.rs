@@ -4,7 +4,7 @@
 //! traced on a graph of (vertex, field direction) nodes until every patch is
 //! a disk with 3 to `max_sides` convex corners (Pietroni et al., *Reliable
 //! Feature-Line Driven Quad-Remeshing*, SIGGRAPH 2021, §5). See
-//! `docs/superpowers/plans/2026-10-24-m5-trace-layout.md`.
+//! decisions 0006 (field-traced layout) and 0008 (quads from the layout).
 
 pub mod cut;
 pub mod graph;
