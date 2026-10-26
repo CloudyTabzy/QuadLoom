@@ -75,6 +75,8 @@ locally and never committed.
 | Armadillo | 8,000 | 7,979 | 0.26% | 0.503 |
 | Armadillo | 500 | 1,660 | 232% | -0.002 |
 
+`p5 scaled Jacobian` is the 5th-percentile element quality; 1.0 is ideal.
+
 13 of 18 requests met the reporting tolerance `max(4 quads, 5%)`; median error was
 2.8%. All nine synthetic and all six 8,000-quad requests met tolerance. Coarse
 real-asset targets remain approximate — see the
