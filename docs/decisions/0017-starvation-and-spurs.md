@@ -4,12 +4,12 @@
 
 ## Context
 
-The owner tested 0.1.9 on the armadillo and reported three things.
+Testing 0.1.9 on the armadillo surfaced three things.
 1. A quick re-run stayed on "Checking" with no progress, then appeared; nothing said it had been quick.
 2. At Density 2, one pec showed irregular hex-like quads instead of a grid.
 3. Under Organic / Sculpt, the hand came out as a few huge faces.
 
-**Reproducing.** The owner's numbers (53,960 and 15,938 quads) were reproduced exactly by running the real add-on headless in a throwaway Blender profile. A scratch probe linked against `quadloom-core` then gave the same results, once it read meshes in file order and used the add-on's f32-rounded settings. The results were then rendered (front, back, chest and hand) for visual checks.
+**Reproducing.** The reported numbers (53,960 and 15,938 quads) were reproduced exactly by running the real add-on headless in a throwaway Blender profile. A scratch probe linked against `quadloom-core` then gave the same results, once it read meshes in file order and used the add-on's f32-rounded settings. The results were then rendered (front, back, chest and hand) for visual checks.
 
 ## Findings and decisions
 

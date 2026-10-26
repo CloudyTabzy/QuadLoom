@@ -59,7 +59,7 @@ All variants were run behind a temporary environment switch, on 7 models × 3 se
 | Quads | 19.3k | 20.4k |
 | Time | 12.1 s | 15.8 s |
 
-**Renders.** The owner's exact Organic input gives a hand with separate fingers and grid quads; before, it was a few long slabs. The body is unchanged in character.
+**Renders.** The exact Organic input gives a hand with separate fingers and grid quads; before, it was a few long slabs. The body is unchanged in character.
 
 **Cost.** A second layout of the parts that need it: armadillo Organic trace 3.7 s → about 6 s (noisy machine). Other parts pay only the area check.
 

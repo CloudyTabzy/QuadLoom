@@ -4,7 +4,7 @@
 
 ## Context
 
-The owner asked for better memory efficiency without losing quality and with a sensible speed trade, in safe Rust only. Large inputs peak during the repair and the prep remesh, and a host that runs out of memory takes Blender down with it.
+The goal was better memory efficiency without losing quality and with a sensible speed trade, in safe Rust only. Large inputs peak during the repair and the prep remesh, and a host that runs out of memory takes Blender down with it.
 
 A scratch profiler tracked live bytes per stage and, at each stage's peak, every live block over 32 KB with its call site. It is a counting `#[global_allocator]` linked against `quadloom-core`.
 

@@ -4,14 +4,14 @@
 
 ## Context
 
-The owner suggested hashbrown 0.17.1 for its richer API. All maps were `std::collections` ones with SipHash, except the remesher's, which had its own FxHash-style hasher.
+hashbrown 0.17.1 was chosen for its richer API. All maps were `std::collections` ones with SipHash, except the remesher's, which had its own FxHash-style hasher.
 
 ## Decision
 
 - **Every `HashMap`/`HashSet` is hashbrown's**, with its default foldhash hasher (`default-features = false`, features `default-hasher` and `inline-more`). foldhash seeds each map separately, which avoids the slowdown fixed-seed hashers get when one map is copied into another in iteration order. Results don't depend on iteration order: the same mesh gave byte-identical output in repeated runs before and after the switch.
 - **The remesher's directed-edge map is a `HashTable<u32>`** of half-edge ids (`edit::EdgeTable`). The `(from, to)` key is read back from the face corners, which never change once a face exists (faces are only appended), so the table can rehash at any time. Each entry is 4 bytes, not 12. The custom `EdgeHasher` is gone.
 - **`entry_ref`** looks up the shared-patch region map by a borrowed slice, so the key is copied only when it's new.
-- **Unsafe:** `unsafe_code = "forbid"` still covers our crates. hashbrown's internal `unsafe` is that crate's responsibility (the owner's ruling). Its `unsafe fn` APIs (`*_unchecked`) are not used, because calling them needs `unsafe` in our code.
+- **Unsafe:** `unsafe_code = "forbid"` still covers our crates. hashbrown's internal `unsafe` is that crate's responsibility (a deliberate exception). Its `unsafe fn` APIs (`*_unchecked`) are not used, because calling them needs `unsafe` in our code.
 
 ## Evidence
 

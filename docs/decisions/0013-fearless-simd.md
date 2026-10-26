@@ -4,7 +4,7 @@
 
 ## Context
 
-The owner asked where `fearless_simd` 1.1.0 helps. Instrumenting the stages showed one float-heavy hot spot that is ours: `TriangleBvh` closest-point queries.
+The question was where `fearless_simd` 1.1.0 helps. Instrumenting the stages showed one float-heavy hot spot that is ours: `TriangleBvh` closest-point queries.
 - They take about 27% of the prep remesh's wall time: every split, collapse and smoothing step projects onto the input surface or a feature line, or measures a distance to it.
 - The quad smoothing runs them too.
 - The other float work is either already SIMD inside a library (the field's faer solves), dominated by graph walks (curvature sizing, tracing), or not ours (the microlp ILP).
@@ -15,7 +15,7 @@ The owner asked where `fearless_simd` 1.1.0 helps. Instrumenting the stages show
 - **SIMD leaves.** A leaf (at most 4 triangles) is one packet. `closest4` runs Ericson's closest-point routine on all four at once: every region's point is computed with the scalar routine's operations in the same order, and the first region that applies is selected. Each lane is therefore bit for bit the scalar result. Zero-area triangles are flagged and recomputed by the scalar routine.
 - **Same visiting order as the binary tree.** Each flat node keeps the boxes of the two binary halves its children came from. Children are visited nearer half first, then the nearer child within each half, which is exactly the binary tree's depth-first order. Ties between equally near triangles (shared edges and vertices) therefore resolve the same way, and the pipeline output is byte-identical to before. Without this, about 0.2% of queries named a different, equally near triangle.
 - **Runtime dispatch.** `Level::new()` picks the best level the CPU has (SSE2 through AVX-512 on x86, NEON on ARM). There is no FMA contraction and every lane computes the same IEEE operations, so the result is the same at every level; a test checks that SSE2 and the detected level match.
-- **Unsafe.** Our code stays `forbid(unsafe_code)`. `fearless_simd` keeps its small amount of `unsafe` internal: the `target_feature` call inside `vectorize`, and the intrinsic wrappers. The owner asked for this crate, so it joins hashbrown as an accepted exception.
+- **Unsafe.** Our code stays `forbid(unsafe_code)`. `fearless_simd` keeps its small amount of `unsafe` internal: the `target_feature` call inside `vectorize`, and the intrinsic wrappers. This crate was chosen, so it joins hashbrown as an accepted exception.
 - **MSRV 1.89** (fearless_simd's). Raising it enabled clippy lints that the old 1.85 MSRV held back (`is_multiple_of`, `if let` chains, `as_chunks`). They are fixed throughout.
 
 ## Evidence

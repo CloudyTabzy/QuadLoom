@@ -2,8 +2,8 @@
 
 **Status:** implemented and verified for 0.4.0, 2026-10-24.
 
-The owner reserves 0.3.0 for OOM hardening and assigns target quad count to 0.4.0,
-requesting research and crucial accuracy/quality tests.
+0.3.0 was reserved for OOM hardening; target quad count was assigned to 0.4.0,
+with research and accuracy/quality tests.
 
 ## Decision
 

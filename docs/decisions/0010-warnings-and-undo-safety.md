@@ -4,7 +4,7 @@
 
 ## Context
 
-The owner asked for fallbacks and warnings for edge cases ("symmetrizing a mesh where it doesn't make sense should warn"), and for safe undo/redo. They remembered QuadWild's add-on lagging or crashing on undo.
+The design calls for fallbacks and warnings for edge cases ("symmetrizing a mesh where it doesn't make sense should warn"), and for safe undo/redo. They remembered QuadWild's add-on lagging or crashing on undo.
 
 ## Decision
 

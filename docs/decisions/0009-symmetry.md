@@ -4,7 +4,7 @@
 
 ## Context
 
-The owner asked for symmetry "similar to Ksami's QuadWild add-on, evolved". QRemeshify bisects the mesh at the origin with Blender's operator, remeshes one half, then mirrors it with a Mirror modifier. The user must have centred the object, and the seam relies on the remesher treating the cut as a border.
+The goal was symmetry "similar to Ksami's QuadWild add-on, evolved". QRemeshify bisects the mesh at the origin with Blender's operator, remeshes one half, then mirrors it with a Mirror modifier. The user must have centred the object, and the seam relies on the remesher treating the cut as a border.
 
 ## Decision
 

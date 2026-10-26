@@ -1,6 +1,6 @@
 # 0007 — Rectangular frames: an integrable frame stage between the field and tracing
 
-**Status:** accepted 2026-10-24. Opt-in: off by default (owner ruling), and with it off every run is unchanged.
+**Status:** accepted 2026-10-24. Opt-in: off by default; with it off every run is unchanged.
 
 ## Context
 
@@ -17,7 +17,7 @@ The constraint is per-edge integrability (Cartan's first structure equation, the
 - alignment (Σ A θ²),
 - a target aspect ratio from curvature.
 
-The owner asked for this to be adapted into QuadLoom, with the choices exposed in the N-panel.
+This was adapted into QuadLoom, with the choices exposed in the N-panel.
 
 ## Decision
 

@@ -8,7 +8,7 @@
 
 Quantization is the largest stage on organic models. On the armadillo at the 0.2.0-era working tree it took 11.2 s of a 16.4 s run, of which the global ILP was 11.05 s and the neighbourhood repairs 28 ms.
 
-The owner found **ripsolve 0.4.0**, a pure-Rust branch-and-cut MIP solver, and asked whether it could benefit QuadLoom. This record is the evaluation.
+**ripsolve 0.4.0**, a pure-Rust branch-and-cut MIP solver, was evaluated to see whether it could benefit QuadLoom. This record is the evaluation.
 
 ## What was evaluated
 

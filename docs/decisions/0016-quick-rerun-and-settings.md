@@ -4,10 +4,10 @@
 
 ## Context
 
-Before calling QuadLoom production-ready, the owner asked which settings from Ksami's QRemeshify and from their QRemeshify-rs fork we could expand on.
+Before calling QuadLoom production-ready, the question was which settings from Ksami's QRemeshify and from their QRemeshify-rs fork we could expand on.
 - **Already covered:** Preprocess, Smoothing, sharp detection and angle, symmetry, density, the feature sources, presets.
 - **Not worth copying:** the QuadWild solver internals (ILP method, flow/Satsuma configs, parity and "repeat losing constraints" toggles, callback limits). Our quantizer is our own deterministic code.
-- **Four ideas carried over,** and the owner chose all four:
+- **Four ideas carried over,** and all four were adopted:
   - Use Cache → Quick Re-run;
   - Alpha → Regularity;
   - Time/Gap Limit → Solver Effort;

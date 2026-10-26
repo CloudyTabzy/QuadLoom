@@ -98,12 +98,9 @@ after discard; worker termination and result rejection still work.
 
 ## Workflow choices
 
-The owner delegated the recommended approach. Work uses a task branch in the
-existing checkout to preserve installed test/build paths; this shares the
-checkout instead of adding worktree isolation. The referenced workflow helper
-directory was absent, so progress was tracked manually in the ignored task
-ledger, with the corresponding manual bookkeeping cost. README.md was absent;
-this decision holds the safety documentation, with lower top-level discoverability.
+Work used a task branch in the existing checkout to preserve the installed
+test/build paths. Progress was tracked manually. At the time there was no
+top-level README; this decision holds the safety documentation.
 
 ## Primary references
 

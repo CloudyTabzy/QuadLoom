@@ -4,7 +4,7 @@
 
 ## Context
 
-The owner asked whether `bumpalo` 3.20.3 or `bump-scope` 2.4.1 helps, and where. A bump arena pays off where many short-lived allocations of varying size are made in one phase and freed together. So the first step was to find out how much time the allocator takes.
+The question was whether `bumpalo` 3.20.3 or `bump-scope` 2.4.1 helps, and where. A bump arena pays off where many short-lived allocations of varying size are made in one phase and freed together. So the first step was to find out how much time the allocator takes.
 
 A scratch profiler linked `quadloom-core` with a counting global allocator: per-stage counts and bytes, timed `alloc`/`free` with the timer cost subtracted, and call sites sampled from 1 in 2,048 backtraces.
 

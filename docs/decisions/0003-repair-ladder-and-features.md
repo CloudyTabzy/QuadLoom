@@ -31,7 +31,7 @@ Glue-split game assets produce clean, closed topology and far fewer spurious fea
 
 ## Update 2026-10-23: salience test for angle features
 
-**Problem.** The owner's dyntopo sculpt produced 59 "feature edges". The raw per-edge dihedral test (35°) also fires on sculpting and scanning noise. Those edges were then forced into the layout, marked Sharp (hard shading) and held still during smoothing, which left visible creases.
+**Problem.** A dyntopo sculpt produced 59 "feature edges". The raw per-edge dihedral test (35°) also fires on sculpting and scanning noise. Those edges were then forced into the layout, marked Sharp (hard shading) and held still during smoothing, which left visible creases.
 
 **Fix.** An edge that's sharp by its own two faces stays a feature only if it's still sharp between the two **sides of its neighbourhood**:
 1. Take the faces within 3 rings of the edge.

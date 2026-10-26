@@ -1,6 +1,6 @@
 # 0008 — Quads from the layout: segments, integer quantization, closed-form patterns
 
-**Status:** accepted 2026-10-23. This is the first all-quad output, and it covers what the roadmap planned as M6 (quantization) and M7 (patterns, map and stitch). It's built directly, without subagents, because the owner wanted quads as soon as possible.
+**Status:** accepted 2026-10-23. This is the first all-quad output, and it covers what the roadmap planned as M6 (quantization) and M7 (patterns, map and stitch). It was built directly to get quads working as soon as possible.
 
 ## Decision
 

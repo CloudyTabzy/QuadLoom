@@ -4,7 +4,7 @@
 
 ## Context
 
-The result was a bare mesh: no UV maps, materials, vertex groups, colour attributes or rig. QRemeshify users report the same gap ([ksami/QRemeshify#46](https://github.com/ksami/QRemeshify/issues/46): "Remesh removes lots of information (UV-Maps, Materials, etc.) … Please don't remove these!"). The owner asked for this to be treated as seriously as the user report does.
+The result was a bare mesh: no UV maps, materials, vertex groups, colour attributes or rig. QRemeshify users report the same gap ([ksami/QRemeshify#46](https://github.com/ksami/QRemeshify/issues/46): "Remesh removes lots of information (UV-Maps, Materials, etc.) … Please don't remove these!"). This is treated as seriously as the user report does.
 
 **The common fix and why it falls short.** A fork's fix for #46 copies data with Blender's Data Transfer modifier (`POLYINTERP_NEAREST`) and picks each face's material by its centre's nearest source face.
 - **UVs across seams.** A UV map jumps at a seam. A result corner on the seam is interpolated from whichever side is nearest, so a quad along a seam stretches across the texture.
