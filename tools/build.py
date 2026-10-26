@@ -27,7 +27,11 @@ WHEEL_OUT = ROOT / "target" / "wheels"
 ADDON = ROOT / "addon" / "quadloom"
 ADDON_WHEELS = ADDON / "wheels"
 MANIFEST = ADDON / "blender_manifest.toml"
-DEFAULT_BLENDER = Path(r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
+BLENDER_CANDIDATES = (
+    Path(r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"),
+    Path("/Applications/Blender.app/Contents/MacOS/Blender"),
+    Path("/usr/bin/blender"),
+)
 
 
 class BuildError(RuntimeError):
@@ -36,8 +40,8 @@ class BuildError(RuntimeError):
 
 def child_env() -> dict[str, str]:
     env = dict(os.environ)
-    # A stray global CMAKE variable on the dev machine points at another
-    # project's script; nothing here needs CMake, so keep it out of children.
+    # Nothing here needs CMake; keep a stray CMAKE variable in the parent
+    # environment from confusing the build.
     env.pop("CMAKE", None)
     env["VIRTUAL_ENV"] = str(VENV)
     return env
@@ -53,16 +57,24 @@ def step(name: str, cmd: list[str | Path]) -> str:
 
 
 def find_blender() -> Path:
-    candidate = Path(os.environ.get("QUADLOOM_BLENDER", DEFAULT_BLENDER))
-    if not candidate.is_file():
-        raise BuildError(f"Blender not found at {candidate}; set QUADLOOM_BLENDER")
-    return candidate
+    requested = os.environ.get("QUADLOOM_BLENDER")
+    candidates = [Path(requested)] if requested else []
+    for name in ("blender", "blender.exe"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(Path(found))
+    candidates.extend(BLENDER_CANDIDATES)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise BuildError("Blender not found; set QUADLOOM_BLENDER to the Blender executable")
 
 
 def ensure_venv() -> None:
     if not VENV_PY.is_file():
         step("create .venv", [sys.executable, "-m", "venv", VENV])
-    step("install build tools", [VENV_PY, "-m", "pip", "install", "-q", "maturin==1.14.*", "pytest"])
+    step("install build tools",
+         [VENV_PY, "-m", "pip", "install", "-q", "maturin==1.14.*", "pytest", "numpy"])
 
 
 def build_wheel(dev: bool) -> Path:

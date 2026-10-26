@@ -1,6 +1,5 @@
 # Build output
 /target/
-/tools/diag/patchprobe/target/
 /dist/
 /addon/quadloom/wheels/
 *.pyd
@@ -19,8 +18,7 @@ __pycache__/
 /benchmark/runs/
 /benchmark/reports/**/renders/
 
-# Agent and editor state
-/.superpowers/
+# Editor state
 .vscode/
 .idea/
 *.code-workspace
