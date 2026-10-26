@@ -17,7 +17,8 @@ responsive and a backend failure can be contained in a worker process.
 3. Enable **QuadLoom** if it is not enabled automatically.
 
 The extension is currently built for **Windows x64**. Linux and macOS wheels are not
-published yet.
+published yet. The manifest permits Blender 4.2+, but 5.2 is the only version covered
+by the current test suite.
 
 ## Quick start
 
