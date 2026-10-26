@@ -62,9 +62,10 @@ solver effort, smoothing and attribute transfer under **Advanced**.
 
 The benchmark set is 70 public meshes (96 files, 272 MB) with per-model license notes
 in [`benchmark/sources.json`](benchmark/sources.json). The meshes are downloaded
-locally and never committed.
+locally and never committed. The 0.4.0 target-count sweep below uses six
+representative models (18 requests).
 
-**Target-count accuracy (0.4.0, Windows / Blender 5.2.2):**
+**Target-count accuracy (0.4.0, Windows / Blender 5.2.2; representative rows):**
 
 | Model | Target | Achieved | Error | p5 scaled Jacobian |
 |---|---:|---:|---:|---:|
@@ -75,7 +76,8 @@ locally and never committed.
 | Armadillo | 8,000 | 7,979 | 0.26% | 0.503 |
 | Armadillo | 500 | 1,660 | 232% | -0.002 |
 
-`p5 scaled Jacobian` is the 5th-percentile element quality; 1.0 is ideal.
+`p5 scaled Jacobian` is the 5th-percentile element quality; 1.0 is ideal. The rows
+above are a representative subset; the full report has all 18 requests.
 
 13 of 18 requests met the reporting tolerance `max(4 quads, 5%)`; median error was
 2.8%. All nine synthetic and all six 8,000-quad requests met tolerance. Coarse
