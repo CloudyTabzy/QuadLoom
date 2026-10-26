@@ -1,5 +1,10 @@
 # QuadLoom
 
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+![Blender 5.2](https://img.shields.io/badge/Blender-5.2-orange.svg)
+![Windows x64](https://img.shields.io/badge/platform-Windows%20x64-lightgrey.svg)
+![Status: beta](https://img.shields.io/badge/status-beta-yellow.svg)
+
 Feature-aligned quad remeshing for Blender, written from scratch in safe Rust.
 
 QuadLoom turns a triangle mesh into a quad-dominant mesh while following sharp
@@ -9,6 +14,11 @@ responsive and a backend failure can be contained in a worker process.
 
 > **Status:** 0.4.0, Windows x64, Blender 5.2. This is a pre-1.0 release; the
 > target-count mode is approximate. See [Known limitations](#known-limitations).
+
+## Screenshots
+
+> **Coming soon:** screenshots of the N-panel and before/after results, plus a
+> short demo GIF.
 
 ## Install
 
@@ -48,6 +58,48 @@ solver effort, smoothing and attribute transfer under **Advanced**.
 - Pure safe Rust (`#![forbid(unsafe_code)]`) with no C/C++ build dependencies.
 - Deterministic output for the same input and settings.
 
+## Benchmark
+
+The benchmark set is 70 public meshes (96 files, 272 MB) with per-model license notes
+in [`benchmark/sources.json`](benchmark/sources.json). The meshes are downloaded
+locally and never committed.
+
+**Target-count accuracy (0.4.0, Windows / Blender 5.2.2):**
+
+| Model | Target | Achieved | Error | p5 scaled Jacobian |
+|---|---:|---:|---:|---:|
+| Cube | 8,000 | 7,776 | 2.80% | 1.000 |
+| Torus | 8,000 | 8,036 | 0.45% | 0.978 |
+| Fandisk | 8,000 | 8,322 | 4.03% | 0.571 |
+| Stanford bunny | 8,000 | 8,259 | 3.24% | 0.517 |
+| Armadillo | 8,000 | 7,979 | 0.26% | 0.503 |
+| Armadillo | 500 | 1,660 | 232% | -0.002 |
+
+13 of 18 requests met the reporting tolerance `max(4 quads, 5%)`; median error was
+2.8%. All nine synthetic and all six 8,000-quad requests met tolerance. Coarse
+real-asset targets remain approximate — see the
+[full target-count report](benchmark/reports/2026-10-24-target-count.md) for all 18
+rows, timings, quality and caveats. The [benchmark README](benchmark/README.md)
+explains the inventory and how to fetch the meshes.
+
+## Known limitations
+
+These are the main user-facing limits for 0.4.0; measured details are in the
+benchmark reports.
+
+- **Target Quads is approximate.** Coarse requests can miss substantially (for
+  example 500 requested → 1,660 on the armadillo); constrained feature/layout cases
+  are the hardest.
+- Crowded organic regions can still keep a few patches with multiple singularities.
+- UV-sphere poles and similar high-index singularities are not fully handled.
+- Layouts with more than 2,500 free segments skip the global ILP and use regional
+  repair.
+- Shape keys and edge attributes (crease/bevel weights) are not transferred; custom
+  normals are recomputed.
+- Windows x64 only for now.
+- Heavy-noise inputs and very large meshes remain slow; marking sharp edges on a 1M
+  triangle mesh can freeze the UI for 1–2 seconds.
+
 ## Build from source
 
 Requirements: Rust 1.89+, Python 3.11+, and Blender 5.2 (for the extension zip).
@@ -83,30 +135,11 @@ cargo run -p quadloom-cli -- info mesh.obj
 cargo run -p quadloom-cli -- run mesh.obj remeshed.obj
 ```
 
-## Benchmark
+## Documentation
 
-`benchmark/` contains the model inventory (`sources.json`), a downloader
-(`fetch_meshes.py`) and the published measurement reports. The meshes themselves are
-not committed; their licenses are recorded as they are fetched. See
-[`benchmark/README.md`](benchmark/README.md).
-
-## Known limitations
-
-The full, current list is in [`docs/open-items.md`](docs/open-items.md). The main
-user-facing ones for 0.4.0:
-
-- **Target Quads is approximate.** Coarse requests can miss substantially (for
-  example 500 requested → 1,660 on the armadillo); constrained feature/layout cases
-  are the hardest.
-- Crowded organic regions can still keep a few patches with multiple singularities.
-- UV-sphere poles and similar high-index singularities are not fully handled.
-- Layouts with more than 2,500 free segments skip the global ILP and use regional
-  repair.
-- Shape keys and edge attributes (crease/bevel weights) are not transferred; custom
-  normals are recomputed.
-- Windows x64 only for now.
-- Heavy-noise inputs and very large meshes remain slow; marking sharp edges on a 1M
-  triangle mesh can freeze the UI for 1–2 seconds.
+- [`docs/decisions/`](docs/decisions/) — architecture and algorithm decision records.
+- [`docs/releases/`](docs/releases/) — release notes and measured results.
+- [`benchmark/reports/`](benchmark/reports/) — full benchmark reports.
 
 ## License
 
