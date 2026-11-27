@@ -80,6 +80,10 @@ impl Params {
         if !(0.0..=180.0).contains(&angle) {
             return bad(format!("features.angle_deg must be between 0 and 180 (got {angle})"));
         }
+        let fold = self.features.min_fold;
+        if !(0.0..=1000.0).contains(&fold) {
+            return bad(format!("features.min_fold must be between 0 and 1000 (got {fold})"));
+        }
         let r = &self.remesh;
         if !(0.0..=0.5).contains(&r.target_edge_rel) {
             return bad(format!(
@@ -182,6 +186,13 @@ impl Params {
         let sym = &self.symmetry;
         if !(sym.tolerance.is_finite() && (0.0..=0.1).contains(&sym.tolerance)) {
             return bad(format!("symmetry.tolerance must be between 0 and 0.1 (got {})", sym.tolerance));
+        }
+        if !(1..=crate::attempts::MOST).contains(&q.attempts) {
+            return bad(format!(
+                "quad.attempts must be between 1 and {} (got {})",
+                crate::attempts::MOST,
+                q.attempts
+            ));
         }
         if q.smoothing > 100 {
             return bad(format!("quad.smoothing must be at most 100 (got {})", q.smoothing));

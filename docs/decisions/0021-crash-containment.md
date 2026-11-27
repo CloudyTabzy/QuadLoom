@@ -96,6 +96,49 @@ Blender Python executable on the main thread, passing plain paths to the worker.
 Minor deferred: renaming a scene during a run can leave its status text stale
 after discard; worker termination and result rejection still work.
 
+## Addendum 2026-11-26: progress must never fail a run
+
+**Problem.** The first full benchmark run through the add-on since the worker
+landed (70 meshes, released 0.4.0 zip) lost 11 runs to
+`QuadLoom worker failed: [Errno 13] Permission denied: ...progress.json`.
+Re-running those 11 one at a time on an idle machine lost 2 again: roughly one
+run in six, on any mesh, more often on longer runs.
+
+**Cause.** The child replaced `progress.json` about 20 times a second while the
+parent polled it 50 times a second. Windows refuses to open a file in the middle
+of being replaced, and refuses to replace a file another handle has open. Both
+sides treated that as fatal: in the parent it failed the run and discarded the
+worker and its Quick Re-run cache; in the child it killed the progress thread, so
+the status line froze for the rest of the run. A two-second probe of the released
+functions saw 69 refused reads and 4,659 refused replaces. The scenario and unit
+suites missed it because their meshes finish in a few polls.
+
+**Decision.** Progress is advisory, and the protocol now says so:
+
+- `worker_protocol.read_progress` returns `None` for a file that is missing,
+  busy, half-written or malformed; the parent keeps the last value it saw.
+- `worker_protocol.publish_progress` skips a tick when the file is busy; the
+  next tick publishes again.
+- `publish` (manifests, which do matter) retries a refused rename with a
+  doubling pause, about 0.6 s in all, before raising: a virus scanner holding a
+  new file is the same transient.
+- Removing a finished job's folder can no longer fail the run: the result is
+  already read, and the session's folder is removed when the worker closes.
+
+Integrity checks on input and output manifests are unchanged and stay strict.
+
+**Evidence.** Eight new tests in `tests/python/test_worker.py`, each seen failing
+on the released code first: the injected lock in a real run, the reader and the
+writer alone, a real open handle (Windows), two readers racing a writer for half
+a second, the manifest retry and its limit, and the cleanup failure. Full gate
+green (321 / 318 Rust tests, both clippy configurations, 125 Python tests, 49
+Blender scenarios). The two benchmark cases that failed twice completed with the
+fix, giving 70 of 70.
+
+**Lesson.** Run the whole benchmark through the add-on before a release, not
+only the scenarios: it is the only test whose runs last long enough to meet the
+real process boundary.
+
 ## Workflow choices
 
 Work used a task branch in the existing checkout to preserve the installed

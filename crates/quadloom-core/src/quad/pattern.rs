@@ -15,14 +15,35 @@
 //!   into two pieces that are each a Grid or a Center. Among all chords, the
 //!   one with the fewest irregular vertices and the best-proportioned length
 //!   wins.
+//! - **Bridge**: the boundary read as four sides, filled with a grid whose
+//!   longer sides are reached through rows of widening cells (one edge below,
+//!   three above, four quads). It takes what the others can't: a strip of
+//!   (1, 147, 1, 145), a wedge of (9, 144, 7, 102), a triangle of (16, 1, 17)
+//!   read as a 16 × 1 grid. The four sides need not start at the patch's own
+//!   corners: a corner can be moved an edge along to mend the parity, a
+//!   triangle given a fourth, a pentagon read with one of its corners as a
+//!   point of a side. One or two quads near such a corner come out poor;
+//!   everything else is a grid.
 //! - **Fan**: any even boundary. One quad if the boundary has 4 edges, else a
-//!   center vertex and one quad per two boundary edges. Always valid, poor
-//!   shape; the last resort.
+//!   center vertex and one quad per two boundary edges. Always valid, and
+//!   fair while the boundary is short ([`FAN_EDGES`]); on a long one its
+//!   centre joins half the boundary, so a Bridge is tried first.
+//!
+//! A pattern is connectivity first. The builders give inner points a rough
+//! position (the polygon's centre, straight rays, bilinear cells), which folds
+//! as soon as the side counts are lopsided: the singularity of a (20, 20, 2)
+//! triangle belongs one quad from the corner facing its short side (two
+//! strips of quads run the length of the wedge), not at the centre.
+//! [`Pattern::place`] gives the positions to use: every inner point at the
+//! average of its neighbours, the embedding the connectivity itself asks for.
 
 use hashbrown::HashMap;
 use std::f64::consts::TAU;
 
 use crate::{Control, Error, Stage};
+use faer::linalg::solvers::Solve;
+use faer::sparse::{SparseColMat, Triplet};
+use faer::{Mat, Side};
 use glam::DVec2;
 
 const TARGET_SPLIT_CHECKS: usize = 250_000;
@@ -44,15 +65,98 @@ pub enum PatternKind {
     Grid,
     Center,
     Split,
+    Bridge,
     Fan,
 }
 
+/// A fan over this many boundary edges or fewer has a centre of at most five
+/// quads, which is as good as such a boundary gets. Over it, a Bridge is
+/// tried first.
+pub const FAN_EDGES: u32 = 10;
+
 /// A quad pattern: domain points with identities, and counter-clockwise quads.
+/// Boundary points sit on the polygon; an inner point's position here is only
+/// the builder's rough one (see [`Pattern::place`]).
 #[derive(Clone, Debug)]
 pub struct Pattern {
     pub points: Vec<(Point, DVec2)>,
     pub quads: Vec<[u32; 4]>,
     pub kind: PatternKind,
+}
+
+impl Pattern {
+    /// The domain position of every point: boundary points on the polygon,
+    /// and every inner point at the average of its neighbours (Tutte's
+    /// embedding). With the boundary on a convex polygon no quad folds,
+    /// whatever the side counts, and cells come out as even as the
+    /// connectivity allows. A regular grid is already there.
+    pub fn place(&self) -> Vec<DVec2> {
+        let rough: Vec<DVec2> = self.points.iter().map(|p| p.1).collect();
+        if self.kind == PatternKind::Grid {
+            return rough;
+        }
+        self.averaged().unwrap_or(rough)
+    }
+
+    /// Solves "each inner point is the mean of its neighbours" exactly.
+    /// `None` if there is nothing to solve or the solve fails.
+    fn averaged(&self) -> Option<Vec<DVec2>> {
+        let mut index = vec![usize::MAX; self.points.len()];
+        let mut inner = 0usize;
+        for (i, (point, _)) in self.points.iter().enumerate() {
+            if matches!(point, Point::Inner(_)) {
+                index[i] = inner;
+                inner += 1;
+            }
+        }
+        if inner == 0 {
+            return None;
+        }
+        // Every edge once in each direction (an inner edge is in two quads).
+        let mut links: Vec<(u32, u32)> = Vec::with_capacity(self.quads.len() * 8);
+        for q in &self.quads {
+            for k in 0..4 {
+                let (a, b) = (q[k], q[(k + 1) % 4]);
+                links.push((a, b));
+                links.push((b, a));
+            }
+        }
+        links.sort_unstable();
+        links.dedup();
+        let mut triplets = Vec::with_capacity(links.len() + inner);
+        let mut degree = vec![0.0f64; inner];
+        let mut rhs = vec![DVec2::ZERO; inner];
+        for &(a, b) in &links {
+            let (Some(&ia), Some(&ib)) = (index.get(a as usize), index.get(b as usize)) else { return None };
+            if ia == usize::MAX {
+                continue;
+            }
+            degree[ia] += 1.0;
+            if ib == usize::MAX {
+                rhs[ia] += self.points[b as usize].1;
+            } else {
+                triplets.push(Triplet::new(ia, ib, -1.0));
+            }
+        }
+        for (i, d) in degree.iter().enumerate() {
+            triplets.push(Triplet::new(i, i, *d));
+        }
+        let matrix = SparseColMat::<usize, f64>::try_new_from_triplets(inner, inner, &triplets).ok()?;
+        let llt = matrix.sp_cholesky(Side::Lower).ok()?;
+        let mut b = Mat::<f64>::from_fn(inner, 2, |i, k| if k == 0 { rhs[i].x } else { rhs[i].y });
+        llt.solve_in_place(b.as_mut());
+        let mut placed: Vec<DVec2> = self.points.iter().map(|p| p.1).collect();
+        for (i, &k) in index.iter().enumerate() {
+            if k != usize::MAX {
+                let q = DVec2::new(b[(k, 0)], b[(k, 1)]);
+                if !q.is_finite() {
+                    return None;
+                }
+                placed[i] = q;
+            }
+        }
+        Some(placed)
+    }
 }
 
 /// Corner `i` of the regular N-gon (side 0 at the bottom).
@@ -315,6 +419,17 @@ fn build_impl(l: &[u32], max_quads: usize, control: Option<&Control>) -> Result<
     if b.split(max_quads, control)? {
         return Ok(Some(b.finish(PatternKind::Split)));
     }
+    if perimeter > FAN_EDGES
+        && let Some((corners, quads)) = best_reading(l)
+    {
+        if quads > max_quads {
+            return Err(limit_error("pattern exceeds the quad output limit"));
+        }
+        let mut b = Builder::new(l);
+        if b.bridge(corners) {
+            return Ok(Some(b.finish(PatternKind::Bridge)));
+        }
+    }
     let fan_count = if perimeter == 4 { 1 } else { perimeter as usize / 2 };
     if fan_count > max_quads {
         return Err(limit_error("pattern exceeds the quad output limit"));
@@ -322,6 +437,131 @@ fn build_impl(l: &[u32], max_quads: usize, control: Option<&Control>) -> Result<
     let mut b = Builder::new(l);
     b.fan();
     Ok(Some(b.finish(PatternKind::Fan)))
+}
+
+/// Side counts `[bottom, right, top, left]` seen with side `turn` as the bottom.
+fn turned(s: [usize; 4], turn: usize) -> [usize; 4] {
+    [s[turn % 4], s[(turn + 1) % 4], s[(turn + 2) % 4], s[(turn + 3) % 4]]
+}
+
+/// Whether four sides `[bottom, right, top, left]` can be bridged to a grid,
+/// and with how many widening cells and how many quads. A row is taken off
+/// the longer side of an unequal pair for as long as both sides next to it
+/// have an edge to give: the row widens from the chain under it (at least a
+/// third as long, and the same parity) to the side. A strip one edge thick is
+/// a single such row. Opposite sides must differ by an even count, which no
+/// row changes.
+fn bridge_plan(mut s: [usize; 4]) -> Option<(usize, usize)> {
+    if s.contains(&0) || (s[0] + s[2]) % 2 == 1 || (s[1] + s[3]) % 2 == 1 {
+        return None;
+    }
+    let (mut widenings, mut quads) = (0usize, 0usize);
+    loop {
+        if s[0] == s[2] && s[1] == s[3] {
+            return Some((widenings, quads.checked_add(s[0].checked_mul(s[1])?)?));
+        }
+        let mut taken = false;
+        for turn in 0..4 {
+            let [a, b, c, d] = turned(s, turn);
+            if c <= a {
+                continue;
+            }
+            let extra = c - a;
+            if b == 1 && d == 1 {
+                return (extra / 2 <= a).then_some((widenings + extra / 2, quads + a + 3 * (extra / 2)));
+            }
+            if b >= 2 && d >= 2 {
+                let mut under = a.max(c.div_ceil(3));
+                if (c - under) % 2 == 1 {
+                    under += 1;
+                }
+                let wide = (c - under) / 2;
+                widenings += wide;
+                quads = quads.checked_add(under + 3 * wide)?;
+                s[(turn + 1) % 4] = b - 1;
+                s[(turn + 2) % 4] = under;
+                s[(turn + 3) % 4] = d - 1;
+                taken = true;
+                break;
+            }
+        }
+        if !taken {
+            return None;
+        }
+    }
+}
+
+/// The best way to read a boundary with side counts `l` as four sides for a
+/// [`Builder::bridge`]: the ring positions of the four corners (position 0 is
+/// corner 0, counting boundary edges round) and the quads it takes. `None` if
+/// no reading can be bridged.
+///
+/// Readings tried: four of the polygon's corners as they are, or with one of
+/// them an edge along (which mends an odd difference between opposite sides);
+/// for a triangle, its three corners and any other boundary point. A reading
+/// costs its widening cells, and more for every corner it moves or leaves out,
+/// since the quads there come out poor.
+fn best_reading(l: &[u32]) -> Option<([usize; 4], usize)> {
+    let n = l.len();
+    let total: usize = l.iter().map(|&v| v as usize).sum();
+    let mut corner_at = Vec::with_capacity(n);
+    let mut sum = 0usize;
+    for &len in l {
+        corner_at.push(sum);
+        sum += len as usize;
+    }
+    let mut readings: Vec<([usize; 4], usize)> = Vec::new();
+    let with_moves = |four: [usize; 4], penalty: usize, readings: &mut Vec<([usize; 4], usize)>| {
+        readings.push((four, penalty));
+        for i in 0..4 {
+            for step in [1, total - 1] {
+                let mut moved = four;
+                moved[i] = (moved[i] + step) % total;
+                readings.push((moved, penalty + 2));
+            }
+        }
+    };
+    match n {
+        3 => {
+            for extra in 0..total {
+                if !corner_at.contains(&extra) {
+                    let mut four = [corner_at[0], corner_at[1], corner_at[2], extra];
+                    four.sort_unstable();
+                    readings.push((four, 1));
+                }
+            }
+        }
+        4 => with_moves([corner_at[0], corner_at[1], corner_at[2], corner_at[3]], 0, &mut readings),
+        5 | 6 => {
+            // Every four of the corners, in order.
+            for skip_a in 0..n {
+                for skip_b in skip_a..n {
+                    if (n == 5 && skip_b != skip_a) || (n == 6 && skip_b == skip_a) {
+                        continue;
+                    }
+                    let kept: Vec<usize> =
+                        (0..n).filter(|&i| i != skip_a && i != skip_b).map(|i| corner_at[i]).collect();
+                    if let &[a, b, c, d] = kept.as_slice() {
+                        with_moves([a, b, c, d], n - 4, &mut readings);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut best: Option<(usize, [usize; 4], usize)> = None;
+    for (four, penalty) in readings {
+        let sides = [0, 1, 2, 3].map(|k| (four[(k + 1) % 4] + total - four[k]) % total);
+        if sides.iter().sum::<usize>() != total {
+            continue; // Not in order round the ring (a corner moved onto or past its neighbour).
+        }
+        let Some((widenings, quads)) = bridge_plan(sides) else { continue };
+        let cost = widenings + 6 * penalty;
+        if best.is_none_or(|(old, ..)| cost < old) {
+            best = Some((cost, four, quads));
+        }
+    }
+    best.map(|(_, four, quads)| (four, quads))
 }
 
 /// An edge of a (sub-)polygon.
@@ -338,10 +578,24 @@ enum Edge {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Key {
     Boundary(Point),
-    Chord { id: u32, t: u32 },
-    Ray { region: u32, side: u32, k: u32 },
+    Chord {
+        id: u32,
+        t: u32,
+    },
+    Ray {
+        region: u32,
+        side: u32,
+        k: u32,
+    },
     Center(u32),
-    Cell { region: u32, sub: u32, a: u32, b: u32 },
+    Cell {
+        region: u32,
+        sub: u32,
+        a: u32,
+        b: u32,
+    },
+    /// An inner point of a Bridge, by number.
+    Free(u32),
 }
 
 struct Builder<'a> {
@@ -663,6 +917,134 @@ impl<'a> Builder<'a> {
         Ok(self.fill(&piece_a).is_some() && self.fill(&piece_b).is_some())
     }
 
+    /// A new inner point. Its place comes from [`Pattern::place`]; until then
+    /// it sits at the polygon's centre.
+    fn free(&mut self) -> u32 {
+        let number = self.inner;
+        self.id(Key::Free(number), DVec2::ZERO)
+    }
+
+    /// Fills the boundary read as four sides with corners at ring positions
+    /// `corners` (from [`best_reading`]). False if it can't be done after all,
+    /// with the builder left in no fit state to use.
+    fn bridge(&mut self, corners: [usize; 4]) -> bool {
+        let ring = self.ring();
+        let total = ring.len();
+        let ids: Vec<u32> = ring.iter().map(|&(side, m)| self.outer(side as usize, m)).collect();
+        let chain = |from: usize, to: usize| -> Vec<u32> {
+            let edges = (to + total - from) % total;
+            (0..=edges).map(|k| ids[(from + k) % total]).collect()
+        };
+        // Bottom and right run with the boundary, top and left against it,
+        // so both of a pair run the same way.
+        let mut sides = [
+            chain(corners[0], corners[1]),
+            chain(corners[1], corners[2]),
+            chain(corners[2], corners[3]),
+            chain(corners[3], corners[0]),
+        ];
+        sides[2].reverse();
+        sides[3].reverse();
+        // The four sides seen with the next one round as the bottom.
+        let turn = |sides: &mut [Vec<u32>; 4]| {
+            sides[2].reverse();
+            sides[0].reverse();
+            sides.rotate_left(1);
+        };
+        loop {
+            if sides[0].len() == sides[2].len() && sides[1].len() == sides[3].len() {
+                let [bottom, right, top, left] = &sides;
+                self.grid_between(bottom, right, top, left);
+                return true;
+            }
+            // The same order of tries as `bridge_plan`, which found this possible.
+            let mut taken = false;
+            for turns in 0..4 {
+                let [bottom, right, top, left] = &sides;
+                let (a, b, c, d) = (bottom.len() - 1, right.len() - 1, top.len() - 1, left.len() - 1);
+                if c > a && b == 1 && d == 1 {
+                    if (c - a) % 2 == 1 || (c - a) / 2 > a {
+                        return false;
+                    }
+                    self.widening_row(bottom, top);
+                    return true;
+                }
+                if c > a && b >= 2 && d >= 2 {
+                    let mut under = a.max(c.div_ceil(3));
+                    if (c - under) % 2 == 1 {
+                        under += 1;
+                    }
+                    // The chain under the top row, between the last vertices
+                    // but one of the left and right sides.
+                    let mut below = Vec::with_capacity(under + 1);
+                    below.push(left[d - 1]);
+                    below.extend((1..under).map(|_| self.free()));
+                    below.push(right[b - 1]);
+                    self.widening_row(&below, top);
+                    sides[2] = below;
+                    sides[1].pop();
+                    sides[3].pop();
+                    // Back to the way round it started.
+                    for _ in turns..4 {
+                        turn(&mut sides);
+                    }
+                    taken = true;
+                    break;
+                }
+                turn(&mut sides);
+            }
+            if !taken {
+                return false;
+            }
+        }
+    }
+
+    /// A row of quads from `lower` up to `upper`, which has as many edges or
+    /// an even number more: that many halves of the cells, spread evenly, are
+    /// widening cells (one edge below, three above, four quads round two new
+    /// points); the others are single quads.
+    fn widening_row(&mut self, lower: &[u32], upper: &[u32]) {
+        let (cells, wide) = (lower.len() - 1, upper.len() - 1);
+        let widen = (wide - cells) / 2;
+        let mut j = 0;
+        for i in 0..cells {
+            let (l0, l1) = (lower[i], lower[i + 1]);
+            if (i + 1) * widen / cells > i * widen / cells {
+                let (m0, m1) = (self.free(), self.free());
+                self.quads.push([l0, l1, m1, m0]);
+                self.quads.push([l0, m0, upper[j + 1], upper[j]]);
+                self.quads.push([m0, m1, upper[j + 2], upper[j + 1]]);
+                self.quads.push([l1, upper[j + 3], upper[j + 2], m1]);
+                j += 3;
+            } else {
+                self.quads.push([l0, l1, upper[j + 1], upper[j]]);
+                j += 1;
+            }
+        }
+    }
+
+    /// A regular grid between four chains: `bottom` and `top` left to right,
+    /// `left` and `right` bottom to top, meeting at their ends.
+    fn grid_between(&mut self, bottom: &[u32], right: &[u32], top: &[u32], left: &[u32]) {
+        let (columns, rows) = (bottom.len() - 1, right.len() - 1);
+        let mut below = bottom.to_vec();
+        for r in 1..=rows {
+            let row: Vec<u32> = if r == rows {
+                top.to_vec()
+            } else {
+                let mut row = Vec::with_capacity(columns + 1);
+                row.push(left[r]);
+                row.extend((1..columns).map(|_| self.free()));
+                row.push(right[r]);
+                row
+            };
+            for k in 0..columns {
+                self.quads.push([below[k], below[k + 1], row[k + 1], row[k]]);
+            }
+            below = row;
+        }
+    }
+
     /// One quad for a 4-edge boundary, else a center vertex and a quad per two
     /// boundary edges.
     fn fan(&mut self) {
@@ -761,8 +1143,9 @@ mod tests {
             }
         }
         // Quads are counter-clockwise (positive area) in the domain.
+        let placed = p.place();
         for q in &p.quads {
-            let v: Vec<DVec2> = q.iter().map(|&i| p.points[i as usize].1).collect();
+            let v: Vec<DVec2> = q.iter().map(|&i| placed[i as usize]).collect();
             let area: f64 = (0..4).map(|k| v[k].perp_dot(v[(k + 1) % 4])).sum::<f64>() * 0.5;
             assert!(area > 0.0, "{l:?} {:?} quad {q:?} area {area}", p.kind);
         }
@@ -820,6 +1203,184 @@ mod tests {
             check(&p, &l);
         }
         assert_eq!(build(&[1, 1, 2]).unwrap().quads.len(), 1);
+    }
+
+    /// The smallest corner turn of any quad in the domain: the sine of the
+    /// corner angle (1 = right angle, 0 = straight, negative = reflex).
+    fn worst_corner(p: &Pattern) -> f64 {
+        let mut worst = f64::INFINITY;
+        let placed = p.place();
+        for q in &p.quads {
+            let v: Vec<DVec2> = q.iter().map(|&i| placed[i as usize]).collect();
+            for k in 0..4 {
+                let (a, b) = (v[(k + 1) % 4] - v[k], v[(k + 3) % 4] - v[k]);
+                worst = worst.min(a.perp_dot(b) / (a.length() * b.length()).max(1e-300));
+            }
+        }
+        worst
+    }
+
+    #[test]
+    fn every_quad_is_convex_in_the_domain_even_for_lopsided_counts() {
+        // Lopsided counts put the closed form's splits next to the corners. A
+        // singularity left at the polygon's centre then folds the sub-grids.
+        for l in [
+            vec![20, 20, 2],
+            vec![2, 20, 20],
+            vec![30, 4, 28],
+            vec![12, 3, 3, 12, 2],
+            vec![2, 9, 9, 2, 2],
+            vec![14, 2, 2, 14, 2, 2],
+            vec![3, 47, 1, 47],
+            vec![9, 1, 1, 1],
+            vec![4, 3, 3],
+            vec![6, 6, 6, 6],
+        ] {
+            let p = build(&l).unwrap();
+            check(&p, &l);
+            assert!(worst_corner(&p) > -1e-9, "{l:?} {:?}: a quad is concave ({})", p.kind, worst_corner(&p));
+        }
+    }
+
+    #[test]
+    fn placed_inner_points_are_the_mean_of_their_neighbours() {
+        for l in [vec![20, 20, 2], vec![4, 3, 3], vec![3, 4, 3, 4, 2], vec![8, 4, 4, 4], vec![9, 1, 1, 1]] {
+            let p = build(&l).unwrap();
+            let placed = p.place();
+            let mut sum = vec![DVec2::ZERO; placed.len()];
+            let mut neighbours = vec![hashbrown::HashSet::new(); placed.len()];
+            for q in &p.quads {
+                for k in 0..4 {
+                    let (a, b) = (q[k] as usize, q[(k + 1) % 4] as usize);
+                    if neighbours[a].insert(b) {
+                        sum[a] += placed[b];
+                    }
+                    if neighbours[b].insert(a) {
+                        sum[b] += placed[a];
+                    }
+                }
+            }
+            for (i, (point, on_polygon)) in p.points.iter().enumerate() {
+                if matches!(point, Point::Inner(_)) {
+                    let mean = sum[i] / neighbours[i].len() as f64;
+                    assert!((placed[i] - mean).length() < 1e-9, "{l:?} point {i}");
+                } else {
+                    assert_eq!(placed[i], *on_polygon, "{l:?}: a boundary point moved");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_grid_is_placed_as_built() {
+        let p = build(&[5, 3, 5, 3]).unwrap();
+        assert_eq!(p.kind, PatternKind::Grid);
+        let built: Vec<DVec2> = p.points.iter().map(|q| q.1).collect();
+        assert_eq!(p.place(), built);
+        // And that is the mean-of-neighbours embedding too.
+        let averaged = p.averaged().unwrap();
+        assert!(averaged.iter().zip(&built).all(|(a, b)| (*a - *b).length() < 1e-12));
+    }
+
+    #[test]
+    fn a_lopsided_triangle_puts_its_singularity_by_the_far_corner() {
+        // (20, 20, 2): two strips of quads run from the 2-edge side down the
+        // wedge, and the valence-3 vertex closes them one quad from the corner
+        // facing that side. The builder's rough position is the centre.
+        let p = build(&[20, 20, 2]).unwrap();
+        let placed = p.place();
+        let mut valence = vec![0usize; placed.len()];
+        for q in &p.quads {
+            for &v in q {
+                valence[v as usize] += 1;
+            }
+        }
+        let singular: Vec<usize> = (0..placed.len())
+            .filter(|&i| matches!(p.points[i].0, Point::Inner(_)) && valence[i] == 3)
+            .collect();
+        assert_eq!(singular.len(), 1);
+        let (short_a, short_b, far) = (corner(3, 2), corner(3, 0), corner(3, 1));
+        let to_short = (placed[singular[0]] - (short_a + short_b) / 2.0).length();
+        let to_far = (placed[singular[0]] - far).length();
+        assert!(
+            to_far < 0.25 * to_short,
+            "singularity {to_short} from the short side, {to_far} from the far corner"
+        );
+        let rough = p.points[singular[0]].1;
+        assert!(rough.length() < 1e-9, "the builder's rough position is the centre: {rough}");
+    }
+
+    /// The most quads round any one point of a pattern.
+    fn most_quads_at_a_point(p: &Pattern) -> usize {
+        let mut around = vec![0usize; p.points.len()];
+        for q in &p.quads {
+            for &v in q {
+                around[v as usize] += 1;
+            }
+        }
+        around.into_iter().max().unwrap_or(0)
+    }
+
+    #[test]
+    fn long_boundaries_nothing_else_fills_are_bridged_not_fanned() {
+        // Counts from the benchmark's worst patches. As fans, their centres
+        // joined half the boundary: on (1, 147, 1, 145) one point with 147
+        // quads round it, and quads half the model long.
+        for l in [
+            vec![1, 147, 1, 145],
+            vec![1, 82, 2, 83],
+            vec![9, 144, 7, 102],
+            vec![12, 131, 12, 79],
+            vec![7, 72, 9, 56],
+            vec![1, 25, 2, 26],
+            vec![2, 29, 1, 30],
+            vec![16, 1, 17],
+            vec![1, 13, 16],
+            vec![5, 76, 1, 74, 6],
+            vec![4, 19, 2, 34, 3],
+            vec![6, 10, 1, 15, 6],
+            vec![12, 5, 1, 13, 5],
+            vec![2, 4, 10, 1, 13],
+        ] {
+            let p = build(&l).unwrap();
+            assert_eq!(p.kind, PatternKind::Bridge, "{l:?}");
+            check(&p, &l);
+            assert!(worst_corner(&p) > -1e-9, "{l:?}: a quad is concave ({})", worst_corner(&p));
+            assert!(
+                most_quads_at_a_point(&p) <= 6,
+                "{l:?}: {} quads at one point",
+                most_quads_at_a_point(&p)
+            );
+        }
+    }
+
+    #[test]
+    fn a_strip_one_quad_thick_is_one_widening_row() {
+        // (1, 7, 1, 5): five cells, one of them widening: four quads and two new points.
+        let p = build(&[1, 7, 1, 5]).unwrap();
+        assert_eq!(p.kind, PatternKind::Bridge);
+        assert_eq!(p.quads.len(), 4 + 4);
+        assert_eq!(p.points.iter().filter(|(point, _)| matches!(point, Point::Inner(_))).count(), 2);
+        check(&p, &[1, 7, 1, 5]);
+    }
+
+    #[test]
+    fn bridge_plans_count_their_cells() {
+        assert_eq!(bridge_plan([3, 2, 3, 2]), Some((0, 6)), "a grid already");
+        assert_eq!(bridge_plan([5, 1, 7, 1]), Some((1, 8)), "one row, one widening cell");
+        assert_eq!(bridge_plan([1, 5, 1, 7]), Some((1, 8)), "the same strip, turned");
+        // A row under the top: 3 below, 9 above takes three widening cells, then a 3 x 1 grid.
+        assert_eq!(bridge_plan([3, 2, 9, 2]), Some((3, 12 + 3)));
+        assert_eq!(bridge_plan([3, 2, 4, 3]), None, "opposite sides differ by an odd count");
+        assert_eq!(bridge_plan([1, 1, 5, 1]), None, "one cell can't widen to five");
+        assert_eq!(bridge_plan([2, 0, 2, 2]), None);
+    }
+
+    #[test]
+    fn short_boundaries_keep_their_fan() {
+        for l in [vec![1, 1, 2, 2], vec![1, 2, 3], vec![1, 1, 1, 3], vec![1, 3, 2, 2]] {
+            assert_eq!(build(&l).unwrap().kind, PatternKind::Fan, "{l:?}");
+        }
     }
 
     #[test]

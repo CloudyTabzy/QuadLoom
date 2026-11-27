@@ -5,19 +5,37 @@ from array import array
 import json
 import os
 from pathlib import Path
+import time
 
 MAX_MANIFEST = 1024 * 1024
 MAX_DEPTH = 32
+# Tries at renaming a manifest into place before giving up (see `publish`).
+PUBLISH_ATTEMPTS = 8
 
 
-def publish(path, value):
+def publish(path, value, attempts=PUBLISH_ATTEMPTS):
+    """Writes `value` beside `path` and renames it into place.
+
+    Windows refuses the rename while another process has either file open (a
+    reader, a virus scanner). That passes in milliseconds, so it is retried
+    with a doubling pause, about 0.6 s in all, before the error is raised.
+    """
     raw = json.dumps(value, allow_nan=False, separators=(",", ":")).encode("utf-8")
     if len(raw) > MAX_MANIFEST:
         raise ValueError("worker manifest exceeds its size limit")
     path = Path(path)
     temporary = path.with_suffix(".tmp")
     temporary.write_bytes(raw)
-    os.replace(temporary, path)
+    pause = 0.005
+    for attempt in range(attempts):
+        try:
+            os.replace(temporary, path)
+            return
+        except PermissionError:
+            if attempt + 1 >= attempts:
+                raise
+        time.sleep(pause)
+        pause *= 2
 
 
 def read_json(path):
@@ -26,6 +44,37 @@ def read_json(path):
     if len(raw) > MAX_MANIFEST:
         raise ValueError("worker manifest exceeds its size limit")
     return json.loads(raw)
+
+
+# Progress is advisory. The child republishes it many times a second while the
+# parent polls it, so each side regularly meets the other's open handle or a
+# half-finished replace. Neither may fail a run over that: the writer skips the
+# tick and the reader keeps what it last saw.
+
+
+def publish_progress(path, value):
+    """Publishes one progress tick. False if the file was busy; the next tick tries again."""
+    try:
+        publish(path, value, attempts=1)
+    except OSError:
+        return False
+    return True
+
+
+def read_progress(path):
+    """The latest published progress, or None while it is missing, busy or incomplete."""
+    try:
+        data = read_json(path)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    stage, fraction = data.get("stage"), data.get("fraction")
+    if not isinstance(stage, str) or type(fraction) not in (int, float) or not 0.0 <= fraction <= 1.0:
+        return None
+    if type(data.get("filled")) is not bool or type(data.get("reusing")) is not bool:
+        return None
+    return data
 
 
 def write(directory, value, budget):

@@ -16,6 +16,7 @@
 //! failed map) keeps its triangles. Segments bordering it are sampled at their
 //! own mesh vertices, so the result stays watertight.
 
+pub mod curves;
 pub mod embed;
 pub mod ilp;
 pub mod pattern;
@@ -25,8 +26,10 @@ pub mod smooth;
 pub mod target;
 #[cfg(test)]
 mod tests;
+pub mod turn;
 
 use hashbrown::HashMap;
+use tinyvec::TinyVec;
 
 use glam::{DVec2, DVec3};
 
@@ -34,9 +37,19 @@ use crate::control::{Control, Stage};
 use crate::error::Error;
 use crate::mesh::PolyMesh;
 use crate::trace::TraceOutput;
+use curves::Curves;
 use embed::PatchMap;
 use pattern::{PatternKind, Point};
 use segments::Segments;
+use smooth::Hold;
+
+/// Layouts each part gets unless asked otherwise. The best of N draws grows
+/// like 0.56, 0.85, 1.03, 1.16, 1.27 of their spread for N = 2 to 6, and
+/// measured on the 70 benchmark models four attempts keep 82% of what six
+/// gain (three: 67%). The later attempts run side by side, so three and
+/// four cost the same, about half as long again as one (decision 0027).
+/// The add-on's Layout Attempts starts at the same number.
+pub const DEFAULT_ATTEMPTS: usize = 4;
 
 /// Settings for the quad stages.
 #[derive(Clone, Debug, PartialEq)]
@@ -59,6 +72,10 @@ pub struct QuadParams {
     /// How much quad size follows the prep remesh's local detail: 0 keeps
     /// every quad the same size, 1 follows it fully (geometric blend between).
     pub adaptivity: f64,
+    /// How many layouts each part gets: 1 is one layout and its quads, more
+    /// lays the part out again and keeps the quads that come out best (see
+    /// `attempts`).
+    pub attempts: usize,
 }
 
 impl Default for QuadParams {
@@ -71,6 +88,7 @@ impl Default for QuadParams {
             smoothing: 20,
             solver_effort: 1.0,
             adaptivity: 0.5,
+            attempts: DEFAULT_ATTEMPTS,
         }
     }
 }
@@ -87,15 +105,64 @@ pub struct QuadReport {
     pub triangles: usize,
     pub segments: usize,
     /// Patches filled with a regular grid / the one-singularity closed form /
-    /// a diagonal split / the fan fallback.
+    /// a diagonal split / a grid bridged to its sides / the fan fallback.
     pub grid_patches: usize,
     pub center_patches: usize,
     pub split_patches: usize,
+    pub bridge_patches: usize,
     pub fan_patches: usize,
     /// Patches left as triangles.
     pub kept_patches: usize,
     /// Quad edge length used.
     pub edge_length: f64,
+    /// Layouts made per part (1: only the first).
+    pub attempts: usize,
+    /// Parts given more than one layout, and how many of them took their
+    /// quads from one of the later ones.
+    pub parts_retried: usize,
+    pub parts_improved: usize,
+}
+
+/// How a layout patch was filled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Fill {
+    /// Its triangles, each split into three quads.
+    #[default]
+    Kept,
+    Grid,
+    Center,
+    Split,
+    Bridge,
+    Fan,
+}
+
+/// What one layout patch came to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PatchNote {
+    pub fill: Fill,
+    pub quads: u32,
+    /// Segments counted for this patch: each segment counts once, for the
+    /// lowest-numbered patch it borders.
+    pub segments: u32,
+}
+
+impl QuadReport {
+    /// The totals of `notes` (the counts a report takes from its patches).
+    pub(crate) fn tally(&mut self, notes: &[PatchNote]) {
+        let mut count = [0usize; 6];
+        (self.quads, self.segments) = (0, 0);
+        for note in notes {
+            count[note.fill as usize] += 1;
+            self.quads += note.quads as usize;
+            self.segments += note.segments as usize;
+        }
+        self.kept_patches = count[Fill::Kept as usize];
+        self.grid_patches = count[Fill::Grid as usize];
+        self.center_patches = count[Fill::Center as usize];
+        self.split_patches = count[Fill::Split as usize];
+        self.bridge_patches = count[Fill::Bridge as usize];
+        self.fan_patches = count[Fill::Fan as usize];
+    }
 }
 
 /// The quad mesh.
@@ -106,6 +173,8 @@ pub struct QuadOutput {
     pub patch_of_face: Vec<u32>,
     /// Edges of the quad mesh along feature lines and borders, as vertex pairs.
     pub feature_edges: Vec<[u32; 2]>,
+    /// Per layout patch, what it came to (before any mirroring).
+    pub patches: Vec<PatchNote>,
     pub report: QuadReport,
 }
 
@@ -133,11 +202,110 @@ pub fn compute(
     if !(edge.is_finite() && edge > 0.0) {
         return Err(Error::invalid_input(stage, "the quad size must be positive"));
     }
-    let prepared = Prepared::new(trace, control)?;
-    let targets = targets(trace, &prepared.segs, sizing, edge);
-    let counts =
-        quantize::quantize(&prepared.segs, &targets, params.regularity, params.solver_effort, control)?;
-    prepared.assemble(trace, &counts, edge, params, None, control)
+    retrying_clashes(trace, |keep| {
+        let prepared = Prepared::new(trace, keep, control)?;
+        let targets = targets(trace, &prepared.segs, sizing, edge);
+        let counts =
+            quantize::quantize(&prepared.segs, &targets, params.regularity, params.solver_effort, control)?;
+        prepared.assemble(trace, &counts, edge, params, None, control)
+    })
+}
+
+/// What assembling the patches gave.
+#[derive(Debug)]
+enum Assembled {
+    Mesh(Box<QuadOutput>),
+    /// These patches' quads can't be used, and the patches should keep
+    /// their triangles instead. Either they would share an edge with more
+    /// than two faces (it happens where the quads are too big for what they
+    /// cover: a tube two quads round, whose two "rungs" join the same two
+    /// vertices), or they stray from the surface ([`astray_patches`]).
+    Clash(Vec<u32>),
+}
+
+/// A quad edge over this many times the quad size is looked at by [`astray_patches`].
+const LONG_EDGE: f64 = 3.0;
+/// A patch with a long edge whose midpoint is this many quad sizes off the
+/// surface keeps its triangles.
+const ASTRAY: f64 = 1.0;
+
+/// The patches with a quad edge far longer than was asked for that leaves
+/// the surface: its midpoint more than [`ASTRAY`] quad sizes from the
+/// layout's mesh.
+///
+/// A pattern's points are put on the surface one by one; nothing puts its
+/// edges there. In a patch whose shape its pattern doesn't suit, two points
+/// far apart get joined, and the edge is a chord through the model.
+/// SpecularSilkPouf laid out without its faint creases has a seam strip 0.7
+/// long and almost no width, with five sides: its pattern's quads ran a
+/// third of the model's length each, and the result was 9.4% of the
+/// diagonal off its input with no error. A long edge that stays on the
+/// surface (a flat face with large quads) is no fault and isn't refused.
+fn astray_patches(
+    positions: &[DVec3],
+    face_offsets: &[u32],
+    face_indices: &[u32],
+    patch_of_face: &[u32],
+    trace: &TraceOutput,
+    edge: f64,
+) -> Vec<u32> {
+    if edge.is_nan() || edge <= 0.0 {
+        return Vec::new();
+    }
+    let at = |v: u32| positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
+    let mut suspects: Vec<(u32, DVec3)> = Vec::new();
+    for (f, w) in face_offsets.windows(2).enumerate() {
+        let face = face_indices.get(w[0] as usize..w[1] as usize).unwrap_or_default();
+        let Some(&patch) = patch_of_face.get(f) else { continue };
+        for (i, &a) in face.iter().enumerate() {
+            let (pa, pb) = (at(a), at(face[(i + 1) % face.len()]));
+            if (pa - pb).length() > LONG_EDGE * edge {
+                suspects.push((patch, 0.5 * (pa + pb)));
+            }
+        }
+    }
+    if suspects.is_empty() {
+        return Vec::new();
+    }
+    let surface = crate::spatial::TriangleBvh::new(&trace.mesh.positions, &trace.mesh.triangles);
+    let mut astray: Vec<u32> = suspects
+        .into_iter()
+        .filter(|&(_, midpoint)| surface.closest_point(midpoint).is_some_and(|(_, d)| d > ASTRAY * edge))
+        .map(|(patch, _)| patch)
+        .collect();
+    astray.sort_unstable();
+    astray.dedup();
+    astray
+}
+
+/// Rounds of keeping clashing patches as triangles before giving up.
+const CLASH_ROUNDS: usize = 4;
+
+/// Runs `build` with the patches to keep as triangles, adding to them the
+/// patches whose quads clash until none do. A clash costs those patches
+/// their quads (their triangles are split instead, which never clashes:
+/// every vertex is a mesh vertex or an edge's midpoint), not the whole mesh.
+fn retrying_clashes(
+    trace: &TraceOutput,
+    mut build: impl FnMut(&[bool]) -> Result<Assembled, Error>,
+) -> Result<QuadOutput, Error> {
+    let mut keep = vec![false; trace.patches.len()];
+    for _ in 0..=CLASH_ROUNDS {
+        match build(&keep)? {
+            Assembled::Mesh(output) => return Ok(*output),
+            Assembled::Clash(patches) => {
+                for p in patches {
+                    if let Some(flag) = keep.get_mut(p as usize) {
+                        *flag = true;
+                    }
+                }
+            }
+        }
+    }
+    Err(Error::internal(
+        Stage::Patterns,
+        "quad mesh check failed: patches still share an edge or stray from the surface",
+    ))
 }
 
 struct Prepared {
@@ -146,7 +314,8 @@ struct Prepared {
 }
 
 impl Prepared {
-    fn new(trace: &TraceOutput, control: &Control) -> Result<Self, Error> {
+    /// `keep` marks patches that keep their triangles whatever their shape.
+    fn new(trace: &TraceOutput, keep: &[bool], control: &Control) -> Result<Self, Error> {
         let stage = Stage::Quantize;
         let mut faces_of: Vec<Vec<u32>> = vec![Vec::new(); trace.patches.len()];
         for (f, &p) in trace.patch_of_face.iter().enumerate() {
@@ -154,21 +323,24 @@ impl Prepared {
                 list.push(f as u32);
             }
         }
-        // Patches whose triangles can't be mapped onto their polygon keep them; find
-        // them first, so their neighbours sample at their mesh vertices.
-        let first = segments::build(trace, &[]);
-        let mut excluded = vec![false; trace.patches.len()];
+        // Patches whose triangles can't be mapped onto their polygon keep them,
+        // and so do patches that bulge far past their boundary; find them
+        // first, so their neighbours sample at their mesh vertices.
+        let first = segments::build(trace, keep);
+        let mut excluded: Vec<bool> =
+            (0..trace.patches.len()).map(|p| keep.get(p).copied().unwrap_or(false)).collect();
         for (p, sides) in first.sides.iter().enumerate() {
             if p % 256 == 0 {
                 control.checkpoint(stage)?;
             }
             if let Some(sides) = sides
-                && !mappable(trace, &first, sides, &faces_of[p])
+                && (bulges(trace, p, &faces_of[p]) || !mappable(trace, &first, sides, &faces_of[p]))
             {
                 excluded[p] = true;
             }
         }
-        let segs = if excluded.contains(&true) { segments::build(trace, &excluded) } else { first };
+        let changed = excluded.iter().enumerate().any(|(p, &e)| e != keep.get(p).copied().unwrap_or(false));
+        let segs = if changed { segments::build(trace, &excluded) } else { first };
         Ok(Self { faces_of, segs })
     }
 
@@ -180,7 +352,7 @@ impl Prepared {
         params: &QuadParams,
         patterns: Option<(&[Option<pattern::Pattern>], usize)>,
         control: &Control,
-    ) -> Result<QuadOutput, Error> {
+    ) -> Result<Assembled, Error> {
         let segs = &self.segs;
         let faces_of = &self.faces_of;
         let stage = Stage::Quantize;
@@ -188,9 +360,22 @@ impl Prepared {
 
         control.checkpoint(Stage::Patterns)?;
         let mut out = Assembly::new(trace, segs, counts);
-        let mut report =
-            QuadReport { segments: segs.segments.len(), edge_length: edge, ..QuadReport::default() };
+        let mut report = QuadReport {
+            segments: segs.segments.len(),
+            edge_length: edge,
+            attempts: 1,
+            ..QuadReport::default()
+        };
+        let mut notes = vec![PatchNote::default(); trace.patches.len()];
+        for segment in &segs.segments {
+            if let Some(note) =
+                segment.uses.iter().map(|u| u.patch).min().and_then(|owner| notes.get_mut(owner as usize))
+            {
+                note.segments += 1;
+            }
+        }
         for (p, faces) in faces_of.iter().enumerate() {
+            let before = out.quads;
             if p % 64 == 0 {
                 control.checkpoint(Stage::Patterns)?;
                 control.set_progress(Stage::Patterns, p as f32 / trace.patches.len().max(1) as f32);
@@ -210,11 +395,20 @@ impl Prepared {
                 }
                 None => out.fill(p, faces),
             };
+            notes[p].fill = match kind {
+                Some(PatternKind::Grid) => Fill::Grid,
+                Some(PatternKind::Center) => Fill::Center,
+                Some(PatternKind::Split) => Fill::Split,
+                Some(PatternKind::Bridge) => Fill::Bridge,
+                Some(PatternKind::Fan) => Fill::Fan,
+                None => Fill::Kept,
+            };
             match kind {
                 Some(kind) => match kind {
                     PatternKind::Grid => report.grid_patches += 1,
                     PatternKind::Center => report.center_patches += 1,
                     PatternKind::Split => report.split_patches += 1,
+                    PatternKind::Bridge => report.bridge_patches += 1,
                     PatternKind::Fan => report.fan_patches += 1,
                 },
                 None => {
@@ -234,17 +428,82 @@ impl Prepared {
                     report.kept_patches += 1;
                 }
             }
+            notes[p].quads = (out.quads - before) as u32;
+        }
+        let mut refused = out.clashing_patches();
+        refused.extend(astray_patches(
+            &out.positions,
+            &out.face_offsets,
+            &out.face_indices,
+            &out.patch_of_face,
+            trace,
+            edge,
+        ));
+        if !refused.is_empty() {
+            refused.sort_unstable();
+            refused.dedup();
+            return Ok(Assembled::Clash(refused));
         }
         let feature_edges = out.feature_edges();
-        let (mut mesh, patch_of_face, fixed, quads, triangles) = out.finish();
+        let (mut mesh, patch_of_face, mut holds, curves, quads, triangles) = out.finish();
         control.checkpoint(Stage::Smooth)?;
-        smooth::smooth(&mut mesh, &fixed, &patch_of_face, trace, params.smoothing, control);
+        smooth::smooth(
+            &mut mesh,
+            &mut holds,
+            &feature_edges,
+            &curves,
+            &patch_of_face,
+            trace,
+            params.smoothing,
+            control,
+        );
         check_output(&mesh)?;
         report.quads = quads;
         report.triangles = triangles;
         control.set_progress(Stage::Patterns, 1.0);
-        Ok(QuadOutput { mesh, patch_of_face, feature_edges, report })
+        Ok(Assembled::Mesh(Box::new(QuadOutput {
+            mesh,
+            patch_of_face,
+            feature_edges,
+            patches: notes,
+            report,
+        })))
     }
+}
+
+/// A patch with this many times the area of a square with its perimeter
+/// keeps its triangles. A square and a disk have about once, a hemisphere on
+/// its rim two and a half times; past four the patch is more than a
+/// hemisphere, or a tube five times longer than wide closed at the far end.
+const BULGE: f64 = 4.0;
+
+/// Whether patch `p` has far more area than its boundary could span.
+///
+/// Quads are counted along a patch's boundary, so its pattern holds about as
+/// many as fit in the boundary laid flat. Given a patch that is most of a
+/// closed part behind a boundary of a few edges, the pattern draws a few
+/// quads across the mouth and the part behind it is gone from the result:
+/// no error, and a surface that is no longer the input's. Such a patch is a
+/// layout that failed (its part wanted loops it never got), and it is rare:
+/// one patch in the 70 benchmark models. Keeping its triangles keeps the
+/// shape.
+fn bulges(trace: &TraceOutput, p: usize, faces: &[u32]) -> bool {
+    let position = |v: u32| trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
+    let Some(patch) = trace.patches.get(p) else { return false };
+    let perimeter: f64 = patch
+        .sides
+        .iter()
+        .map(|side| side.vertices.windows(2).map(|w| (position(w[0]) - position(w[1])).length()).sum::<f64>())
+        .sum();
+    let area: f64 = faces
+        .iter()
+        .filter_map(|&f| trace.mesh.triangles.get(f as usize))
+        .map(|t| {
+            let [a, b, c] = t.map(position);
+            0.5 * (b - a).cross(c - a).length()
+        })
+        .sum();
+    16.0 * area > BULGE * perimeter * perimeter
 }
 
 /// Whether a patch's triangles map onto its polygon (pins by arc length).
@@ -361,6 +620,18 @@ fn targets(trace: &TraceOutput, segs: &Segments, sizing: Sizing<'_>, edge: f64) 
         .collect()
 }
 
+/// Where an output vertex was put on the layout's mesh, which decides how
+/// smoothing may move it.
+#[derive(Clone, Copy, Debug)]
+enum Origin {
+    /// Inside a patch.
+    Inner,
+    /// At mesh vertex `v`.
+    Vertex(u32),
+    /// A fraction `w` of the way along mesh edge `(a, b)`.
+    Edge { a: u32, b: u32, w: f64 },
+}
+
 /// The output mesh under construction.
 struct Assembly<'a> {
     trace: &'a TraceOutput,
@@ -372,8 +643,8 @@ struct Assembly<'a> {
     patch_of_face: Vec<u32>,
     by_mesh_vertex: HashMap<u32, u32>,
     by_sample: HashMap<(u32, u32), u32>,
-    /// Per output vertex: whether smoothing must leave it (on a feature or border).
-    fixed: Vec<bool>,
+    /// Per output vertex: where on the layout's mesh it was put.
+    origin: Vec<Origin>,
     /// Mesh vertices on a feature line or the border.
     feature_vertex: hashbrown::HashSet<u32>,
     /// Mesh edges on a feature line or the border.
@@ -415,7 +686,6 @@ impl<'a> Assembly<'a> {
             trace.mesh.feature_edges.iter().map(|&[a, b]| (a.min(b), a.max(b))).collect();
         sharp.extend(uses.iter().filter(|&(_, &n)| n == 1).map(|(&e, _)| e));
         let feature_vertex = sharp.iter().flat_map(|&(a, b)| [a, b]).collect();
-        let sharp_edges = sharp.clone();
         let feature_segment = segs
             .segments
             .iter()
@@ -426,6 +696,7 @@ impl<'a> Assembly<'a> {
                     .is_some_and(|w| sharp.contains(&(w[0].min(w[1]), w[0].max(w[1]))))
             })
             .collect();
+        let sharp_edges = sharp;
         Self {
             trace,
             segs,
@@ -436,7 +707,7 @@ impl<'a> Assembly<'a> {
             patch_of_face: Vec::new(),
             by_mesh_vertex: HashMap::new(),
             by_sample: HashMap::new(),
-            fixed: Vec::new(),
+            origin: Vec::new(),
             feature_vertex,
             sharp_edges,
             feature_segment,
@@ -452,14 +723,14 @@ impl<'a> Assembly<'a> {
             return id;
         }
         let p = self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
-        let id = self.push(p, self.feature_vertex.contains(&v));
+        let id = self.push(p, Origin::Vertex(v));
         self.by_mesh_vertex.insert(v, id);
         id
     }
 
-    fn push(&mut self, p: DVec3, fixed: bool) -> u32 {
+    fn push(&mut self, p: DVec3, origin: Origin) -> u32 {
         self.positions.push(p);
-        self.fixed.push(fixed);
+        self.origin.push(origin);
         (self.positions.len() - 1) as u32
     }
 
@@ -487,14 +758,15 @@ impl<'a> Assembly<'a> {
         if let Some(&id) = self.by_sample.get(&(s, k)) {
             return id;
         }
-        let pos = self.arc_point(s, k as f64 / n as f64);
-        let id = self.push(pos, self.feature_segment.get(s as usize).copied().unwrap_or(true));
+        let (pos, origin) = self.arc_point(s, k as f64 / n as f64);
+        let id = self.push(pos, origin);
         self.by_sample.insert((s, k), id);
         id
     }
 
-    /// The point at arc-length fraction `t` along segment `s`.
-    fn arc_point(&self, s: u32, t: f64) -> DVec3 {
+    /// The point at arc-length fraction `t` along segment `s`, and the mesh
+    /// edge it lies on.
+    fn arc_point(&self, s: u32, t: f64) -> (DVec3, Origin) {
         let segment = &self.segs.segments[s as usize];
         let arc = &self.arc[s as usize];
         let total = arc.last().copied().unwrap_or(0.0);
@@ -503,7 +775,8 @@ impl<'a> Assembly<'a> {
         let (a0, a1) = (arc[i - 1], arc[i]);
         let w = if a1 > a0 { (target - a0) / (a1 - a0) } else { 0.0 };
         let position = |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
-        position(segment.vertices[i - 1]).lerp(position(segment.vertices[i]), w)
+        let (a, b) = (segment.vertices[i - 1], segment.vertices[i]);
+        (position(a).lerp(position(b), w), Origin::Edge { a, b, w })
     }
 
     /// Fills patch `p` with quads; `None` if it must keep its triangles.
@@ -549,8 +822,9 @@ impl<'a> Assembly<'a> {
         let map = PatchMap::new(&self.trace.mesh.positions, &self.trace.mesh.triangles, faces, &boundary)?;
 
         // Place interior points first: nothing is created unless all succeed.
+        let domain = pattern.place();
         let mut inner = Vec::new();
-        for &(point, q) in &pattern.points {
+        for (&(point, _), &q) in pattern.points.iter().zip(&domain) {
             if let Point::Inner(_) = point {
                 inner.push(map.locate(&self.trace.mesh.positions, q)?);
             }
@@ -573,7 +847,7 @@ impl<'a> Assembly<'a> {
                 }
                 Point::Inner(_) => {
                     let pos = inner.next()?;
-                    self.push(pos, false)
+                    self.push(pos, Origin::Inner)
                 }
             };
             ids.push(id);
@@ -606,6 +880,26 @@ impl<'a> Assembly<'a> {
         Some((s, if reversed { 0 } else { count }))
     }
 
+    /// The patches with a face on an edge that more than two faces use
+    /// (sorted). Empty for a mesh that is a surface.
+    fn clashing_patches(&self) -> Vec<u32> {
+        let mut uses: HashMap<(u32, u32), TinyVec<[u32; 4]>> =
+            HashMap::with_capacity(self.face_indices.len() / 2);
+        for (f, w) in self.face_offsets.windows(2).enumerate() {
+            let face = self.face_indices.get(w[0] as usize..w[1] as usize).unwrap_or_default();
+            let patch = self.patch_of_face.get(f).copied().unwrap_or(u32::MAX);
+            for (i, &a) in face.iter().enumerate() {
+                let b = face[(i + 1) % face.len()];
+                uses.entry((a.min(b), a.max(b))).or_default().push(patch);
+            }
+        }
+        let mut patches: Vec<u32> =
+            uses.into_values().filter(|faces| faces.len() > 2).flat_map(|faces| faces.into_iter()).collect();
+        patches.sort_unstable();
+        patches.dedup();
+        patches
+    }
+
     /// The quad-mesh edges along feature and border segments that some patch used.
     fn feature_edges(&mut self) -> Vec<[u32; 2]> {
         let mut edges = Vec::new();
@@ -634,7 +928,7 @@ impl<'a> Assembly<'a> {
             return id;
         }
         let position = |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
-        let id = self.push(position(a).lerp(position(b), 0.5), self.sharp_edges.contains(&key));
+        let id = self.push(position(a).lerp(position(b), 0.5), Origin::Edge { a, b, w: 0.5 });
         self.midpoints.insert(key, id);
         id
     }
@@ -649,7 +943,7 @@ impl<'a> Assembly<'a> {
             let corner = t.map(|v| self.mesh_vertex(v));
             let mid = [0, 1, 2].map(|i| self.midpoint(t[i], t[(i + 1) % 3]));
             let position = |v: u32| self.trace.mesh.positions.get(v as usize).copied().unwrap_or(DVec3::ZERO);
-            let centroid = self.push(t.iter().map(|&v| position(v)).sum::<DVec3>() / 3.0, false);
+            let centroid = self.push(t.iter().map(|&v| position(v)).sum::<DVec3>() / 3.0, Origin::Inner);
             // Counter-clockwise like the triangle: corner, its outgoing midpoint, centroid, its incoming midpoint.
             for i in 0..3 {
                 let quad = [corner[i], mid[i], centroid, mid[(i + 2) % 3]];
@@ -661,12 +955,30 @@ impl<'a> Assembly<'a> {
         }
     }
 
-    fn finish(self) -> (PolyMesh, Vec<u32>, Vec<bool>, usize, usize) {
+    /// The mesh, each face's patch, how smoothing may move each vertex, the
+    /// feature curves those holds refer to, and the quad and triangle counts.
+    fn finish(self) -> (PolyMesh, Vec<u32>, Vec<Hold>, Curves, usize, usize) {
+        // Feature lines and borders, as curves their vertices slide along. A
+        // vertex where such a curve ends, branches or turns a corner stays.
+        let curves = Curves::new(&self.trace.mesh.positions, self.sharp_edges.iter().copied());
+        let on_curve =
+            |at: Option<(u32, f64)>| at.map_or(Hold::Fixed, |(chain, at)| Hold::Curve { chain, at });
+        let holds = self
+            .origin
+            .iter()
+            .map(|&origin| match origin {
+                Origin::Inner => Hold::Free,
+                Origin::Vertex(v) if !self.feature_vertex.contains(&v) => Hold::Free,
+                Origin::Vertex(v) => on_curve(curves.at_vertex(v)),
+                Origin::Edge { a, b, .. } if !self.sharp_edges.contains(&(a.min(b), a.max(b))) => Hold::Free,
+                Origin::Edge { a, b, w } => on_curve(curves.on_edge(a, b, w)),
+            })
+            .collect();
         let mesh = PolyMesh {
             positions: self.positions,
             face_offsets: self.face_offsets,
             face_indices: self.face_indices,
         };
-        (mesh, self.patch_of_face, self.fixed, self.quads, self.triangles)
+        (mesh, self.patch_of_face, holds, curves, self.quads, self.triangles)
     }
 }

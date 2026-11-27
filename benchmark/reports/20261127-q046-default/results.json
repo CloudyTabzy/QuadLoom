@@ -1,0 +1,4346 @@
+{
+ "run_id": "20261127-q046-default",
+ "tool": "quadloom",
+ "cases": [
+  {
+   "case": "common3d/alligator",
+   "mesh": "common3d/alligator/alligator.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 2.06,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 5981,
+   "output_faces": 8510,
+   "tool_seconds": 1.426,
+   "distance": {
+    "hausdorff": 0.0006752410726347298,
+    "mean": 1.6162680991243301e-06,
+    "reference_to_result_max": 0.0006752410726347298,
+    "reference_to_result_max_at": [
+     381.5,
+     0.0,
+     4.5
+    ],
+    "result_to_reference_max": 0.00036879528179266824,
+    "result_to_reference_max_at": [
+     167.0872802734375,
+     1.2000000424450263e-05,
+     160.81930541992188
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 52.43706649942601,
+     "mean": 9.116569513815971,
+     "min": 0.06750898904013525,
+     "p05": 0.8731346380367455,
+     "p95": 26.271299631399327
+    },
+    "aspect_ratio": {
+     "max": 73.52607931640804,
+     "mean": 1.428526198413078,
+     "min": 1.0035479348478837,
+     "p05": 1.0436203230946859,
+     "p95": 2.1423878802263405
+    },
+    "boundary_edges": 876,
+    "faces": 8510,
+    "irregular_boundary": 21,
+    "irregular_interior": 30,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 8510,
+    "scaled_jacobian": {
+     "max": 0.9999979715531228,
+     "mean": 0.9730039400954315,
+     "min": 0.19802259592369403,
+     "p05": 0.8843941082457569,
+     "p95": 0.9997226093177347
+    },
+    "singularities_per_1k_quads": 5.99294947121034,
+    "triangles": 0,
+    "vertices": 8949
+   }
+  },
+  {
+   "case": "common3d/armadillo",
+   "mesh": "common3d/armadillo/armadillo.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 19.27,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 99976,
+   "output_faces": 19870,
+   "tool_seconds": 18.557,
+   "distance": {
+    "hausdorff": 0.003963453029750067,
+    "mean": 0.00036969583401346833,
+    "reference_to_result_max": 0.003963453029750067,
+    "reference_to_result_max_at": [
+     2.4066250324249268,
+     34.283756256103516,
+     55.09903335571289
+    ],
+    "result_to_reference_max": 0.002808233845573206,
+    "result_to_reference_max_at": [
+     49.365057945251465,
+     39.03693771362305,
+     87.64390563964844
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99941212148278,
+     "mean": 11.215537994075001,
+     "min": 0.18341822787353834,
+     "p05": 1.5274919970368828,
+     "p95": 30.96627105764923
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 208.55013920317782,
+     "min": 1.0059319763196544,
+     "p05": 1.0691172093771393,
+     "p95": 3.0161588230779977
+    },
+    "boundary_edges": 0,
+    "faces": 19870,
+    "irregular_boundary": 0,
+    "irregular_interior": 342,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 19870,
+    "scaled_jacobian": {
+     "max": 0.9999607524198416,
+     "mean": 0.937368194125206,
+     "min": -0.20437727273763806,
+     "p05": 0.7401322141272186,
+     "p95": 0.9981156598154081
+    },
+    "singularities_per_1k_quads": 17.211877201811777,
+    "triangles": 0,
+    "vertices": 19872
+   }
+  },
+  {
+   "case": "common3d/beetle",
+   "mesh": "common3d/beetle/beetle.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 3.66,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 2053,
+   "output_faces": 12386,
+   "tool_seconds": 2.915,
+   "distance": {
+    "hausdorff": 0.0032128199197502816,
+    "mean": 0.00012919391666202344,
+    "reference_to_result_max": 0.0032128199197502816,
+    "reference_to_result_max_at": [
+     -0.19275300204753876,
+     0.1972460001707077,
+     0.3612070083618164
+    ],
+    "result_to_reference_max": 0.0022039659224637903,
+    "result_to_reference_max_at": [
+     -0.19333850219845772,
+     0.1906130015850067,
+     0.3589460030198097
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.51384798630355,
+     "mean": 12.455308742100048,
+     "min": 0.0023240812699185653,
+     "p05": 0.7277228158731361,
+     "p95": 42.347924422936096
+    },
+    "aspect_ratio": {
+     "max": 676.5233870380174,
+     "mean": 1.8596969033132384,
+     "min": 1.0016303879348094,
+     "p05": 1.0355471693132854,
+     "p95": 3.440899093681219
+    },
+    "boundary_edges": 1802,
+    "faces": 12386,
+    "irregular_boundary": 55,
+    "irregular_interior": 139,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 12386,
+    "scaled_jacobian": {
+     "max": 0.9999999991773266,
+     "mean": 0.926067610917954,
+     "min": -0.1323333988766313,
+     "p05": 0.6254045550356916,
+     "p95": 0.9997793929474383
+    },
+    "singularities_per_1k_quads": 15.662845147747456,
+    "triangles": 0,
+    "vertices": 13277
+   }
+  },
+  {
+   "case": "common3d/cheburashka",
+   "mesh": "common3d/cheburashka/cheburashka.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 3.03,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 13334,
+   "output_faces": 9112,
+   "tool_seconds": 2.415,
+   "distance": {
+    "hausdorff": 0.002425303903163971,
+    "mean": 0.00032361787247154266,
+    "reference_to_result_max": 0.002358358631546067,
+    "reference_to_result_max_at": [
+     0.7529270052909851,
+     -0.5111100077629089,
+     0.8729529976844788
+    ],
+    "result_to_reference_max": 0.002425303903163971,
+    "result_to_reference_max_at": [
+     0.26538024842739105,
+     -0.4803119972348213,
+     0.2804352417588234
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 8.457395567730067,
+     "min": 0.13138331543821735,
+     "p05": 1.2098217240439233,
+     "p95": 21.902601509457973
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 550.2363225845056,
+     "min": 1.00813085333597,
+     "p05": 1.0650747286247706,
+     "p95": 2.153313775659414
+    },
+    "boundary_edges": 0,
+    "faces": 9112,
+    "irregular_boundary": 0,
+    "irregular_interior": 90,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9112,
+    "scaled_jacobian": {
+     "max": 0.9999834282589714,
+     "mean": 0.964085626264021,
+     "min": -1.0,
+     "p05": 0.8602615544984348,
+     "p95": 0.9992450063449536
+    },
+    "singularities_per_1k_quads": 9.877085162423178,
+    "triangles": 0,
+    "vertices": 9114
+   }
+  },
+  {
+   "case": "common3d/cow",
+   "mesh": "common3d/cow/cow.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 4.92,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 5804,
+   "output_faces": 13544,
+   "tool_seconds": 4.295,
+   "distance": {
+    "hausdorff": 0.004292900645367184,
+    "mean": 0.0001919983704906984,
+    "reference_to_result_max": 0.004292900645367184,
+    "reference_to_result_max_at": [
+     -2.0486810207366943,
+     -0.4508430063724518,
+     -2.1652820110321045
+    ],
+    "result_to_reference_max": 0.003158234598315401,
+    "result_to_reference_max_at": [
+     -2.0413812696933746,
+     -0.4436892494559288,
+     -2.1076422333717346
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 86.05057981962621,
+     "mean": 14.635037162329494,
+     "min": 0.11064616991581389,
+     "p05": 1.4703404294891556,
+     "p95": 43.528885402313286
+    },
+    "aspect_ratio": {
+     "max": 963.7119012096086,
+     "mean": 2.306522100272661,
+     "min": 1.0073902191909874,
+     "p05": 1.078742054029002,
+     "p95": 4.010666276615242
+    },
+    "boundary_edges": 0,
+    "faces": 13544,
+    "irregular_boundary": 0,
+    "irregular_interior": 259,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13544,
+    "scaled_jacobian": {
+     "max": 0.9999724865476602,
+     "mean": 0.9103142331591506,
+     "min": -0.07797336724101445,
+     "p05": 0.598069135229924,
+     "p95": 0.9986659237632494
+    },
+    "singularities_per_1k_quads": 19.122858830478442,
+    "triangles": 0,
+    "vertices": 13546
+   }
+  },
+  {
+   "case": "common3d/fandisk",
+   "mesh": "common3d/fandisk/fandisk.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 2.0,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 12946,
+   "output_faces": 7661,
+   "tool_seconds": 1.336,
+   "distance": {
+    "hausdorff": 0.0020064779458953664,
+    "mean": 5.025181746293586e-05,
+    "reference_to_result_max": 0.0020064779458953664,
+    "reference_to_result_max_at": [
+     0.860044002532959,
+     1.045670986175537,
+     15.552499771118164
+    ],
+    "result_to_reference_max": 0.0012182792933863038,
+    "result_to_reference_max_at": [
+     3.27494353055954,
+     1.1530117392539978,
+     15.460420846939087
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 52.04450612257988,
+     "mean": 7.123648320242235,
+     "min": 0.008642626043901203,
+     "p05": 0.14976288543210003,
+     "p95": 21.21250506527573
+    },
+    "aspect_ratio": {
+     "max": 19.464899081904797,
+     "mean": 1.3518759721657183,
+     "min": 1.0040321835783035,
+     "p05": 1.0511602682641747,
+     "p95": 1.915454177708518
+    },
+    "boundary_edges": 0,
+    "faces": 7661,
+    "irregular_boundary": 0,
+    "irregular_interior": 34,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 7661,
+    "scaled_jacobian": {
+     "max": 0.9999998385927977,
+     "mean": 0.9804327755654745,
+     "min": 0.2659337884561783,
+     "p05": 0.9189729774467011,
+     "p95": 0.9999666366019568
+    },
+    "singularities_per_1k_quads": 4.438062916068398,
+    "triangles": 0,
+    "vertices": 7663
+   }
+  },
+  {
+   "case": "common3d/homer",
+   "mesh": "common3d/homer/homer.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 3.72,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 12000,
+   "output_faces": 10552,
+   "tool_seconds": 3.085,
+   "distance": {
+    "hausdorff": 0.0028183131879879124,
+    "mean": 0.00028348349778164203,
+    "reference_to_result_max": 0.0028183131879879124,
+    "reference_to_result_max_at": [
+     0.6209779977798462,
+     -0.534296989440918,
+     0.16990399360656738
+    ],
+    "result_to_reference_max": 0.0024359479388029737,
+    "result_to_reference_max_at": [
+     0.603048250079155,
+     -0.5577684938907623,
+     0.1693279966711998
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 79.50414045262407,
+     "mean": 10.64891800509626,
+     "min": 0.0695093281917245,
+     "p05": 1.3432774803309613,
+     "p95": 28.159602458990488
+    },
+    "aspect_ratio": {
+     "max": 15.430519360446596,
+     "mean": 1.471031416771926,
+     "min": 1.001560097551986,
+     "p05": 1.0539158207082338,
+     "p95": 2.3298828749637726
+    },
+    "boundary_edges": 0,
+    "faces": 10552,
+    "irregular_boundary": 0,
+    "irregular_interior": 124,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10552,
+    "scaled_jacobian": {
+     "max": 0.9999865826228542,
+     "mean": 0.9545485233361155,
+     "min": 0.14052542072898197,
+     "p05": 0.8194831256201796,
+     "p95": 0.9989706164385463
+    },
+    "singularities_per_1k_quads": 11.751326762699014,
+    "triangles": 0,
+    "vertices": 10554
+   }
+  },
+  {
+   "case": "common3d/igea",
+   "mesh": "common3d/igea/igea.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 12.85,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 268686,
+   "output_faces": 13762,
+   "tool_seconds": 12.01,
+   "distance": {
+    "hausdorff": 0.004192754891487859,
+    "mean": 0.0003330160950212135,
+    "reference_to_result_max": 0.004192754891487859,
+    "reference_to_result_max_at": [
+     0.018811000511050224,
+     -0.01360000018030405,
+     0.04511000091830889
+    ],
+    "result_to_reference_max": 0.00309892081280261,
+    "result_to_reference_max_at": [
+     -0.0015415000525536016,
+     -0.019372500013560057,
+     0.048829250037670135
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 80.83695502429978,
+     "mean": 10.169843843011714,
+     "min": 0.10641462585100214,
+     "p05": 1.1955411774108136,
+     "p95": 28.81239005091799
+    },
+    "aspect_ratio": {
+     "max": 59.396930260333114,
+     "mean": 2.1088540753648664,
+     "min": 1.0050773861875735,
+     "p05": 1.073778811448881,
+     "p95": 5.0160616922433
+    },
+    "boundary_edges": 0,
+    "faces": 13762,
+    "irregular_boundary": 0,
+    "irregular_interior": 125,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13762,
+    "scaled_jacobian": {
+     "max": 0.9999918467948066,
+     "mean": 0.9522322205200862,
+     "min": -0.2968419848235354,
+     "p05": 0.7981188235412605,
+     "p95": 0.9990213774601291
+    },
+    "singularities_per_1k_quads": 9.08298212469118,
+    "triangles": 0,
+    "vertices": 13764
+   }
+  },
+  {
+   "case": "common3d/max-planck",
+   "mesh": "common3d/max-planck/max-planck.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 5.12,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 99991,
+   "output_faces": 10357,
+   "tool_seconds": 4.359,
+   "distance": {
+    "hausdorff": 0.003128931301074886,
+    "mean": 0.00033703435459450914,
+    "reference_to_result_max": 0.003128931301074886,
+    "reference_to_result_max_at": [
+     -64.84539794921875,
+     -123.0009994506836,
+     0.9731450080871582
+    ],
+    "result_to_reference_max": 0.0020406145060164345,
+    "result_to_reference_max_at": [
+     125.42107963562012,
+     -125.52858352661133,
+     -1.6184429991990328
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99948100997362,
+     "mean": 9.066436467036771,
+     "min": 0.08425878566779943,
+     "p05": 1.0885162992260895,
+     "p95": 24.778988424534997
+    },
+    "aspect_ratio": {
+     "max": 27.698272268389825,
+     "mean": 1.3993254022678037,
+     "min": 1.001780272884716,
+     "p05": 1.050505137887672,
+     "p95": 2.1527068898181976
+    },
+    "boundary_edges": 92,
+    "faces": 10357,
+    "irregular_boundary": 3,
+    "irregular_interior": 56,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10357,
+    "scaled_jacobian": {
+     "max": 0.9999780659916567,
+     "mean": 0.9694112462784359,
+     "min": -2.1445522972659114e-05,
+     "p05": 0.8747487611318372,
+     "p95": 0.9992701272921086
+    },
+    "singularities_per_1k_quads": 5.696630298348943,
+    "triangles": 0,
+    "vertices": 10404
+   }
+  },
+  {
+   "case": "common3d/rocker-arm",
+   "mesh": "common3d/rocker-arm/rocker-arm.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 3.45,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 20088,
+   "output_faces": 11496,
+   "tool_seconds": 2.684,
+   "distance": {
+    "hausdorff": 0.002793907271537466,
+    "mean": 0.0003573131346118306,
+    "reference_to_result_max": 0.002793907271537466,
+    "reference_to_result_max_at": [
+     -0.14778199791908264,
+     0.03135399892926216,
+     -0.058118999004364014
+    ],
+    "result_to_reference_max": 0.002715722029656274,
+    "result_to_reference_max_at": [
+     0.030840750318020582,
+     -0.45468874275684357,
+     0.1512414962053299
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 76.50373782221737,
+     "mean": 9.243275462674493,
+     "min": 0.06494890345069848,
+     "p05": 0.9490851699244978,
+     "p95": 26.977545210798613
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 175.50326877138363,
+     "min": 1.0064009898708806,
+     "p05": 1.0636251422041318,
+     "p95": 2.3405080780477885
+    },
+    "boundary_edges": 0,
+    "faces": 11496,
+    "irregular_boundary": 0,
+    "irregular_interior": 61,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 11496,
+    "scaled_jacobian": {
+     "max": 0.999992435721699,
+     "mean": 0.9624702197382007,
+     "min": -1.0,
+     "p05": 0.8332355911551413,
+     "p95": 0.999525957879243
+    },
+    "singularities_per_1k_quads": 5.306193458594294,
+    "triangles": 0,
+    "vertices": 11496
+   }
+  },
+  {
+   "case": "common3d/stanford-bunny",
+   "mesh": "common3d/stanford-bunny/stanford-bunny.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 5.93,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 69451,
+   "output_faces": 13536,
+   "tool_seconds": 5.224,
+   "distance": {
+    "hausdorff": 0.0034823055659216643,
+    "mean": 0.00031930301742916434,
+    "reference_to_result_max": 0.0034823055659216643,
+    "reference_to_result_max_at": [
+     -0.052550667275985084,
+     -0.03383733332157135,
+     0.11639799922704697
+    ],
+    "result_to_reference_max": 0.003305750372475905,
+    "result_to_reference_max_at": [
+     -0.05212125089019537,
+     -0.03456075023859739,
+     0.11633249931037426
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 81.47029521766441,
+     "mean": 11.23447581906404,
+     "min": 0.1356405534813696,
+     "p05": 1.4726659555663524,
+     "p95": 32.36313284611763
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 445.0521838619205,
+     "min": 1.0025899528150497,
+     "p05": 1.07152805066963,
+     "p95": 2.8522027829863856
+    },
+    "boundary_edges": 230,
+    "faces": 13536,
+    "irregular_boundary": 62,
+    "irregular_interior": 148,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13536,
+    "scaled_jacobian": {
+     "max": 0.9999829480398613,
+     "mean": 0.9437954355361868,
+     "min": -1.0,
+     "p05": 0.7562690570142308,
+     "p95": 0.9986396530797061
+    },
+    "singularities_per_1k_quads": 15.51418439716312,
+    "triangles": 0,
+    "vertices": 13648
+   }
+  },
+  {
+   "case": "common3d/suzanne",
+   "mesh": "common3d/suzanne/suzanne.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 3.86,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 500,
+   "output_faces": 11316,
+   "tool_seconds": 3.075,
+   "distance": {
+    "hausdorff": 0.014930289999695095,
+    "mean": 0.0006441428164814042,
+    "reference_to_result_max": 0.009981616011757535,
+    "reference_to_result_max_at": [
+     -2.8456246058146157,
+     -4.635142167409261,
+     1.7647063334782918
+    ],
+    "result_to_reference_max": 0.014930289999695095,
+    "result_to_reference_max_at": [
+     -3.038330078125,
+     -3.608236074447632,
+     1.8194040060043335
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 88.07438257503377,
+     "mean": 12.407218775660246,
+     "min": 0.22698397461584108,
+     "p05": 1.8680012897155045,
+     "p95": 31.14508895343159
+    },
+    "aspect_ratio": {
+     "max": 36.96753488590626,
+     "mean": 1.6190048503108643,
+     "min": 1.0069522813944671,
+     "p05": 1.0731109590983456,
+     "p95": 2.7778028838664697
+    },
+    "boundary_edges": 222,
+    "faces": 11316,
+    "irregular_boundary": 3,
+    "irregular_interior": 215,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 11316,
+    "scaled_jacobian": {
+     "max": 0.9999751936295728,
+     "mean": 0.9374475172192511,
+     "min": 0.013604157497611765,
+     "p05": 0.7543851918321496,
+     "p95": 0.9982461697801194
+    },
+    "singularities_per_1k_quads": 19.264757864969955,
+    "triangles": 0,
+    "vertices": 11429
+   }
+  },
+  {
+   "case": "common3d/teapot",
+   "mesh": "common3d/teapot/teapot.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 2.51,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 6320,
+   "output_faces": 10818,
+   "tool_seconds": 1.831,
+   "distance": {
+    "hausdorff": 0.002511685330335803,
+    "mean": 0.00020433630390712476,
+    "reference_to_result_max": 0.002511685330335803,
+    "reference_to_result_max_at": [
+     -1.1341899633407593,
+     0.5900890231132507,
+     2.4407999515533447
+    ],
+    "result_to_reference_max": 0.001993177474778365,
+    "result_to_reference_max_at": [
+     -1.1822582483291626,
+     -0.3966895043849945,
+     2.4370410442352295
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 67.80886980202906,
+     "mean": 4.473359868989742,
+     "min": 0.021440767162303587,
+     "p05": 0.4607084273487949,
+     "p95": 14.671906739770161
+    },
+    "aspect_ratio": {
+     "max": 126.78783458539664,
+     "mean": 1.2919420036209583,
+     "min": 1.0009227119590145,
+     "p05": 1.016721425874964,
+     "p95": 2.0906478628232246
+    },
+    "boundary_edges": 300,
+    "faces": 10818,
+    "irregular_boundary": 0,
+    "irregular_interior": 16,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10818,
+    "scaled_jacobian": {
+     "max": 0.9999966367460195,
+     "mean": 0.9886717787114463,
+     "min": 0.21315694650893324,
+     "p05": 0.9504774115743568,
+     "p95": 0.9998917143255831
+    },
+    "singularities_per_1k_quads": 1.4790164540580515,
+    "triangles": 0,
+    "vertices": 10970
+   }
+  },
+  {
+   "case": "common3d/woody",
+   "mesh": "common3d/woody/woody.obj",
+   "license": "per original source (see the repository README); Stanford models are for research use with credit",
+   "seconds": 2.1,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 1267,
+   "output_faces": 9698,
+   "tool_seconds": 1.346,
+   "distance": {
+    "hausdorff": 0.000881603517107783,
+    "mean": 9.938145242964464e-07,
+    "reference_to_result_max": 0.000881603517107783,
+    "reference_to_result_max_at": [
+     10.5,
+     1.5999999959603883e-05,
+     214.5
+    ],
+    "result_to_reference_max": 0.0003928150936167315,
+    "result_to_reference_max_at": [
+     93.69950103759766,
+     1.5999999959603883e-05,
+     209.22848510742188
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 38.01921813056556,
+     "mean": 10.291587998266236,
+     "min": 0.06862599339140019,
+     "p05": 0.9033785813333886,
+     "p95": 26.63011552906835
+    },
+    "aspect_ratio": {
+     "max": 3.600730880892303,
+     "mean": 1.2637899456917605,
+     "min": 1.0025530847655777,
+     "p05": 1.0347230490205137,
+     "p95": 1.6146409255842795
+    },
+    "boundary_edges": 532,
+    "faces": 9698,
+    "irregular_boundary": 5,
+    "irregular_interior": 13,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9698,
+    "scaled_jacobian": {
+     "max": 0.9999978497547675,
+     "mean": 0.9705100127500185,
+     "min": 0.5897217667535548,
+     "p05": 0.8754045596705874,
+     "p95": 0.9997348345805176
+    },
+    "singularities_per_1k_quads": 1.856052794390596,
+    "triangles": 0,
+    "vertices": 9965
+   }
+  },
+  {
+   "case": "crane/blub",
+   "mesh": "crane/blub/blub/blub_triangulated.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 2.85,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 14208,
+   "output_faces": 9464,
+   "tool_seconds": 2.197,
+   "distance": {
+    "hausdorff": 0.004065703616200162,
+    "mean": 0.00021853085440113652,
+    "reference_to_result_max": 0.004065703616200162,
+    "reference_to_result_max_at": [
+     0.033420998603105545,
+     0.06663800030946732,
+     1.0624500513076782
+    ],
+    "result_to_reference_max": 0.003989974011898741,
+    "result_to_reference_max_at": [
+     -0.015825500180653762,
+     0.06763225048780441,
+     1.0565789937973022
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 75.48430185478892,
+     "mean": 9.183375410724999,
+     "min": 0.1683309791191725,
+     "p05": 1.0693327416350016,
+     "p95": 26.284226806148475
+    },
+    "aspect_ratio": {
+     "max": 40.051432706603826,
+     "mean": 1.4016825254809253,
+     "min": 1.0062034367148343,
+     "p05": 1.0464305133636,
+     "p95": 2.0770907015750404
+    },
+    "boundary_edges": 0,
+    "faces": 9464,
+    "irregular_boundary": 0,
+    "irregular_interior": 63,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9464,
+    "scaled_jacobian": {
+     "max": 0.9999744148354613,
+     "mean": 0.9652737004876333,
+     "min": 0.15235223765058428,
+     "p05": 0.8546084684719126,
+     "p95": 0.999395169086489
+    },
+    "singularities_per_1k_quads": 6.65680473372781,
+    "triangles": 0,
+    "vertices": 9466
+   }
+  },
+  {
+   "case": "crane/bob",
+   "mesh": "crane/bob/bob/bob_tri.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 2.35,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 10688,
+   "output_faces": 6735,
+   "tool_seconds": 1.558,
+   "distance": {
+    "hausdorff": 0.004279151388209128,
+    "mean": 0.00021832482533029469,
+    "reference_to_result_max": 0.004279151388209128,
+    "reference_to_result_max_at": [
+     0.8639320135116577,
+     0.024894999340176582,
+     0.18427099287509918
+    ],
+    "result_to_reference_max": 0.0031988931171826533,
+    "result_to_reference_max_at": [
+     0.8622747510671616,
+     0.01862374972552061,
+     0.17776675149798393
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 46.0183956268493,
+     "mean": 8.114109301147868,
+     "min": 0.04478555690463537,
+     "p05": 0.9385338841148503,
+     "p95": 19.26486711880311
+    },
+    "aspect_ratio": {
+     "max": 4.426697120156298,
+     "mean": 1.4325659841971554,
+     "min": 1.003828013823658,
+     "p05": 1.048811304163924,
+     "p95": 1.9741765259986557
+    },
+    "boundary_edges": 0,
+    "faces": 6735,
+    "irregular_boundary": 0,
+    "irregular_interior": 20,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 6735,
+    "scaled_jacobian": {
+     "max": 0.9999743448488304,
+     "mean": 0.9769953728757003,
+     "min": 0.512270276055837,
+     "p05": 0.9226052944515407,
+     "p95": 0.9995511184974033
+    },
+    "singularities_per_1k_quads": 2.969561989606533,
+    "triangles": 0,
+    "vertices": 6735
+   }
+  },
+  {
+   "case": "crane/crumpleddevelopable",
+   "mesh": "crane/crumpleddevelopable/CrumpledDevelopable.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 2.69,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 512,
+   "output_faces": 9584,
+   "tool_seconds": 2.001,
+   "distance": {
+    "hausdorff": 0.005314479012835139,
+    "mean": 0.00013159267717119413,
+    "reference_to_result_max": 0.005314479012835139,
+    "reference_to_result_max_at": [
+     0.7031509876251221,
+     -0.09012900292873383,
+     -0.0679280012845993
+    ],
+    "result_to_reference_max": 0.0028961485975689885,
+    "result_to_reference_max_at": [
+     -0.5390360206365585,
+     -0.14443999901413918,
+     -0.022836250253021717
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 87.70085734507305,
+     "mean": 13.479620826000817,
+     "min": 0.14209681839278687,
+     "p05": 1.8052517830642678,
+     "p95": 35.54201646151584
+    },
+    "aspect_ratio": {
+     "max": 93.31372034672718,
+     "mean": 1.8046747670163763,
+     "min": 1.0084420094612194,
+     "p05": 1.0777481610458797,
+     "p95": 2.9840888619737194
+    },
+    "boundary_edges": 438,
+    "faces": 9584,
+    "irregular_boundary": 7,
+    "irregular_interior": 40,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9584,
+    "scaled_jacobian": {
+     "max": 0.9999943582553755,
+     "mean": 0.9273850446919725,
+     "min": -0.04359957497870544,
+     "p05": 0.7284703499233154,
+     "p95": 0.9983972391245274
+    },
+    "singularities_per_1k_quads": 4.904006677796327,
+    "triangles": 0,
+    "vertices": 9804
+   }
+  },
+  {
+   "case": "crane/ogre",
+   "mesh": "crane/ogre/bs_rest.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 5.7,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 39856,
+   "output_faces": 14171,
+   "tool_seconds": 4.936,
+   "distance": {
+    "hausdorff": 0.002939069197556759,
+    "mean": 0.00032306023179396023,
+    "reference_to_result_max": 0.002939069197556759,
+    "reference_to_result_max_at": [
+     -0.13232000172138214,
+     -0.6734970211982727,
+     -0.25983700156211853
+    ],
+    "result_to_reference_max": 0.002707483305160979,
+    "result_to_reference_max_at": [
+     0.3920990005135536,
+     -0.12248499877750874,
+     -0.10341800004243851
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 83.52855477829446,
+     "mean": 11.07185082640193,
+     "min": 0.08968237293330006,
+     "p05": 1.4435548897504624,
+     "p95": 33.115533958781334
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 142.95820366260034,
+     "min": 1.0045040069008813,
+     "p05": 1.0703681170671482,
+     "p95": 3.4168040074477553
+    },
+    "boundary_edges": 226,
+    "faces": 14171,
+    "irregular_boundary": 0,
+    "irregular_interior": 208,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 14171,
+    "scaled_jacobian": {
+     "max": 0.9999720415071973,
+     "mean": 0.9407406610263463,
+     "min": -1.0,
+     "p05": 0.7383087245176284,
+     "p95": 0.9987498119046366
+    },
+    "singularities_per_1k_quads": 14.67786324183191,
+    "triangles": 0,
+    "vertices": 14285
+   }
+  },
+  {
+   "case": "crane/oloid",
+   "mesh": "crane/oloid/oloid4096_tri.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 15.1,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 8192,
+   "output_faces": 13760,
+   "tool_seconds": 14.451,
+   "distance": {
+    "hausdorff": 0.0009991614851494626,
+    "mean": 6.881012848808635e-05,
+    "reference_to_result_max": 0.0009991614851494626,
+    "reference_to_result_max_at": [
+     0.888185977935791,
+     0.0,
+     0.4594840109348297
+    ],
+    "result_to_reference_max": 0.0007662649988911306,
+    "result_to_reference_max_at": [
+     0.004546999873127788,
+     -0.8553905040025711,
+     0.4887775108218193
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 72.17698838961263,
+     "mean": 10.935032243893842,
+     "min": 0.15687440010537657,
+     "p05": 1.1384276523530126,
+     "p95": 30.116650539681917
+    },
+    "aspect_ratio": {
+     "max": 55.779720074591324,
+     "mean": 1.8030318375155074,
+     "min": 1.005138151016818,
+     "p05": 1.036689084564532,
+     "p95": 4.265283347413041
+    },
+    "boundary_edges": 0,
+    "faces": 13760,
+    "irregular_boundary": 0,
+    "irregular_interior": 10,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13760,
+    "scaled_jacobian": {
+     "max": 0.9999860103286258,
+     "mean": 0.9642825104145356,
+     "min": 0.20417772557091765,
+     "p05": 0.8462848196531565,
+     "p95": 0.9994109373025128
+    },
+    "singularities_per_1k_quads": 0.7267441860465116,
+    "triangles": 0,
+    "vertices": 13762
+   }
+  },
+  {
+   "case": "crane/pig",
+   "mesh": "crane/pig/pig/pig_triangulated.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 8.07,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 11392,
+   "output_faces": 11809,
+   "tool_seconds": 7.382,
+   "distance": {
+    "hausdorff": 0.0043548458810553,
+    "mean": 0.00028087156328748374,
+    "reference_to_result_max": 0.0043548458810553,
+    "reference_to_result_max_at": [
+     -1.4471299648284912,
+     2.1221699714660645,
+     0.8392360210418701
+    ],
+    "result_to_reference_max": 0.0034848779784626294,
+    "result_to_reference_max_at": [
+     -0.8700807392597198,
+     1.8518397808074951,
+     0.9052352458238602
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 85.34249101466733,
+     "mean": 12.065208261080945,
+     "min": 0.14494943066334898,
+     "p05": 1.4294291392018117,
+     "p95": 38.57642083346372
+    },
+    "aspect_ratio": {
+     "max": 1891.5150199024902,
+     "mean": 1.8979137595088995,
+     "min": 1.0061760545772187,
+     "p05": 1.0545137785495933,
+     "p95": 2.7137136992313446
+    },
+    "boundary_edges": 0,
+    "faces": 11809,
+    "irregular_boundary": 0,
+    "irregular_interior": 163,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 11809,
+    "scaled_jacobian": {
+     "max": 0.9999802508754045,
+     "mean": 0.9326169742255439,
+     "min": -0.058260869374225345,
+     "p05": 0.6871525898578736,
+     "p95": 0.9989140035016683
+    },
+    "singularities_per_1k_quads": 13.803031586078415,
+    "triangles": 0,
+    "vertices": 11817
+   }
+  },
+  {
+   "case": "crane/spot",
+   "mesh": "crane/spot/spot/spot_triangulated.obj",
+   "license": "CC0-1.0 for most models per the repository page; verify per model",
+   "seconds": 3.14,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 5856,
+   "output_faces": 10090,
+   "tool_seconds": 2.499,
+   "distance": {
+    "hausdorff": 0.002387249039740641,
+    "mean": 0.000199724341626816,
+    "reference_to_result_max": 0.002387249039740641,
+    "reference_to_result_max_at": [
+     -0.013740000315010548,
+     -1.034019947052002,
+     -0.09427600353956223
+    ],
+    "result_to_reference_max": 0.002066637674495575,
+    "result_to_reference_max_at": [
+     -0.13303599692881107,
+     -0.024933999869972467,
+     -0.6864700019359589
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 60.03308159041027,
+     "mean": 7.166818586099769,
+     "min": 0.09917280005370444,
+     "p05": 0.8848646407464003,
+     "p95": 19.10767721906712
+    },
+    "aspect_ratio": {
+     "max": 10.531087982233192,
+     "mean": 1.265081492709041,
+     "min": 1.003612407170061,
+     "p05": 1.0384987936009227,
+     "p95": 1.7141001723025104
+    },
+    "boundary_edges": 0,
+    "faces": 10090,
+    "irregular_boundary": 0,
+    "irregular_interior": 94,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10090,
+    "scaled_jacobian": {
+     "max": 0.9999849338195768,
+     "mean": 0.9761526218482408,
+     "min": 0.36919055550150087,
+     "p05": 0.9016946764206536,
+     "p95": 0.999581404846791
+    },
+    "singularities_per_1k_quads": 9.31615460852329,
+    "triangles": 0,
+    "vertices": 10092
+   }
+  },
+  {
+   "case": "khronos/ABeautifulGame",
+   "mesh": "khronos/ABeautifulGame/ABeautifulGame.glb",
+   "license": "CC-BY-4.0",
+   "seconds": 40.47,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 1498828,
+   "output_faces": 95238,
+   "tool_seconds": 37.582,
+   "distance": {
+    "hausdorff": 0.004002245939321032,
+    "mean": 0.00020664859801513392,
+    "reference_to_result_max": 0.004002245939321032,
+    "reference_to_result_max_at": [
+     0.3526243368784587,
+     0.18283666670322418,
+     4.566666636189135e-05
+    ],
+    "result_to_reference_max": 0.003283455094796262,
+    "result_to_reference_max_at": [
+     0.257145494222641,
+     0.0959744993597269,
+     0.00332625005285081
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.98612640334215,
+     "mean": 10.7766010012186,
+     "min": 0.0025588990002063383,
+     "p05": 0.41350900673513635,
+     "p95": 34.743882424992314
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 44.103116393968904,
+     "min": 1.0003526919244634,
+     "p05": 1.0146598780719178,
+     "p95": 3.3738710959601885
+    },
+    "boundary_edges": 32,
+    "faces": 95238,
+    "irregular_boundary": 0,
+    "irregular_interior": 2303,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 95238,
+    "scaled_jacobian": {
+     "max": 0.999999999002688,
+     "mean": 0.9285252178722749,
+     "min": -1.0,
+     "p05": 0.6738146745395612,
+     "p95": 0.9999677514846665
+    },
+    "singularities_per_1k_quads": 24.181524181524182,
+    "triangles": 0,
+    "vertices": 95438
+   }
+  },
+  {
+   "case": "khronos/AntiqueCamera",
+   "mesh": "khronos/AntiqueCamera/AntiqueCamera.glb",
+   "license": "CC0-1.0 / LicenseRef-LegalMark-UX3D",
+   "seconds": 15.84,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 20066,
+   "output_faces": 82399,
+   "tool_seconds": 14.871,
+   "distance": {
+    "hausdorff": 0.0022782388194040803,
+    "mean": 6.0422643276220924e-05,
+    "reference_to_result_max": 0.0022782388194040803,
+    "reference_to_result_max_at": [
+     -0.544090986251831,
+     0.5490390062332153,
+     5.768919944763184
+    ],
+    "result_to_reference_max": 0.001992389870821746,
+    "result_to_reference_max_at": [
+     -0.21699075028300285,
+     0.3745419979095459,
+     5.393599987030029
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 14.11289511881477,
+     "min": 0.0,
+     "p05": 0.39125232891081296,
+     "p95": 54.61547213616262
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 424.05469074484716,
+     "min": 1.0001257450807755,
+     "p05": 1.036539309496674,
+     "p95": 6.366081527731543
+    },
+    "boundary_edges": 904,
+    "faces": 82399,
+    "irregular_boundary": 27,
+    "irregular_interior": 2261,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 82399,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9001302662633234,
+     "min": -1.0,
+     "p05": 0.4186737122029338,
+     "p95": 0.9999487745366804
+    },
+    "singularities_per_1k_quads": 27.767327273389242,
+    "triangles": 0,
+    "vertices": 82983
+   }
+  },
+  {
+   "case": "khronos/Avocado",
+   "mesh": "khronos/Avocado/Avocado.glb",
+   "license": "CC0-1.0",
+   "seconds": 4.94,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 682,
+   "output_faces": 10388,
+   "tool_seconds": 3.653,
+   "distance": {
+    "hausdorff": 0.002109149926506272,
+    "mean": 8.406072986293838e-05,
+    "reference_to_result_max": 0.002109149926506272,
+    "reference_to_result_max_at": [
+     0.009562999941408634,
+     -0.00688599981367588,
+     0.060989998281002045
+    ],
+    "result_to_reference_max": 0.0017090837092708447,
+    "result_to_reference_max_at": [
+     0.007679250091314316,
+     -0.006553999963216484,
+     0.06255424953997135
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 42.055252344812246,
+     "mean": 6.221971092704249,
+     "min": 0.07872836546875206,
+     "p05": 0.5950853478961768,
+     "p95": 20.094395643438148
+    },
+    "aspect_ratio": {
+     "max": 2.863297301934048,
+     "mean": 1.1864718313141054,
+     "min": 1.003495697543084,
+     "p05": 1.0228231191927228,
+     "p95": 1.5658692817724964
+    },
+    "boundary_edges": 92,
+    "faces": 10388,
+    "irregular_boundary": 0,
+    "irregular_interior": 14,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10388,
+    "scaled_jacobian": {
+     "max": 0.999996354081396,
+     "mean": 0.9838696542367535,
+     "min": 0.6631101580561729,
+     "p05": 0.9227442312527004,
+     "p95": 0.9997981442444461
+    },
+    "singularities_per_1k_quads": 1.3477088948787062,
+    "triangles": 0,
+    "vertices": 10437
+   }
+  },
+  {
+   "case": "khronos/BarramundiFish",
+   "mesh": "khronos/BarramundiFish/BarramundiFish.glb",
+   "license": "CC0-1.0",
+   "seconds": 4.38,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3864,
+   "output_faces": 13565,
+   "tool_seconds": 3.317,
+   "distance": {
+    "hausdorff": 0.002234914513497977,
+    "mean": 0.00012185738803435658,
+    "reference_to_result_max": 0.002234914513497977,
+    "reference_to_result_max_at": [
+     0.03771299868822098,
+     -0.2607190012931824,
+     0.08917199820280075
+    ],
+    "result_to_reference_max": 0.0019478573767072785,
+    "result_to_reference_max_at": [
+     0.03468050016090274,
+     -0.2617737501859665,
+     0.08617549948394299
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.8790663736786,
+     "mean": 15.245944243766294,
+     "min": 0.07652851643126013,
+     "p05": 0.9892643963647458,
+     "p95": 54.51088057690994
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 445.6954820317,
+     "min": 1.0045260014920416,
+     "p05": 1.0686547862431268,
+     "p95": 6.858743472940602
+    },
+    "boundary_edges": 0,
+    "faces": 13565,
+    "irregular_boundary": 0,
+    "irregular_interior": 174,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13565,
+    "scaled_jacobian": {
+     "max": 0.9999953486119363,
+     "mean": 0.8967334633202197,
+     "min": -1.0,
+     "p05": 0.36808427349371126,
+     "p95": 0.9994982614580612
+    },
+    "singularities_per_1k_quads": 12.82712863988205,
+    "triangles": 0,
+    "vertices": 13571
+   }
+  },
+  {
+   "case": "khronos/BoomBox",
+   "mesh": "khronos/BoomBox/BoomBox.glb",
+   "license": "CC0-1.0",
+   "seconds": 2.93,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 6036,
+   "output_faces": 12937,
+   "tool_seconds": 2.141,
+   "distance": {
+    "hausdorff": 0.002279056997594925,
+    "mean": 0.00015935864558205463,
+    "reference_to_result_max": 0.002279056997594925,
+    "reference_to_result_max_at": [
+     -0.008671999908983707,
+     0.0010189999593421817,
+     0.0017320000333711505
+    ],
+    "result_to_reference_max": 0.0016264303452475934,
+    "result_to_reference_max_at": [
+     0.00908250012435019,
+     0.000987500010523945,
+     0.001047749989083968
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 68.65718835635835,
+     "mean": 8.199344700170611,
+     "min": 0.0,
+     "p05": 0.3169938140504236,
+     "p95": 27.977863923075084
+    },
+    "aspect_ratio": {
+     "max": 18.02450399918514,
+     "mean": 1.333681999473834,
+     "min": 1.0000011686716967,
+     "p05": 1.014335763335351,
+     "p95": 2.0544949564117467
+    },
+    "boundary_edges": 272,
+    "faces": 12937,
+    "irregular_boundary": 0,
+    "irregular_interior": 86,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 12937,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.966697746387473,
+     "min": 0.14599667457430285,
+     "p05": 0.828228187932514,
+     "p95": 0.999929752066623
+    },
+    "singularities_per_1k_quads": 6.647599907242792,
+    "triangles": 0,
+    "vertices": 13091
+   }
+  },
+  {
+   "case": "khronos/BrainStem",
+   "mesh": "khronos/BrainStem/BrainStem.glb",
+   "license": "LicenseRef-Poser-EULA",
+   "seconds": 13.56,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 61666,
+   "output_faces": 84972,
+   "tool_seconds": 12.297,
+   "distance": {
+    "hausdorff": 0.002593073106055679,
+    "mean": 0.00012330763282450806,
+    "reference_to_result_max": 0.002593073106055679,
+    "reference_to_result_max_at": [
+     -0.06354500353336334,
+     -1.5099400281906128,
+     -0.1152309998869896
+    ],
+    "result_to_reference_max": 0.0024256331106283194,
+    "result_to_reference_max_at": [
+     -0.008975250297226012,
+     -1.5894242525100708,
+     0.08941499888896942
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 10.671517085558007,
+     "min": 0.0,
+     "p05": 0.00999504712956778,
+     "p95": 35.453999779864326
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 535.6590431021056,
+     "min": 1.0000003569455596,
+     "p05": 1.0528954212147763,
+     "p95": 3.9333701840736994
+    },
+    "boundary_edges": 5116,
+    "faces": 84972,
+    "irregular_boundary": 515,
+    "irregular_interior": 5398,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 84972,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9246458416805112,
+     "min": -1.0,
+     "p05": 0.6421371885813844,
+     "p95": 0.9999999596575055
+    },
+    "singularities_per_1k_quads": 69.58762886597938,
+    "triangles": 0,
+    "vertices": 87836
+   }
+  },
+  {
+   "case": "khronos/CesiumMan",
+   "mesh": "khronos/CesiumMan/CesiumMan.glb",
+   "license": "CC-BY-4.0 / LicenseRef-LegalMark-Cesium",
+   "seconds": 3.84,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4672,
+   "output_faces": 9111,
+   "tool_seconds": 2.992,
+   "distance": {
+    "hausdorff": 0.002330764695800996,
+    "mean": 0.00011702037321473028,
+    "reference_to_result_max": 0.002330764695800996,
+    "reference_to_result_max_at": [
+     -0.09251800179481506,
+     -1.061210036277771,
+     -0.09296900033950806
+    ],
+    "result_to_reference_max": 0.0015537904075356799,
+    "result_to_reference_max_at": [
+     -0.028430750127881765,
+     -1.0145752727985382,
+     0.12744949758052826
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 79.29843810342706,
+     "mean": 9.05136819925834,
+     "min": 0.09557512873619345,
+     "p05": 0.983163561961284,
+     "p95": 23.76529614119046
+    },
+    "aspect_ratio": {
+     "max": 86.87049190736633,
+     "mean": 1.6195371290429672,
+     "min": 1.004959366538382,
+     "p05": 1.0606071303047369,
+     "p95": 2.3674096495577492
+    },
+    "boundary_edges": 0,
+    "faces": 9111,
+    "irregular_boundary": 0,
+    "irregular_interior": 74,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9111,
+    "scaled_jacobian": {
+     "max": 0.9999876848464865,
+     "mean": 0.9684209401928484,
+     "min": 0.058365713136474665,
+     "p05": 0.8771152796458025,
+     "p95": 0.9996195290768412
+    },
+    "singularities_per_1k_quads": 8.122050268905719,
+    "triangles": 0,
+    "vertices": 9113
+   }
+  },
+  {
+   "case": "khronos/CesiumMilkTruck",
+   "mesh": "khronos/CesiumMilkTruck/CesiumMilkTruck.glb",
+   "license": "CC-BY-4.0 / LicenseRef-LegalMark-Cesium",
+   "seconds": 7.55,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3624,
+   "output_faces": 17097,
+   "tool_seconds": 6.683,
+   "distance": {
+    "hausdorff": 0.004027208503008852,
+    "mean": 0.0001350671566791145,
+    "reference_to_result_max": 0.004027208503008852,
+    "reference_to_result_max_at": [
+     0.19871999323368073,
+     2.40120005607605,
+     1.0549999475479126
+    ],
+    "result_to_reference_max": 0.0035070842657149255,
+    "result_to_reference_max_at": [
+     0.46748800575733185,
+     2.364796280860901,
+     -1.077334463596344
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.61901570058001,
+     "mean": 11.855082744789913,
+     "min": 0.0,
+     "p05": 0.31277611740011224,
+     "p95": 46.8820351684802
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 126.08989544916047,
+     "min": 1.0035831892834322,
+     "p05": 1.0517501824153273,
+     "p95": 4.185658367773092
+    },
+    "boundary_edges": 632,
+    "faces": 17097,
+    "irregular_boundary": 0,
+    "irregular_interior": 322,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 17097,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9240817842590325,
+     "min": -1.0,
+     "p05": 0.5312215288243218,
+     "p95": 0.9999521513539584
+    },
+    "singularities_per_1k_quads": 18.833713516991285,
+    "triangles": 0,
+    "vertices": 17441
+   }
+  },
+  {
+   "case": "khronos/ChronographWatch",
+   "mesh": "khronos/ChronographWatch/ChronographWatch.glb",
+   "license": "CC-BY-4.0 / LicenseRef-LegalMark-DGG / LicenseRef-LegalMark-Khronos",
+   "seconds": 81.66,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 100002,
+   "output_faces": 95164,
+   "tool_seconds": 80.412,
+   "distance": {
+    "hausdorff": 0.007088436073041973,
+    "mean": 0.00019710137036978468,
+    "reference_to_result_max": 0.007088436073041973,
+    "reference_to_result_max_at": [
+     1.015097975730896,
+     -0.7215269804000854,
+     -0.6786109805107117
+    ],
+    "result_to_reference_max": 0.004976110971141514,
+    "result_to_reference_max_at": [
+     0.3064444996416569,
+     2.042081296443939,
+     -2.8179786801338196
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 24.131054090402287,
+     "min": 5.986563140325529e-05,
+     "p05": 2.048299475067008,
+     "p95": 78.10380649362105
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 1154.6104077845655,
+     "min": 1.0004714219579176,
+     "p05": 1.0952062111964476,
+     "p95": 10.261184091306344
+    },
+    "boundary_edges": 4874,
+    "faces": 95164,
+    "irregular_boundary": 570,
+    "irregular_interior": 8038,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 95164,
+    "scaled_jacobian": {
+     "max": 0.9999999999993232,
+     "mean": 0.7699173976036211,
+     "min": -1.0,
+     "p05": 0.09843543184002283,
+     "p95": 0.9983006599328024
+    },
+    "singularities_per_1k_quads": 90.45437350258501,
+    "triangles": 0,
+    "vertices": 97470
+   }
+  },
+  {
+   "case": "khronos/CommercialRefrigerator",
+   "mesh": "khronos/CommercialRefrigerator/CommercialRefrigerator.glb",
+   "license": "CC-BY-4.0",
+   "seconds": 12.06,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 208679,
+   "output_faces": 105346,
+   "tool_seconds": 10.874,
+   "distance": {
+    "hausdorff": 0.0020327394560926515,
+    "mean": 0.00026954426870428314,
+    "reference_to_result_max": 0.0020041432381402253,
+    "reference_to_result_max_at": [
+     -0.24051399528980255,
+     -0.24213799834251404,
+     1.0946439504623413
+    ],
+    "result_to_reference_max": 0.0020327394560926515,
+    "result_to_reference_max_at": [
+     -0.20059575140476227,
+     -0.052114750258624554,
+     1.4585817456245422
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 5.971529758929232,
+     "min": 0.0,
+     "p05": 0.0,
+     "p95": 30.092534939113623
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 107.93947051961682,
+     "min": 1.0001174611868808,
+     "p05": 1.0328346059312805,
+     "p95": 5.98205878018183
+    },
+    "boundary_edges": 8512,
+    "faces": 105346,
+    "irregular_boundary": 38,
+    "irregular_interior": 1233,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 105346,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9634103674084439,
+     "min": -1.0,
+     "p05": 0.8072586579357225,
+     "p95": 1.0
+    },
+    "singularities_per_1k_quads": 12.065004841189984,
+    "triangles": 0,
+    "vertices": 109946
+   }
+  },
+  {
+   "case": "khronos/Corset",
+   "mesh": "khronos/Corset/Corset.glb",
+   "license": "CC0-1.0",
+   "seconds": 4.67,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 18324,
+   "output_faces": 32438,
+   "tool_seconds": 3.758,
+   "distance": {
+    "hausdorff": 0.0031370897464908063,
+    "mean": 8.770922646499424e-05,
+    "reference_to_result_max": 0.0031370897464908063,
+    "reference_to_result_max_at": [
+     -0.007973000407218933,
+     -0.010564999654889107,
+     0.044870998710393906
+    ],
+    "result_to_reference_max": 0.002289680758979629,
+    "result_to_reference_max_at": [
+     -0.007866749772801995,
+     -0.010343249887228012,
+     0.04483800008893013
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 11.038800693539141,
+     "min": 0.0,
+     "p05": 0.8183592840671281,
+     "p95": 36.56863289110328
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 711.5029921308656,
+     "min": 1.0015669080156255,
+     "p05": 1.0265436313855125,
+     "p95": 5.220401464090738
+    },
+    "boundary_edges": 2270,
+    "faces": 32438,
+    "irregular_boundary": 49,
+    "irregular_interior": 640,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 32438,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.935397988231109,
+     "min": -1.0,
+     "p05": 0.6851339467426956,
+     "p95": 0.9997047045531383
+    },
+    "singularities_per_1k_quads": 21.240520377335223,
+    "triangles": 0,
+    "vertices": 33613
+   }
+  },
+  {
+   "case": "khronos/DamagedHelmet",
+   "mesh": "khronos/DamagedHelmet/DamagedHelmet.glb",
+   "license": "CC-BY-4.0 / CC-BY-NC-4.0",
+   "seconds": 6.7,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 15452,
+   "output_faces": 33829,
+   "tool_seconds": 5.905,
+   "distance": {
+    "hausdorff": 0.003998833435391022,
+    "mean": 0.00018851168927589375,
+    "reference_to_result_max": 0.003998833435391022,
+    "reference_to_result_max_at": [
+     -0.18542400002479553,
+     0.48373299837112427,
+     0.8528820276260376
+    ],
+    "result_to_reference_max": 0.003192594603366801,
+    "result_to_reference_max_at": [
+     -0.7475682348012924,
+     0.024495000136084855,
+     0.24936800077557564
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99735653956665,
+     "mean": 11.177561585934132,
+     "min": 0.0070034092384752,
+     "p05": 0.981436914033047,
+     "p95": 35.049079741891305
+    },
+    "aspect_ratio": {
+     "max": 20768.558214433288,
+     "mean": 2.747296340766918,
+     "min": 1.0018230390874527,
+     "p05": 1.048096482460225,
+     "p95": 3.4947457332235685
+    },
+    "boundary_edges": 4732,
+    "faces": 33829,
+    "irregular_boundary": 124,
+    "irregular_interior": 596,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 33829,
+    "scaled_jacobian": {
+     "max": 0.9999999721316098,
+     "mean": 0.9400328594386097,
+     "min": -0.12385743808515136,
+     "p05": 0.7231636754274419,
+     "p95": 0.9995359417827714
+    },
+    "singularities_per_1k_quads": 21.283514144668775,
+    "triangles": 0,
+    "vertices": 36225
+   }
+  },
+  {
+   "case": "khronos/DragonAttenuation",
+   "mesh": "khronos/DragonAttenuation/DragonAttenuation.glb",
+   "license": "CC0-1.0 / LicenseRef-Stanford-Graphics",
+   "seconds": 16.31,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 134995,
+   "output_faces": 29113,
+   "tool_seconds": 15.177,
+   "distance": {
+    "hausdorff": 0.004525345653493124,
+    "mean": 0.00023950784503199414,
+    "reference_to_result_max": 0.004015777096004124,
+    "reference_to_result_max_at": [
+     -0.1584583322207133,
+     -0.23439166446526846,
+     -0.09062299877405167
+    ],
+    "result_to_reference_max": 0.004525345653493124,
+    "result_to_reference_max_at": [
+     1.3654890060424805,
+     0.13150399923324585,
+     0.8258217573165894
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 19.84885692017855,
+     "min": 0.059256822173949786,
+     "p05": 1.0964243448650421,
+     "p95": 53.369408647946955
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 954.2895159104451,
+     "min": 1.0008986788849756,
+     "p05": 1.0926701422819807,
+     "p95": 7.5037974973137835
+    },
+    "boundary_edges": 370,
+    "faces": 29113,
+    "irregular_boundary": 3,
+    "irregular_interior": 5823,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 29113,
+    "scaled_jacobian": {
+     "max": 0.9999986473933938,
+     "mean": 0.778637271138288,
+     "min": -1.0,
+     "p05": 0.22365498185783098,
+     "p95": 0.9995340896814401
+    },
+    "singularities_per_1k_quads": 200.11678631539175,
+    "triangles": 0,
+    "vertices": 29297
+   }
+  },
+  {
+   "case": "khronos/Duck",
+   "mesh": "khronos/Duck/Duck.glb",
+   "license": "SCEA",
+   "seconds": 3.37,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4212,
+   "output_faces": 9409,
+   "tool_seconds": 2.6,
+   "distance": {
+    "hausdorff": 0.0032762303011183657,
+    "mean": 0.0002152983653147101,
+    "reference_to_result_max": 0.0032762303011183657,
+    "reference_to_result_max_at": [
+     -37.31769943237305,
+     14.532299995422363,
+     89.3021011352539
+    ],
+    "result_to_reference_max": 0.0025418832297493714,
+    "result_to_reference_max_at": [
+     82.91204643249512,
+     28.444005966186523,
+     108.92269515991211
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 65.07896289865187,
+     "mean": 7.061182578018385,
+     "min": 0.032955409004809866,
+     "p05": 0.7263525578388403,
+     "p95": 20.948586239979754
+    },
+    "aspect_ratio": {
+     "max": 24.901789168083138,
+     "mean": 1.3498255127564023,
+     "min": 1.0020592423238497,
+     "p05": 1.0383667709513549,
+     "p95": 2.0231108323411333
+    },
+    "boundary_edges": 0,
+    "faces": 9409,
+    "irregular_boundary": 0,
+    "irregular_interior": 61,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9409,
+    "scaled_jacobian": {
+     "max": 0.9999929353801101,
+     "mean": 0.9761182409661919,
+     "min": 0.19972347712674635,
+     "p05": 0.894361461184324,
+     "p95": 0.9996832663928008
+    },
+    "singularities_per_1k_quads": 6.483154426612818,
+    "triangles": 0,
+    "vertices": 9411
+   }
+  },
+  {
+   "case": "khronos/Fox",
+   "mesh": "khronos/Fox/Fox.glb",
+   "license": "CC-BY-4.0 / CC0-1.0",
+   "seconds": 2.85,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 576,
+   "output_faces": 11034,
+   "tool_seconds": 2.114,
+   "distance": {
+    "hausdorff": 0.004906159788865561,
+    "mean": 8.643129644004894e-05,
+    "reference_to_result_max": 0.0029456803934184025,
+    "reference_to_result_max_at": [
+     5.973052978515625,
+     44.94326400756836,
+     34.281341552734375
+    ],
+    "result_to_reference_max": 0.004906159788865561,
+    "result_to_reference_max_at": [
+     5.928003430366516,
+     40.656527519226074,
+     44.02047824859619
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 87.68341173479055,
+     "mean": 15.776158293631179,
+     "min": 0.08471890182548591,
+     "p05": 1.517687375188217,
+     "p95": 50.38733281470788
+    },
+    "aspect_ratio": {
+     "max": 2145.3908944089585,
+     "mean": 2.376608537595057,
+     "min": 1.0044782455379522,
+     "p05": 1.0688836422199723,
+     "p95": 3.807661715520868
+    },
+    "boundary_edges": 0,
+    "faces": 11034,
+    "irregular_boundary": 0,
+    "irregular_interior": 100,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 11034,
+    "scaled_jacobian": {
+     "max": 0.9999936241586964,
+     "mean": 0.9117666420575868,
+     "min": 2.419612375281516e-06,
+     "p05": 0.5488288348453007,
+     "p95": 0.9989368557964645
+    },
+    "singularities_per_1k_quads": 9.06289650172195,
+    "triangles": 0,
+    "vertices": 11036
+   }
+  },
+  {
+   "case": "khronos/GlamVelvetSofa",
+   "mesh": "khronos/GlamVelvetSofa/GlamVelvetSofa.glb",
+   "license": "CC-BY-4.0",
+   "seconds": 9.13,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4196,
+   "output_faces": 13167,
+   "tool_seconds": 8.188,
+   "distance": {
+    "hausdorff": 0.004344870050604069,
+    "mean": 0.0001619031345290036,
+    "reference_to_result_max": 0.004344870050604069,
+    "reference_to_result_max_at": [
+     -0.6865893403689066,
+     0.3933613399664561,
+     0.43503599365552265
+    ],
+    "result_to_reference_max": 0.003031677821990285,
+    "result_to_reference_max_at": [
+     -0.41459349542856216,
+     -0.2715054973959923,
+     0.23511774837970734
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 87.57128088914602,
+     "mean": 13.283927618185807,
+     "min": 0.08982946019054694,
+     "p05": 1.0416796432742537,
+     "p95": 44.678964149523274
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 154.04796111984524,
+     "min": 1.0017364672845979,
+     "p05": 1.0833880367723066,
+     "p95": 4.054614284963619
+    },
+    "boundary_edges": 82,
+    "faces": 13167,
+    "irregular_boundary": 0,
+    "irregular_interior": 110,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13167,
+    "scaled_jacobian": {
+     "max": 0.999993733229829,
+     "mean": 0.9314483311781907,
+     "min": -1.0,
+     "p05": 0.648918997259599,
+     "p95": 0.9994867844525887
+    },
+    "singularities_per_1k_quads": 8.35421888053467,
+    "triangles": 0,
+    "vertices": 13219
+   }
+  },
+  {
+   "case": "khronos/Lantern",
+   "mesh": "khronos/Lantern/Lantern.glb",
+   "license": "CC0-1.0",
+   "seconds": 3.65,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 5394,
+   "output_faces": 15009,
+   "tool_seconds": 2.538,
+   "distance": {
+    "hausdorff": 0.0021141720329720458,
+    "mean": 7.66568508824896e-05,
+    "reference_to_result_max": 0.0018488271327358602,
+    "reference_to_result_max_at": [
+     -1.7888940572738647,
+     1.7888940572738647,
+     0.7923740148544312
+    ],
+    "result_to_reference_max": 0.0021141720329720458,
+    "result_to_reference_max_at": [
+     -1.6454562544822693,
+     -1.6755835115909576,
+     0.7772419899702072
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.84761439662664,
+     "mean": 6.811303266967675,
+     "min": 0.0,
+     "p05": 0.05990471007658016,
+     "p95": 24.738459234468998
+    },
+    "aspect_ratio": {
+     "max": 52706.943667186955,
+     "mean": 7.237345769923933,
+     "min": 1.0000869053829224,
+     "p05": 1.0167633701315426,
+     "p95": 2.72159449873004
+    },
+    "boundary_edges": 182,
+    "faces": 15009,
+    "irregular_boundary": 6,
+    "irregular_interior": 196,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 15009,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9667662680402654,
+     "min": -0.0307051816502138,
+     "p05": 0.8509811209126107,
+     "p95": 0.9999989453216461
+    },
+    "singularities_per_1k_quads": 13.45859151175961,
+    "triangles": 0,
+    "vertices": 15115
+   }
+  },
+  {
+   "case": "khronos/MaterialsVariantsShoe",
+   "mesh": "khronos/MaterialsVariantsShoe/MaterialsVariantsShoe.glb",
+   "license": "CC-BY-4.0",
+   "seconds": 5.06,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 22700,
+   "output_faces": 21019,
+   "tool_seconds": 4.098,
+   "distance": {
+    "hausdorff": 0.0036304326694983923,
+    "mean": 0.00021337450489013887,
+    "reference_to_result_max": 0.003467301037520012,
+    "reference_to_result_max_at": [
+     -0.7345410188039144,
+     0.04077933356165886,
+     0.18282266954580942
+    ],
+    "result_to_reference_max": 0.0036304326694983923,
+    "result_to_reference_max_at": [
+     -0.7365582436323166,
+     0.03223200037609786,
+     0.17350150272250175
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 88.96587377484737,
+     "mean": 12.444628486411412,
+     "min": 0.03914337769881371,
+     "p05": 1.1557115729127396,
+     "p95": 44.82337459831425
+    },
+    "aspect_ratio": {
+     "max": 279.76412700145977,
+     "mean": 1.7510756073700289,
+     "min": 1.003394498791887,
+     "p05": 1.0467491056587037,
+     "p95": 3.1826835347780813
+    },
+    "boundary_edges": 1646,
+    "faces": 21019,
+    "irregular_boundary": 12,
+    "irregular_interior": 69,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 21019,
+    "scaled_jacobian": {
+     "max": 0.9999979557044332,
+     "mean": 0.9352889765979929,
+     "min": -0.03302670441379186,
+     "p05": 0.6537654066805741,
+     "p95": 0.9993126808500838
+    },
+    "singularities_per_1k_quads": 3.8536562158047483,
+    "triangles": 0,
+    "vertices": 21848
+   }
+  },
+  {
+   "case": "khronos/SciFiHelmet",
+   "mesh": "khronos/SciFiHelmet/glTF/SciFiHelmet.gltf",
+   "license": "CC0-1.0",
+   "seconds": 12.23,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 23358,
+   "output_faces": 34403,
+   "tool_seconds": 11.068,
+   "distance": {
+    "hausdorff": 0.005683220577134452,
+    "mean": 0.0002986685597699763,
+    "reference_to_result_max": 0.005683220577134452,
+    "reference_to_result_max_at": [
+     -0.6288266579310099,
+     -0.5883019963900248,
+     0.542106012503306
+    ],
+    "result_to_reference_max": 0.004590890351004158,
+    "result_to_reference_max_at": [
+     -0.43906500935554504,
+     -0.7206767499446869,
+     0.7238655090332031
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.08558001715679,
+     "mean": 16.34586867666031,
+     "min": 0.052915183767094476,
+     "p05": 2.078320555474896,
+     "p95": 47.28836858070127
+    },
+    "aspect_ratio": {
+     "max": 92179.72318421879,
+     "mean": 5.94464410689733,
+     "min": 1.0062232570217393,
+     "p05": 1.1043256063081224,
+     "p95": 4.328234465314602
+    },
+    "boundary_edges": 1012,
+    "faces": 34403,
+    "irregular_boundary": 28,
+    "irregular_interior": 2124,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 34403,
+    "scaled_jacobian": {
+     "max": 0.9999985259434683,
+     "mean": 0.8733297182199348,
+     "min": -0.39716787123815117,
+     "p05": 0.43591363447518516,
+     "p95": 0.9977960180658038
+    },
+    "singularities_per_1k_quads": 62.552684358922185,
+    "triangles": 0,
+    "vertices": 34899
+   }
+  },
+  {
+   "case": "khronos/SheenChair",
+   "mesh": "khronos/SheenChair/SheenChair.glb",
+   "license": "CC0-1.0",
+   "seconds": 19.76,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 39936,
+   "output_faces": 31870,
+   "tool_seconds": 18.901,
+   "distance": {
+    "hausdorff": 0.0034035942700205916,
+    "mean": 0.0002563597821251555,
+    "reference_to_result_max": 0.0034035942700205916,
+    "reference_to_result_max_at": [
+     0.09899800270795822,
+     -0.0434969998896122,
+     0.3338629901409149
+    ],
+    "result_to_reference_max": 0.0025140963151491875,
+    "result_to_reference_max_at": [
+     -0.21752050146460533,
+     0.22298125177621841,
+     0.5138117372989655
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99562348859789,
+     "mean": 8.610959475711951,
+     "min": 0.0007888483593063711,
+     "p05": 0.7091603894783276,
+     "p95": 22.802883535972217
+    },
+    "aspect_ratio": {
+     "max": 1207.5506731940204,
+     "mean": 1.5465064796299228,
+     "min": 1.002223926595664,
+     "p05": 1.0295918440018812,
+     "p95": 1.841861288105569
+    },
+    "boundary_edges": 982,
+    "faces": 31870,
+    "irregular_boundary": 38,
+    "irregular_interior": 291,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 31870,
+    "scaled_jacobian": {
+     "max": 0.9999999863944331,
+     "mean": 0.9583258233823416,
+     "min": -0.04554407252074562,
+     "p05": 0.8687306495730338,
+     "p95": 0.9997383153245841
+    },
+    "singularities_per_1k_quads": 10.323187951051144,
+    "triangles": 0,
+    "vertices": 32404
+   }
+  },
+  {
+   "case": "khronos/SheenCloth",
+   "mesh": "khronos/SheenCloth/glTF/SheenCloth.gltf",
+   "license": "CC0-1.0",
+   "seconds": 8.75,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 115200,
+   "output_faces": 13703,
+   "tool_seconds": 7.513,
+   "distance": {
+    "hausdorff": 0.003716715924156651,
+    "mean": 0.00034904524651355434,
+    "reference_to_result_max": 0.003716715924156651,
+    "reference_to_result_max_at": [
+     0.011508000083267689,
+     0.011025000363588333,
+     0.019933000206947327
+    ],
+    "result_to_reference_max": 0.0032394343372269515,
+    "result_to_reference_max_at": [
+     0.011148749617859721,
+     0.010593750048428774,
+     0.019819500390440226
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 80.45799287492522,
+     "mean": 6.366294921078776,
+     "min": 0.09490356845655867,
+     "p05": 0.896635662614365,
+     "p95": 16.065073557346416
+    },
+    "aspect_ratio": {
+     "max": 31.39640621180847,
+     "mean": 1.3066572234375449,
+     "min": 1.0036283100901127,
+     "p05": 1.0352347091397494,
+     "p95": 1.7874785284893329
+    },
+    "boundary_edges": 466,
+    "faces": 13703,
+    "irregular_boundary": 0,
+    "irregular_interior": 2,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13703,
+    "scaled_jacobian": {
+     "max": 0.999997169718519,
+     "mean": 0.9786280695267203,
+     "min": 0.06380209846811176,
+     "p05": 0.9303264143118478,
+     "p95": 0.9991861595189421
+    },
+    "singularities_per_1k_quads": 0.14595344085236808,
+    "triangles": 0,
+    "vertices": 13937
+   }
+  },
+  {
+   "case": "khronos/SpecularSilkPouf",
+   "mesh": "khronos/SpecularSilkPouf/SpecularSilkPouf.glb",
+   "license": "CC-BY-4.0",
+   "seconds": 46.5,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 81280,
+   "output_faces": 77334,
+   "tool_seconds": 45.589,
+   "distance": {
+    "hausdorff": 0.005004208632006011,
+    "mean": 0.00014168609147411206,
+    "reference_to_result_max": 0.005004208632006011,
+    "reference_to_result_max_at": [
+     0.25157201290130615,
+     -0.023665999993681908,
+     -0.044328998774290085
+    ],
+    "result_to_reference_max": 0.0032203485280995407,
+    "result_to_reference_max_at": [
+     0.27378299087285995,
+     -0.10993025079369545,
+     0.12404025159776211
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 24.672035733532113,
+     "min": 0.05989978686151787,
+     "p05": 1.8786864104755665,
+     "p95": 71.71270234926064
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 396.3123204092873,
+     "min": 1.0027394477859817,
+     "p05": 1.0807129276589882,
+     "p95": 6.652382146755298
+    },
+    "boundary_edges": 1308,
+    "faces": 77334,
+    "irregular_boundary": 283,
+    "irregular_interior": 2916,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 77334,
+    "scaled_jacobian": {
+     "max": 0.9999975154673992,
+     "mean": 0.8042267835677168,
+     "min": -1.0,
+     "p05": 0.19594390257420427,
+     "p95": 0.998240768936756
+    },
+    "singularities_per_1k_quads": 41.366022706700804,
+    "triangles": 0,
+    "vertices": 77991
+   }
+  },
+  {
+   "case": "khronos/SunglassesKhronos",
+   "mesh": "khronos/SunglassesKhronos/SunglassesKhronos.glb",
+   "license": "CC-BY-4.0 / LicenseRef-LegalMark-Khronos",
+   "seconds": 2.96,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 13396,
+   "output_faces": 24844,
+   "tool_seconds": 2.157,
+   "distance": {
+    "hausdorff": 0.001454899025477831,
+    "mean": 8.200891869025978e-05,
+    "reference_to_result_max": 0.001454899025477831,
+    "reference_to_result_max_at": [
+     -0.06242400035262108,
+     -0.004993000067770481,
+     0.15666499733924866
+    ],
+    "result_to_reference_max": 0.0011984730500892709,
+    "result_to_reference_max_at": [
+     -0.062165750190615654,
+     -0.005008499952964485,
+     0.1563127487897873
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 12.813493113034898,
+     "min": 0.0,
+     "p05": 0.6504493317412035,
+     "p95": 40.69153597573809
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 283.93973623050476,
+     "min": 1.001770405487437,
+     "p05": 1.0266660340075944,
+     "p95": 3.525380097025442
+    },
+    "boundary_edges": 812,
+    "faces": 24844,
+    "irregular_boundary": 6,
+    "irregular_interior": 351,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 24844,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9320501689056063,
+     "min": -1.0,
+     "p05": 0.6373843835097599,
+     "p95": 0.999840270211364
+    },
+    "singularities_per_1k_quads": 14.36966672033489,
+    "triangles": 0,
+    "vertices": 25280
+   }
+  },
+  {
+   "case": "khronos/ToyCar",
+   "mesh": "khronos/ToyCar/ToyCar.glb",
+   "license": "CC0-1.0",
+   "seconds": 15.35,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 108936,
+   "output_faces": 53506,
+   "tool_seconds": 14.27,
+   "distance": {
+    "hausdorff": 0.004876774646267735,
+    "mean": 0.00020302594818922482,
+    "reference_to_result_max": 0.004840150150222378,
+    "reference_to_result_max_at": [
+     0.030690999701619148,
+     0.005286999978125095,
+     -0.015475000254809856
+    ],
+    "result_to_reference_max": 0.004876774646267735,
+    "result_to_reference_max_at": [
+     -0.02284125005826354,
+     0.009663250297307968,
+     -0.01580525003373623
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 13.855055432390085,
+     "min": 0.02204942261970544,
+     "p05": 1.4639726039879193,
+     "p95": 40.35851742258635
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 619.2764371682348,
+     "min": 1.0039641377191204,
+     "p05": 1.0619424282524295,
+     "p95": 5.9078847257298985
+    },
+    "boundary_edges": 3424,
+    "faces": 53506,
+    "irregular_boundary": 79,
+    "irregular_interior": 2256,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 53506,
+    "scaled_jacobian": {
+     "max": 0.9999999253465545,
+     "mean": 0.9009919712652287,
+     "min": -1.0,
+     "p05": 0.5399362192424849,
+     "p95": 0.9989183102384545
+    },
+    "singularities_per_1k_quads": 43.63996561133331,
+    "triangles": 0,
+    "vertices": 55235
+   }
+  },
+  {
+   "case": "khronos/TrafficCone",
+   "mesh": "khronos/TrafficCone/TrafficCone.glb",
+   "license": "CC-BY-4.0 / CC0-1.0",
+   "seconds": 4.17,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 17224,
+   "output_faces": 24414,
+   "tool_seconds": 3.295,
+   "distance": {
+    "hausdorff": 0.0015949460568538856,
+    "mean": 0.00011745951886737809,
+    "reference_to_result_max": 0.0015949460568538856,
+    "reference_to_result_max_at": [
+     -0.3069770038127899,
+     -0.5183150172233582,
+     0.01684500090777874
+    ],
+    "result_to_reference_max": 0.0010723725078602003,
+    "result_to_reference_max_at": [
+     -0.1449199989438057,
+     -0.01999825006350875,
+     0.20240000262856483
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 80.82609937798763,
+     "mean": 6.051717558636662,
+     "min": 0.01624271471124672,
+     "p05": 0.494037563900104,
+     "p95": 17.467650115358587
+    },
+    "aspect_ratio": {
+     "max": 371.0833023584548,
+     "mean": 2.095772275552778,
+     "min": 1.0010978806214021,
+     "p05": 1.0099837152332873,
+     "p95": 5.017158142441491
+    },
+    "boundary_edges": 552,
+    "faces": 24414,
+    "irregular_boundary": 5,
+    "irregular_interior": 35,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 24414,
+    "scaled_jacobian": {
+     "max": 0.9999998585356961,
+     "mean": 0.9799150529468271,
+     "min": -0.08301872095371621,
+     "p05": 0.9321233397381014,
+     "p95": 0.9999212587553306
+    },
+    "singularities_per_1k_quads": 1.6384041943147374,
+    "triangles": 0,
+    "vertices": 24691
+   }
+  },
+  {
+   "case": "khronos/WaterBottle",
+   "mesh": "khronos/WaterBottle/WaterBottle.glb",
+   "license": "CC0-1.0",
+   "seconds": 2.94,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4510,
+   "output_faces": 14413,
+   "tool_seconds": 2.123,
+   "distance": {
+    "hausdorff": 0.002923526921051662,
+    "mean": 0.00016252532743837,
+    "reference_to_result_max": 0.002151208125637553,
+    "reference_to_result_max_at": [
+     -0.028334999457001686,
+     0.004488000180572271,
+     0.09096600115299225
+    ],
+    "result_to_reference_max": 0.002923526921051662,
+    "result_to_reference_max_at": [
+     0.02319200010970235,
+     -0.048756999894976616,
+     -0.10948275029659271
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 88.53785742087884,
+     "mean": 7.568202020871094,
+     "min": 0.013397282374924657,
+     "p05": 0.48776686153811966,
+     "p95": 37.565846987974474
+    },
+    "aspect_ratio": {
+     "max": 58.511664906633,
+     "mean": 1.3658475922386804,
+     "min": 1.0005236225958252,
+     "p05": 1.023208717711539,
+     "p95": 2.1047759039368077
+    },
+    "boundary_edges": 716,
+    "faces": 14413,
+    "irregular_boundary": 0,
+    "irregular_interior": 26,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 14413,
+    "scaled_jacobian": {
+     "max": 0.999999858778518,
+     "mean": 0.9671623482972124,
+     "min": 0.0004790850858526122,
+     "p05": 0.756795497009762,
+     "p95": 0.9999026666813132
+    },
+    "singularities_per_1k_quads": 1.8039270103378895,
+    "triangles": 0,
+    "vertices": 14769
+   }
+  },
+  {
+   "case": "thingi10k/105762",
+   "mesh": "thingi10k/105762/105762.stl",
+   "license": "CC-BY-SA (thing 37117 by BenitoSanduchi)",
+   "seconds": 10.88,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 30572,
+   "output_faces": 31471,
+   "tool_seconds": 9.882,
+   "distance": {
+    "hausdorff": 0.006513170859411173,
+    "mean": 8.951829695855156e-05,
+    "reference_to_result_max": 0.006513170859411173,
+    "reference_to_result_max_at": [
+     -7.511937141418457,
+     31.814300537109375,
+     60.45941925048828
+    ],
+    "result_to_reference_max": 0.005688588053051613,
+    "result_to_reference_max_at": [
+     -6.59092116355896,
+     32.40586519241333,
+     60.890838623046875
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 83.87076815524367,
+     "mean": 16.698792100772057,
+     "min": 0.03777251725815489,
+     "p05": 1.5973731608709372,
+     "p95": 41.801314911464736
+    },
+    "aspect_ratio": {
+     "max": 20.017974338591586,
+     "mean": 1.7530568860048366,
+     "min": 1.0037661069291943,
+     "p05": 1.0623813803875215,
+     "p95": 2.9945249040256026
+    },
+    "boundary_edges": 0,
+    "faces": 31471,
+    "irregular_boundary": 0,
+    "irregular_interior": 178,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 31471,
+    "scaled_jacobian": {
+     "max": 0.9999991307663619,
+     "mean": 0.9251145115540511,
+     "min": 0.10677014566170735,
+     "p05": 0.7132504596336074,
+     "p95": 0.9988291376418673
+    },
+    "singularities_per_1k_quads": 5.656000762606844,
+    "triangles": 0,
+    "vertices": 31473
+   }
+  },
+  {
+   "case": "thingi10k/124040",
+   "mesh": "thingi10k/124040/124040.stl",
+   "license": "CC-BY (thing 42877 by MakerBot)",
+   "seconds": 3.06,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 7384,
+   "output_faces": 10802,
+   "tool_seconds": 2.442,
+   "distance": {
+    "hausdorff": 0.0018106005990868744,
+    "mean": 0.00011069876903452506,
+    "reference_to_result_max": 0.0018106005990868744,
+    "reference_to_result_max_at": [
+     -2.8557066122690835,
+     -2.1949210166931152,
+     0.10416666666666667
+    ],
+    "result_to_reference_max": 0.0014410794227082127,
+    "result_to_reference_max_at": [
+     4.35754668712616,
+     -0.4539957419037819,
+     2.362784445285797
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 49.2367295272868,
+     "mean": 11.630628287227829,
+     "min": 0.014132894606273538,
+     "p05": 1.139432802303869,
+     "p95": 38.81058605385935
+    },
+    "aspect_ratio": {
+     "max": 3.09522610688062,
+     "mean": 1.2107712186928825,
+     "min": 1.0037878659782642,
+     "p05": 1.035376445762796,
+     "p95": 1.6050337143049664
+    },
+    "boundary_edges": 0,
+    "faces": 10802,
+    "irregular_boundary": 0,
+    "irregular_interior": 66,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10802,
+    "scaled_jacobian": {
+     "max": 0.999999931767429,
+     "mean": 0.9553050266353763,
+     "min": 0.38237289013118364,
+     "p05": 0.7646728532696875,
+     "p95": 0.9994354296232247
+    },
+    "singularities_per_1k_quads": 6.109979633401222,
+    "triangles": 0,
+    "vertices": 10804
+   }
+  },
+  {
+   "case": "thingi10k/1458674",
+   "mesh": "thingi10k/1458674/1458674.stl",
+   "license": "CC-BY (thing 83024 by barspin)",
+   "seconds": 6.95,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4438,
+   "output_faces": 15390,
+   "tool_seconds": 6.3,
+   "distance": {
+    "hausdorff": 0.0031808432831532487,
+    "mean": 0.00014007470435380362,
+    "reference_to_result_max": 0.0031808432831532487,
+    "reference_to_result_max_at": [
+     17.770999908447266,
+     -0.29899999499320984,
+     53.55099868774414
+    ],
+    "result_to_reference_max": 0.003170757509115674,
+    "result_to_reference_max_at": [
+     17.5900936126709,
+     -0.40500548854470253,
+     53.4431209564209
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 78.45154587520895,
+     "mean": 9.066026351515646,
+     "min": 0.020129293378726487,
+     "p05": 0.605913359527328,
+     "p95": 27.950103096346236
+    },
+    "aspect_ratio": {
+     "max": 54.4328084151928,
+     "mean": 1.4740484808657983,
+     "min": 1.0004109549898763,
+     "p05": 1.0394606171398248,
+     "p95": 2.3818088672544517
+    },
+    "boundary_edges": 0,
+    "faces": 15390,
+    "irregular_boundary": 0,
+    "irregular_interior": 262,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 15390,
+    "scaled_jacobian": {
+     "max": 0.9999995621083874,
+     "mean": 0.9614439777463692,
+     "min": 0.15183687370399673,
+     "p05": 0.8268925470306627,
+     "p95": 0.9998192219629124
+    },
+    "singularities_per_1k_quads": 17.024041585445094,
+    "triangles": 0,
+    "vertices": 15384
+   }
+  },
+  {
+   "case": "thingi10k/1492345",
+   "mesh": "thingi10k/1492345/1492345.stl",
+   "license": "CC-BY-SA (thing 939266 by daGHIZmo)",
+   "seconds": 4.34,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 10424,
+   "output_faces": 14774,
+   "tool_seconds": 3.616,
+   "distance": {
+    "hausdorff": 0.0024147667011110473,
+    "mean": 0.00017823218788078657,
+    "reference_to_result_max": 0.0024147667011110473,
+    "reference_to_result_max_at": [
+     22.73098627726237,
+     10.922497749328613,
+     13.741550127665201
+    ],
+    "result_to_reference_max": 0.001685905431478385,
+    "result_to_reference_max_at": [
+     22.78534507751465,
+     15.175457239151001,
+     13.53971791267395
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 72.75579475843612,
+     "mean": 5.753549592179508,
+     "min": 0.018289615718305896,
+     "p05": 0.562146228741554,
+     "p95": 14.736094443962713
+    },
+    "aspect_ratio": {
+     "max": 34.01135879751399,
+     "mean": 1.336500076621108,
+     "min": 1.0015665930147888,
+     "p05": 1.0332891371100152,
+     "p95": 2.423706520806263
+    },
+    "boundary_edges": 0,
+    "faces": 14774,
+    "irregular_boundary": 0,
+    "irregular_interior": 66,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 14774,
+    "scaled_jacobian": {
+     "max": 0.9999997962047301,
+     "mean": 0.9818865460266198,
+     "min": 0.1331926978441883,
+     "p05": 0.9403494915583149,
+     "p95": 0.9998945639841984
+    },
+    "singularities_per_1k_quads": 4.467307431975091,
+    "triangles": 0,
+    "vertices": 14772
+   }
+  },
+  {
+   "case": "thingi10k/1505036",
+   "mesh": "thingi10k/1505036/1505036.stl",
+   "license": "CC-BY-SA (thing 952564 by hyperplanemike)",
+   "seconds": 9.15,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4410,
+   "output_faces": 14437,
+   "tool_seconds": 8.444,
+   "distance": {
+    "hausdorff": 0.004417972044360004,
+    "mean": 8.201315088025737e-05,
+    "reference_to_result_max": 0.004417972044360004,
+    "reference_to_result_max_at": [
+     -61.335853576660156,
+     -3.9288489818573,
+     -48.46829605102539
+    ],
+    "result_to_reference_max": 0.0033253346381082382,
+    "result_to_reference_max_at": [
+     -47.82524871826172,
+     -6.2298829555511475,
+     -25.715834617614746
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99946115033721,
+     "mean": 8.724045255923754,
+     "min": 0.03851365507864202,
+     "p05": 0.7522712480314269,
+     "p95": 25.95829120916536
+    },
+    "aspect_ratio": {
+     "max": 333714.4658432752,
+     "mean": 47.085744803184376,
+     "min": 1.0024454708168147,
+     "p05": 1.0613423974110694,
+     "p95": 3.8999163344389984
+    },
+    "boundary_edges": 0,
+    "faces": 14437,
+    "irregular_boundary": 0,
+    "irregular_interior": 388,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 14437,
+    "scaled_jacobian": {
+     "max": 0.9999979534126942,
+     "mean": 0.9596429607252813,
+     "min": -0.1373117228671474,
+     "p05": 0.8295325798252324,
+     "p95": 0.9997459273726372
+    },
+    "singularities_per_1k_quads": 26.875389623883077,
+    "triangles": 0,
+    "vertices": 14437
+   }
+  },
+  {
+   "case": "thingi10k/1514900",
+   "mesh": "thingi10k/1514900/1514900.stl",
+   "license": "CC-BY-SA (thing 935144 by tone001)",
+   "seconds": 48.14,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 7066,
+   "output_faces": 125199,
+   "tool_seconds": 47.471,
+   "distance": {
+    "hausdorff": 0.0016452642802593914,
+    "mean": 3.352935481657365e-05,
+    "reference_to_result_max": 0.001542741190487862,
+    "reference_to_result_max_at": [
+     -53.68077087402344,
+     -8.157309532165527,
+     0.00019099999917671084
+    ],
+    "result_to_reference_max": 0.0016452642802593914,
+    "result_to_reference_max_at": [
+     11.400206804275513,
+     8.330429792404175,
+     116.19524002075195
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 90.0,
+     "mean": 13.955573740130104,
+     "min": 0.009900212324907898,
+     "p05": 0.8276177082071037,
+     "p95": 44.8077088208389
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 172.79916641489964,
+     "min": 1.000398856068958,
+     "p05": 1.0263578372791657,
+     "p95": 2.0854778798751585
+    },
+    "boundary_edges": 0,
+    "faces": 125199,
+    "irregular_boundary": 0,
+    "irregular_interior": 450,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 125199,
+    "scaled_jacobian": {
+     "max": 0.9999999402863329,
+     "mean": 0.9326431564539316,
+     "min": -1.0,
+     "p05": 0.7007575102692548,
+     "p95": 0.9997927473280894
+    },
+    "singularities_per_1k_quads": 3.594277909567968,
+    "triangles": 0,
+    "vertices": 125201
+   }
+  },
+  {
+   "case": "thingi10k/1706457",
+   "mesh": "thingi10k/1706457/1706457.stl",
+   "license": "CC-BY-SA (thing 1085472 by CreativeTools)",
+   "seconds": 4.46,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 17748,
+   "output_faces": 10900,
+   "tool_seconds": 3.744,
+   "distance": {
+    "hausdorff": 0.0025590085867851415,
+    "mean": 0.00027601483064617396,
+    "reference_to_result_max": 0.0025590085867851415,
+    "reference_to_result_max_at": [
+     16.203449249267578,
+     0.541254997253418,
+     40.55585479736328
+    ],
+    "result_to_reference_max": 0.002524643163996499,
+    "result_to_reference_max_at": [
+     5.7377378940582275,
+     6.845323443412781,
+     42.557247161865234
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 65.09833351271547,
+     "mean": 9.002817173983976,
+     "min": 0.10726985954310564,
+     "p05": 0.9125400234191297,
+     "p95": 25.217296627142545
+    },
+    "aspect_ratio": {
+     "max": 9.949980393406864,
+     "mean": 1.3728883903193494,
+     "min": 1.0047985484967772,
+     "p05": 1.0546433831613649,
+     "p95": 1.9223494122067608
+    },
+    "boundary_edges": 0,
+    "faces": 10900,
+    "irregular_boundary": 0,
+    "irregular_interior": 68,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10900,
+    "scaled_jacobian": {
+     "max": 0.9999953400995822,
+     "mean": 0.9679963605073999,
+     "min": 0.22677822070072304,
+     "p05": 0.8613381925339378,
+     "p95": 0.9995515142904783
+    },
+    "singularities_per_1k_quads": 6.238532110091743,
+    "triangles": 0,
+    "vertices": 10900
+   }
+  },
+  {
+   "case": "thingi10k/250397",
+   "mesh": "thingi10k/250397/250397.stl",
+   "license": "CC-BY (thing 121702 by Robo)",
+   "seconds": 9.77,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3424,
+   "output_faces": 43632,
+   "tool_seconds": 9.068,
+   "distance": {
+    "hausdorff": 0.0012719740233871674,
+    "mean": 5.5297695842746924e-05,
+    "reference_to_result_max": 0.0012719740233871674,
+    "reference_to_result_max_at": [
+     -8.144280433654785,
+     -0.2002740055322647,
+     5.097320079803467
+    ],
+    "result_to_reference_max": 0.0010385679492339941,
+    "result_to_reference_max_at": [
+     3.362992286682129,
+     -31.008249282836914,
+     96.34043312072754
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 68.57953628273701,
+     "mean": 2.1604224865852917,
+     "min": 0.01701826053920641,
+     "p05": 0.22264131880333693,
+     "p95": 6.05401683274534
+    },
+    "aspect_ratio": {
+     "max": 7.464609223842032,
+     "mean": 1.1239967278653966,
+     "min": 1.0010520660140774,
+     "p05": 1.0118823817742955,
+     "p95": 1.295120958942218
+    },
+    "boundary_edges": 0,
+    "faces": 43632,
+    "irregular_boundary": 0,
+    "irregular_interior": 4,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 43632,
+    "scaled_jacobian": {
+     "max": 0.9999998657231981,
+     "mean": 0.9972513021907186,
+     "min": 0.20480183208757896,
+     "p05": 0.9931209861821723,
+     "p95": 0.9999665182838776
+    },
+    "singularities_per_1k_quads": 0.09167583425009168,
+    "triangles": 0,
+    "vertices": 43632
+   }
+  },
+  {
+   "case": "thingi10k/271869",
+   "mesh": "thingi10k/271869/271869.stl",
+   "license": "CC-BY (thing 136235 by Mr_MegaTronic)",
+   "seconds": 30.01,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 6648,
+   "output_faces": 32030,
+   "tool_seconds": 29.262,
+   "distance": {
+    "hausdorff": 0.0025229259918525663,
+    "mean": 6.161196544834825e-05,
+    "reference_to_result_max": 0.0025229259918525663,
+    "reference_to_result_max_at": [
+     -133.83544921875,
+     -58.869102478027344,
+     21.0
+    ],
+    "result_to_reference_max": 0.002276862026060194,
+    "result_to_reference_max_at": [
+     -149.3194351196289,
+     -32.0991325378418,
+     6.663066029548645
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99993619127116,
+     "mean": 14.002852199447663,
+     "min": 0.0007859614352341282,
+     "p05": 0.5087029304738984,
+     "p95": 42.89905599217859
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 208.39156901409822,
+     "min": 1.001368441853205,
+     "p05": 1.0342300621351341,
+     "p95": 3.9601292606087624
+    },
+    "boundary_edges": 0,
+    "faces": 32030,
+    "irregular_boundary": 0,
+    "irregular_interior": 1314,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 32030,
+    "scaled_jacobian": {
+     "max": 0.9999999996236542,
+     "mean": 0.9159637604031267,
+     "min": -1.0,
+     "p05": 0.5855115135781914,
+     "p95": 0.9999218766267715
+    },
+    "singularities_per_1k_quads": 41.02403996253512,
+    "triangles": 0,
+    "vertices": 32022
+   }
+  },
+  {
+   "case": "thingi10k/37883",
+   "mesh": "thingi10k/37883/37883.stl",
+   "license": "CC-BY-SA (thing 11836 by Thing-O-Fun)",
+   "seconds": 4.15,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3302,
+   "output_faces": 11830,
+   "tool_seconds": 3.371,
+   "distance": {
+    "hausdorff": 0.0028548490909591335,
+    "mean": 0.0001161055148404187,
+    "reference_to_result_max": 0.001625465370250844,
+    "reference_to_result_max_at": [
+     14.391312599182129,
+     5.562522252400716,
+     14.134124755859375
+    ],
+    "result_to_reference_max": 0.0028548490909591335,
+    "result_to_reference_max_at": [
+     29.91562795639038,
+     15.427026987075806,
+     16.534021377563477
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99163792870544,
+     "mean": 8.89984778071821,
+     "min": 0.018996884518792,
+     "p05": 1.158020660278595,
+     "p95": 22.511062251431333
+    },
+    "aspect_ratio": {
+     "max": 206.47498820641135,
+     "mean": 1.4172197094426626,
+     "min": 1.0042316321228497,
+     "p05": 1.0500223420094696,
+     "p95": 2.1549390289896486
+    },
+    "boundary_edges": 0,
+    "faces": 11830,
+    "irregular_boundary": 0,
+    "irregular_interior": 174,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 11830,
+    "scaled_jacobian": {
+     "max": 0.9999997801383514,
+     "mean": 0.9648502529568179,
+     "min": -0.03597736117498859,
+     "p05": 0.8626363230698083,
+     "p95": 0.9994000458314414
+    },
+    "singularities_per_1k_quads": 14.708368554522401,
+    "triangles": 0,
+    "vertices": 11830
+   }
+  },
+  {
+   "case": "thingi10k/40994",
+   "mesh": "thingi10k/40994/40994.stl",
+   "license": "CC-BY-SA (thing 12652 by hlbrosnihan)",
+   "seconds": 3.33,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 34984,
+   "output_faces": 7675,
+   "tool_seconds": 2.542,
+   "distance": {
+    "hausdorff": 0.0034350021453889534,
+    "mean": 0.0003105856354790143,
+    "reference_to_result_max": 0.0034350021453889534,
+    "reference_to_result_max_at": [
+     19.978246688842773,
+     -6.1910600662231445,
+     26.321321487426758
+    ],
+    "result_to_reference_max": 0.0031143984454777658,
+    "result_to_reference_max_at": [
+     20.71573829650879,
+     -5.889337778091431,
+     26.06488800048828
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.98611185325368,
+     "mean": 8.247561108629768,
+     "min": 0.05587174992737687,
+     "p05": 0.905884929058761,
+     "p95": 21.534611241577828
+    },
+    "aspect_ratio": {
+     "max": 226.9694947678685,
+     "mean": 1.8004585746677415,
+     "min": 1.00446431481806,
+     "p05": 1.0450424183933515,
+     "p95": 2.189811886110554
+    },
+    "boundary_edges": 0,
+    "faces": 7675,
+    "irregular_boundary": 0,
+    "irregular_interior": 46,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 7675,
+    "scaled_jacobian": {
+     "max": 0.9999798567967532,
+     "mean": 0.9661877498299173,
+     "min": -0.337592828353431,
+     "p05": 0.8878999936081186,
+     "p95": 0.9995119333029228
+    },
+    "singularities_per_1k_quads": 5.993485342019544,
+    "triangles": 0,
+    "vertices": 7677
+   }
+  },
+  {
+   "case": "thingi10k/472206",
+   "mesh": "thingi10k/472206/472206.stl",
+   "license": "CC-BY (thing 259005 by MakerBot)",
+   "seconds": 4.58,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 32912,
+   "output_faces": 15656,
+   "tool_seconds": 3.716,
+   "distance": {
+    "hausdorff": 0.001989676680238536,
+    "mean": 0.00021994096142605009,
+    "reference_to_result_max": 0.001989676680238536,
+    "reference_to_result_max_at": [
+     11.165839195251465,
+     23.565378189086914,
+     108.40518951416016
+    ],
+    "result_to_reference_max": 0.0010828227991304309,
+    "result_to_reference_max_at": [
+     11.331215381622314,
+     23.694980144500732,
+     108.49669647216797
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 62.357417141181074,
+     "mean": 4.669889050265169,
+     "min": 0.025594792038550196,
+     "p05": 0.37647275519969625,
+     "p95": 15.752538368592472
+    },
+    "aspect_ratio": {
+     "max": 840.3111886891643,
+     "mean": 2.1249147613397525,
+     "min": 1.0010760350232986,
+     "p05": 1.0285004643716087,
+     "p95": 3.5240437179031887
+    },
+    "boundary_edges": 0,
+    "faces": 15656,
+    "irregular_boundary": 0,
+    "irregular_interior": 42,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 15656,
+    "scaled_jacobian": {
+     "max": 0.9999997447155938,
+     "mean": 0.98494698829239,
+     "min": 0.07190275418816826,
+     "p05": 0.941322851155533,
+     "p95": 0.9998902729900867
+    },
+    "singularities_per_1k_quads": 2.682677567705672,
+    "triangles": 0,
+    "vertices": 15656
+   }
+  },
+  {
+   "case": "thingi10k/49382",
+   "mesh": "thingi10k/49382/49382.stl",
+   "license": "CC-BY-SA (thing 14974 by cptnAWESOME)",
+   "seconds": 3.5,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 9190,
+   "output_faces": 9527,
+   "tool_seconds": 2.665,
+   "distance": {
+    "hausdorff": 0.0008021117163999684,
+    "mean": 0.0002346316627344856,
+    "reference_to_result_max": 0.0008021117163999684,
+    "reference_to_result_max_at": [
+     18.28812026977539,
+     -6.025218963623047,
+     12.734140396118164
+    ],
+    "result_to_reference_max": 0.0007420048210580266,
+    "result_to_reference_max_at": [
+     18.57236385345459,
+     4.526353538036346,
+     18.74462652206421
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 24.795640696006057,
+     "mean": 4.4547315538878305,
+     "min": 0.032897158818190775,
+     "p05": 0.6005882641551317,
+     "p95": 13.200915104385402
+    },
+    "aspect_ratio": {
+     "max": 2.257317680290883,
+     "mean": 1.480704961153597,
+     "min": 1.0049125908158416,
+     "p05": 1.0585508883953962,
+     "p95": 1.9088257496298553
+    },
+    "boundary_edges": 0,
+    "faces": 9527,
+    "irregular_boundary": 0,
+    "irregular_interior": 8,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9527,
+    "scaled_jacobian": {
+     "max": 0.9999965622167806,
+     "mean": 0.9915680573110314,
+     "min": 0.7449955798062552,
+     "p05": 0.9635858160255221,
+     "p95": 0.9998429231667451
+    },
+    "singularities_per_1k_quads": 0.8397186942374305,
+    "triangles": 0,
+    "vertices": 9529
+   }
+  },
+  {
+   "case": "thingi10k/62287",
+   "mesh": "thingi10k/62287/62287.stl",
+   "license": "CC-BY (thing 19518 by PrettySmallThings)",
+   "seconds": 4.66,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3368,
+   "output_faces": 12539,
+   "tool_seconds": 3.72,
+   "distance": {
+    "hausdorff": 0.003416447059226414,
+    "mean": 0.0001392172317554223,
+    "reference_to_result_max": 0.0028519937160416307,
+    "reference_to_result_max_at": [
+     -23.597759246826172,
+     -14.48246955871582,
+     9.765366554260254
+    ],
+    "result_to_reference_max": 0.003416447059226414,
+    "result_to_reference_max_at": [
+     -4.123212814331055,
+     -14.1112380027771,
+     6.051634073257446
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 80.15370561112611,
+     "mean": 8.122882115164638,
+     "min": 0.012122258373164385,
+     "p05": 0.5763318747486181,
+     "p95": 24.83769140927646
+    },
+    "aspect_ratio": {
+     "max": 2440.9931873170017,
+     "mean": 1.8091105389535516,
+     "min": 1.0067866311870568,
+     "p05": 1.045131944109338,
+     "p95": 2.1735671919320576
+    },
+    "boundary_edges": 0,
+    "faces": 12539,
+    "irregular_boundary": 0,
+    "irregular_interior": 167,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 12539,
+    "scaled_jacobian": {
+     "max": 0.9999999104734607,
+     "mean": 0.9688027757242622,
+     "min": -0.02012889083866192,
+     "p05": 0.8620853015244598,
+     "p95": 0.9998919365995628
+    },
+    "singularities_per_1k_quads": 13.318446447085094,
+    "triangles": 0,
+    "vertices": 12541
+   }
+  },
+  {
+   "case": "thingi10k/650187",
+   "mesh": "thingi10k/650187/650187.stl",
+   "license": "CC-BY-SA (thing 367262 by 9999NYC)",
+   "seconds": 35.95,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 25400,
+   "output_faces": 129600,
+   "tool_seconds": 35.162,
+   "distance": {
+    "hausdorff": 0.0006915955821491187,
+    "mean": 1.5891895876589222e-05,
+    "reference_to_result_max": 0.0006915955821491187,
+    "reference_to_result_max_at": [
+     1.9158940315246582,
+     -1.123528003692627,
+     3.999999989900971e-06
+    ],
+    "result_to_reference_max": 0.0004959628146335391,
+    "result_to_reference_max_at": [
+     1.854328989982605,
+     6.183371901512146,
+     0.1528832514077294
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.66164495233343,
+     "mean": 9.605548219036097,
+     "min": 0.015123720461126311,
+     "p05": 1.046179764034111,
+     "p95": 18.27998929734092
+    },
+    "aspect_ratio": {
+     "max": 43.08780689494875,
+     "mean": 1.2214181642065465,
+     "min": 1.0002652642157477,
+     "p05": 1.0229464124970467,
+     "p95": 1.5000737312222803
+    },
+    "boundary_edges": 0,
+    "faces": 129600,
+    "irregular_boundary": 0,
+    "irregular_interior": 0,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 129600,
+    "scaled_jacobian": {
+     "max": 0.99999966005351,
+     "mean": 0.9739677258784288,
+     "min": -0.03316450137023894,
+     "p05": 0.9473596293479424,
+     "p95": 0.9997632263518235
+    },
+    "singularities_per_1k_quads": 0.0,
+    "triangles": 0,
+    "vertices": 129600
+   }
+  },
+  {
+   "case": "thingi10k/71712",
+   "mesh": "thingi10k/71712/71712.stl",
+   "license": "CC-BY (thing 23589 by Daid)",
+   "seconds": 9.86,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 4488,
+   "output_faces": 33050,
+   "tool_seconds": 9.165,
+   "distance": {
+    "hausdorff": 0.002011298579967481,
+    "mean": 1.5078643143886153e-05,
+    "reference_to_result_max": 0.002011298579967481,
+    "reference_to_result_max_at": [
+     6.127999782562256,
+     5.142000198364258,
+     2.200000047683716
+    ],
+    "result_to_reference_max": 0.001455248966452503,
+    "result_to_reference_max_at": [
+     -19.043939113616943,
+     -0.8928765058517456,
+     2.882748782634735
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 67.7398793423095,
+     "mean": 9.966015794997327,
+     "min": 0.0008052707802121972,
+     "p05": 0.09891092571631788,
+     "p95": 28.608514690374683
+    },
+    "aspect_ratio": {
+     "max": 9.599700260712964,
+     "mean": 1.2758398843651377,
+     "min": 1.0010846220042962,
+     "p05": 1.0334620577877838,
+     "p95": 1.8783463985168105
+    },
+    "boundary_edges": 0,
+    "faces": 33050,
+    "irregular_boundary": 0,
+    "irregular_interior": 400,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 33050,
+    "scaled_jacobian": {
+     "max": 0.9999999996362076,
+     "mean": 0.9645507953417978,
+     "min": 0.2023817431219918,
+     "p05": 0.8541100113338195,
+     "p95": 0.999995852009923
+    },
+    "singularities_per_1k_quads": 12.10287443267776,
+    "triangles": 0,
+    "vertices": 33032
+   }
+  },
+  {
+   "case": "thingi10k/75117",
+   "mesh": "thingi10k/75117/75117.stl",
+   "license": "CC-BY-SA (thing 24908 by Oblomobka)",
+   "seconds": 3.61,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 9094,
+   "output_faces": 8716,
+   "tool_seconds": 2.915,
+   "distance": {
+    "hausdorff": 0.00595704649322604,
+    "mean": 0.0001342953860266062,
+    "reference_to_result_max": 0.00595704649322604,
+    "reference_to_result_max_at": [
+     15.0,
+     18.0,
+     16.0
+    ],
+    "result_to_reference_max": 0.0020793709646209986,
+    "result_to_reference_max_at": [
+     14.851372241973877,
+     17.175087928771973,
+     15.5
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 70.57006071494312,
+     "mean": 10.79134274007657,
+     "min": 0.04760845367893296,
+     "p05": 0.7448374148404717,
+     "p95": 30.12259172479849
+    },
+    "aspect_ratio": {
+     "max": 7.889179614872205,
+     "mean": 1.2803496596626207,
+     "min": 1.0029064720915075,
+     "p05": 1.0315741454116512,
+     "p95": 1.8869552162540262
+    },
+    "boundary_edges": 0,
+    "faces": 8716,
+    "irregular_boundary": 0,
+    "irregular_interior": 53,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 8716,
+    "scaled_jacobian": {
+     "max": 0.999996564187563,
+     "mean": 0.9593042728040376,
+     "min": 0.2012068617966944,
+     "p05": 0.8331909848685354,
+     "p95": 0.9998077433718395
+    },
+    "singularities_per_1k_quads": 6.080770995869665,
+    "triangles": 0,
+    "vertices": 8718
+   }
+  },
+  {
+   "case": "thingi10k/756803",
+   "mesh": "thingi10k/756803/756803.stl",
+   "license": "CC-BY-SA (thing 452651 by pauloblank)",
+   "seconds": 44.59,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 13584,
+   "output_faces": 54896,
+   "tool_seconds": 43.728,
+   "distance": {
+    "hausdorff": 0.005320850143488077,
+    "mean": 0.00010394866419610785,
+    "reference_to_result_max": 0.004121895334646327,
+    "reference_to_result_max_at": [
+     -10.389108657836914,
+     10.186303774515787,
+     14.35321044921875
+    ],
+    "result_to_reference_max": 0.005320850143488077,
+    "result_to_reference_max_at": [
+     -0.7074662419036031,
+     35.18196487426758,
+     22.635474681854248
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.99994777411352,
+     "mean": 19.756830401975147,
+     "min": 0.03889468293003162,
+     "p05": 2.8117801923209527,
+     "p95": 49.46277828974
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 518.5086252088754,
+     "min": 1.0000209470167514,
+     "p05": 1.0224469156862859,
+     "p95": 6.324046809928605
+    },
+    "boundary_edges": 0,
+    "faces": 54896,
+    "irregular_boundary": 0,
+    "irregular_interior": 11015,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 54896,
+    "scaled_jacobian": {
+     "max": 0.9999975843808182,
+     "mean": 0.793992507431563,
+     "min": -1.0,
+     "p05": 0.2541630459156532,
+     "p95": 0.9976380339083236
+    },
+    "singularities_per_1k_quads": 200.65214223258525,
+    "triangles": 0,
+    "vertices": 54896
+   }
+  },
+  {
+   "case": "thingi10k/87355",
+   "mesh": "thingi10k/87355/87355.stl",
+   "license": "CC-BY-SA (thing 29731 by lili_czarina)",
+   "seconds": 9.54,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 22752,
+   "output_faces": 13688,
+   "tool_seconds": 8.767,
+   "distance": {
+    "hausdorff": 0.003997931990411447,
+    "mean": 0.0002731354954075516,
+    "reference_to_result_max": 0.003997931990411447,
+    "reference_to_result_max_at": [
+     -6.840519905090332,
+     1.016160011291504,
+     -13.375900268554688
+    ],
+    "result_to_reference_max": 0.0037228929265329946,
+    "result_to_reference_max_at": [
+     -6.907234311103821,
+     0.5714842416346073,
+     -13.43832540512085
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 85.72985130111911,
+     "mean": 12.540063180394368,
+     "min": 0.10450814587850843,
+     "p05": 1.5483499933025797,
+     "p95": 31.58574513336569
+    },
+    "aspect_ratio": {
+     "max": 5622.706674589645,
+     "mean": 2.303144085207186,
+     "min": 1.0023540304138914,
+     "p05": 1.0560206677279576,
+     "p95": 2.958155698764618
+    },
+    "boundary_edges": 0,
+    "faces": 13688,
+    "irregular_boundary": 0,
+    "irregular_interior": 151,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13688,
+    "scaled_jacobian": {
+     "max": 0.9999933451346505,
+     "mean": 0.9409869063363379,
+     "min": -0.1486001436425114,
+     "p05": 0.7725798950650067,
+     "p95": 0.998541376728145
+    },
+    "singularities_per_1k_quads": 11.03156049094097,
+    "triangles": 0,
+    "vertices": 13690
+   }
+  },
+  {
+   "case": "thingi10k/906891",
+   "mesh": "thingi10k/906891/906891.stl",
+   "license": "CC-BY (thing 508896 by CreativeTools)",
+   "seconds": 10.03,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 41300,
+   "output_faces": 35580,
+   "tool_seconds": 9.172,
+   "distance": {
+    "hausdorff": 0.002619537718820746,
+    "mean": 0.00019069002939301112,
+    "reference_to_result_max": 0.002619537718820746,
+    "reference_to_result_max_at": [
+     9.61953353881836,
+     -38.52426528930664,
+     0.2928929924964905
+    ],
+    "result_to_reference_max": 0.0018790895570242943,
+    "result_to_reference_max_at": [
+     8.484572291374207,
+     -38.24966049194336,
+     0.4664745032787323
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 89.0146501117284,
+     "mean": 14.483477411303499,
+     "min": 0.02477629592142705,
+     "p05": 1.7070307421147959,
+     "p95": 25.15508118865162
+    },
+    "aspect_ratio": {
+     "max": 1000000.0,
+     "mean": 136.43411784779516,
+     "min": 1.0030752262792042,
+     "p05": 1.10964034516066,
+     "p95": 2.494020848152677
+    },
+    "boundary_edges": 0,
+    "faces": 35580,
+    "irregular_boundary": 0,
+    "irregular_interior": 10398,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 35580,
+    "scaled_jacobian": {
+     "max": 0.9999996260120606,
+     "mean": 0.8799971835633194,
+     "min": -0.048076061806268125,
+     "p05": 0.7488869414709507,
+     "p95": 0.9988284493422617
+    },
+    "singularities_per_1k_quads": 292.2428330522766,
+    "triangles": 0,
+    "vertices": 35570
+   }
+  },
+  {
+   "case": "thingi10k/94990",
+   "mesh": "thingi10k/94990/94990.stl",
+   "license": "CC-BY (thing 32884 by MakerBot)",
+   "seconds": 3.79,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 27200,
+   "output_faces": 10788,
+   "tool_seconds": 2.881,
+   "distance": {
+    "hausdorff": 0.0028776073286161208,
+    "mean": 0.0002502564964223108,
+    "reference_to_result_max": 0.0028776073286161208,
+    "reference_to_result_max_at": [
+     -3.7719600200653076,
+     -17.496654510498047,
+     5.0
+    ],
+    "result_to_reference_max": 0.0024983138472832386,
+    "result_to_reference_max_at": [
+     14.729817867279053,
+     2.238611251115799,
+     0.6000000238418579
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 86.02005272842837,
+     "mean": 7.310550350966204,
+     "min": 0.0,
+     "p05": 0.6911190451986862,
+     "p95": 21.2151788620619
+    },
+    "aspect_ratio": {
+     "max": 53.99286638070312,
+     "mean": 1.796141741617882,
+     "min": 1.0046732899542714,
+     "p05": 1.070095864456358,
+     "p95": 3.2309820194775103
+    },
+    "boundary_edges": 0,
+    "faces": 10788,
+    "irregular_boundary": 0,
+    "irregular_interior": 62,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 10788,
+    "scaled_jacobian": {
+     "max": 1.0,
+     "mean": 0.9771323005843032,
+     "min": 0.05171335373857017,
+     "p05": 0.9056969817803683,
+     "p95": 0.9996789224574142
+    },
+    "singularities_per_1k_quads": 5.747126436781609,
+    "triangles": 0,
+    "vertices": 10790
+   }
+  },
+  {
+   "case": "thingi10k/97730",
+   "mesh": "thingi10k/97730/97730.stl",
+   "license": "CC-BY-SA (thing 33940 by Camos)",
+   "seconds": 2.99,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3110,
+   "output_faces": 9591,
+   "tool_seconds": 2.307,
+   "distance": {
+    "hausdorff": 0.002576961348318302,
+    "mean": 0.00019755471734268887,
+    "reference_to_result_max": 0.002576961348318302,
+    "reference_to_result_max_at": [
+     12.028000831604004,
+     14.304000854492188,
+     7.197999954223633
+    ],
+    "result_to_reference_max": 0.0024464017744253207,
+    "result_to_reference_max_at": [
+     13.229810953140259,
+     7.29496955871582,
+     7.321361541748047
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 43.5353873809785,
+     "mean": 6.282945411921289,
+     "min": 0.012469093086739491,
+     "p05": 0.5343017627235156,
+     "p95": 16.191536582171626
+    },
+    "aspect_ratio": {
+     "max": 4.425084076659777,
+     "mean": 1.2421043537628578,
+     "min": 1.0008750429916191,
+     "p05": 1.023286248429251,
+     "p95": 1.6379665465862254
+    },
+    "boundary_edges": 0,
+    "faces": 9591,
+    "irregular_boundary": 0,
+    "irregular_interior": 34,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 9591,
+    "scaled_jacobian": {
+     "max": 0.9999999404892215,
+     "mean": 0.9856233817811798,
+     "min": 0.604314940949962,
+     "p05": 0.9448724436504535,
+     "p95": 0.9998846578633952
+    },
+    "singularities_per_1k_quads": 3.5449900948806174,
+    "triangles": 0,
+    "vertices": 9591
+   }
+  },
+  {
+   "case": "thingi10k/99836",
+   "mesh": "thingi10k/99836/99836.stl",
+   "license": "CC-BY (thing 34404 by Mr_MegaTronic)",
+   "seconds": 9.8,
+   "status": "ok",
+   "message": "",
+   "blender_exit": 0,
+   "input_faces": 3136,
+   "output_faces": 13210,
+   "tool_seconds": 9.084,
+   "distance": {
+    "hausdorff": 0.002101670303623344,
+    "mean": 9.097914613470661e-05,
+    "reference_to_result_max": 0.002101670303623344,
+    "reference_to_result_max_at": [
+     87.5,
+     10.099998474121094,
+     9.662193298339844
+    ],
+    "result_to_reference_max": 0.0015503840514498025,
+    "result_to_reference_max_at": [
+     -18.300539016723633,
+     1.4998359680175781,
+     20.84406089782715
+    ]
+   },
+   "quality": {
+    "angle_deviation_deg": {
+     "max": 72.02134071313469,
+     "mean": 10.862976613328094,
+     "min": 0.0012117586221940257,
+     "p05": 0.6200963179719459,
+     "p95": 31.01183695323281
+    },
+    "aspect_ratio": {
+     "max": 47.21110495615871,
+     "mean": 1.6708912866611314,
+     "min": 1.0012858171367114,
+     "p05": 1.0584065442223392,
+     "p95": 2.8156984551942763
+    },
+    "boundary_edges": 0,
+    "faces": 13210,
+    "irregular_boundary": 0,
+    "irregular_interior": 353,
+    "ngons": 0,
+    "non_manifold_edges": 0,
+    "pure_quad": true,
+    "quads": 13210,
+    "scaled_jacobian": {
+     "max": 0.9999999991054245,
+     "mean": 0.9397042685617635,
+     "min": -8.225138490766556e-07,
+     "p05": 0.7237516567945399,
+     "p95": 0.9998879055759933
+    },
+    "singularities_per_1k_quads": 26.7221801665405,
+    "triangles": 0,
+    "vertices": 13210
+   }
+  }
+ ]
+}

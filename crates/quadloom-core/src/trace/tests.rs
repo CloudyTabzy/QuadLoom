@@ -72,6 +72,59 @@ fn dangling_feature_is_extended() {
 }
 
 #[test]
+fn a_feature_ending_an_edge_short_of_the_boundary_is_cut_through() {
+    // A line from the left border that stops one edge short of the right
+    // one, and a second line leaving it one edge before its end. The patch
+    // round the first line's end has that end as a spur, and straight ahead
+    // of it lies the patch's own boundary, four steps along: the cut that
+    // makes the patch convex is that one edge. (fandisk's fading crease: its
+    // strip was kept as triangles, 287 of them.)
+    let (p, t) = grid(10, 10);
+    let id = |i: u32, j: u32| j * 11 + i;
+    let mut barrier: Vec<[u32; 2]> = (0..9).map(|i| [id(i, 5), id(i + 1, 5)]).collect();
+    barrier.extend([[id(8, 5), id(9, 6)], [id(9, 6), id(10, 6)]]);
+    let settings = TraceParams::default().settings(0);
+    let (labels, singular, control) = (HashMap::new(), vec![0i32; p.len()], Control::default());
+    let region = select::Region::new(
+        select::RegionMesh {
+            positions: &p,
+            triangles: &t,
+            barrier: &barrier,
+            directions: vec![DVec3::X; t.len()],
+            singular: &singular,
+            labels: &labels,
+            tolerance: settings.cc_tolerance,
+            merge_id: None,
+        },
+        &settings,
+        &control,
+    )
+    .unwrap();
+    let mut layout = select::Layout::new(region, &settings, &control);
+    let end = id(9, 5);
+    let is_a_spur = |layout: &mut select::Layout| {
+        let partition = layout.partition().clone();
+        partition.patches().any(|(_, info)| {
+            info.not_convex.iter().any(|&(v, _)| layout.region.cut.original[v as usize] == end)
+        })
+    };
+    assert!(is_a_spur(&mut layout), "to begin with");
+    let seam = {
+        let partition = layout.partition().clone();
+        let info = partition
+            .patches()
+            .map(|(_, info)| info)
+            .find(|info| info.not_convex.iter().any(|&(v, _)| layout.region.cut.original[v as usize] == end))
+            .unwrap();
+        layout.repair_seam(info).expect("a seam")
+    };
+    let along: Vec<u32> = seam.vertices().map(|v| layout.region.cut.original[v as usize]).collect();
+    assert_eq!(along, [end, id(10, 5)]);
+    layout.recover(&control).unwrap();
+    assert!(!is_a_spur(&mut layout));
+}
+
+#[test]
 fn sphere_layout_is_valid() {
     let (p, t) = icosphere(4);
     let out = layout(&p, &t, &[]);
@@ -226,7 +279,7 @@ fn diagnose_oracle_case() {
     for &(v, k) in &mesh.singularities {
         singular[v as usize] = k;
     }
-    let settings = TraceParams::default().settings();
+    let settings = TraceParams::default().settings(0);
     let labels = HashMap::new();
     let region = select::Region::new(
         select::RegionMesh {
@@ -309,7 +362,7 @@ fn guided_loops_cross_feature_lines() {
     let features: Vec<[u32; 2]> = (0..10).map(|i| [i * 32, (i + 1) * 32]).collect();
     let control = Control::default();
     let field = field_compute(&p, &t, &features, &FieldParams::default(), &control).unwrap();
-    let settings = TraceParams::default().settings();
+    let settings = TraceParams::default().settings(0);
     let labels = HashMap::new();
     let singular = vec![0; p.len()];
     let region = select::Region::new(
@@ -463,4 +516,106 @@ fn uncrowded_part_is_laid_out_once() {
     assert_valid(&out);
     assert_eq!(crowding(&out), 0);
     assert_eq!(out.report.uncrowded, 0);
+}
+
+/// A cube and a torus beside it: two parts, the cube's edges features.
+fn cube_and_torus() -> (Vec<DVec3>, Vec<[u32; 3]>, Vec<[u32; 2]>) {
+    let (mut p, mut t, f) = cube(4);
+    let base = p.len() as u32;
+    let (q, u) = torus(24, 12);
+    p.extend(q.iter().map(|&v| v + DVec3::new(5.0, 0.0, 0.0)));
+    t.extend(u.iter().map(|tri| tri.map(|v| v + base)));
+    (p, t, f)
+}
+
+#[test]
+fn a_layout_knows_where_each_part_lies() {
+    let (p, t, f) = cube_and_torus();
+    let out = layout(&p, &t, &f);
+    assert_eq!(out.parts.len(), 2);
+    assert_eq!(out.report.parts, 2);
+    // The spans tile every list, in order.
+    let (first, second) = (&out.parts[0], &out.parts[1]);
+    assert_eq!((first.faces.start, second.faces.end as usize), (0, out.mesh.triangles.len()));
+    assert_eq!(first.faces.end, second.faces.start);
+    assert_eq!((first.patches.start, second.patches.end as usize), (0, out.patches.len()));
+    assert_eq!(first.patches.end, second.patches.start);
+    assert_eq!((first.paths.start, second.paths.end as usize), (0, out.paths.len()));
+    assert_eq!((first.added.start as usize, second.added.end as usize), (p.len(), out.mesh.positions.len()));
+    // A part's triangles are in its own patches only.
+    for span in &out.parts {
+        let faces = span.faces.start as usize..span.faces.end as usize;
+        assert!(out.patch_of_face[faces].iter().all(|patch| span.patches.contains(patch)));
+    }
+}
+
+#[test]
+fn a_layout_composed_of_its_own_parts_is_itself() {
+    let (p, t, f) = cube_and_torus();
+    let out = layout(&p, &t, &f);
+    let again = compose(p.len(), &[&out], &[(0, 0), (0, 1)]);
+    assert_eq!(again.mesh, out.mesh);
+    assert_eq!(again.patch_of_face, out.patch_of_face);
+    assert_eq!(again.source_face, out.source_face);
+    assert_eq!(again.patches, out.patches);
+    assert_eq!(again.paths, out.paths);
+    assert_eq!(again.parts, out.parts);
+    assert_eq!(again.report, out.report);
+
+    // The parts the other way round: the same layout of each, renumbered.
+    let swapped = compose(p.len(), &[&out], &[(0, 1), (0, 0)]);
+    assert_eq!(swapped.report, out.report);
+    assert_eq!(swapped.mesh.feature_edges.len(), out.mesh.feature_edges.len());
+    assert_eq!(swapped.mesh.singularities.len(), out.mesh.singularities.len());
+    assert!(same_part(&swapped, 0, &out, 1) && same_part(&swapped, 1, &out, 0));
+    assert!(!same_part(&out, 0, &out, 1));
+    assert_valid(&swapped);
+    // Every vertex a patch names is one of its own triangles'.
+    for (k, patch) in swapped.patches.iter().enumerate() {
+        let own: hashbrown::HashSet<u32> = swapped
+            .mesh
+            .triangles
+            .iter()
+            .zip(&swapped.patch_of_face)
+            .filter(|&(_, &q)| q as usize == k)
+            .flat_map(|(t, _)| *t)
+            .collect();
+        assert!(patch.corners.iter().all(|v| own.contains(v)), "patch {k}");
+    }
+
+    // One part alone: its share of everything, and nothing of the other's.
+    let alone = compose(p.len(), &[&out], &[(0, 1)]);
+    assert_eq!(alone.parts.len(), 1);
+    assert_eq!(alone.mesh.triangles.len(), (out.parts[1].faces.end - out.parts[1].faces.start) as usize);
+    assert!(alone.mesh.feature_edges.is_empty(), "the features are the cube's");
+    assert!(same_part(&alone, 0, &out, 1));
+}
+
+#[test]
+fn seed_zero_is_the_usual_layout_and_other_seeds_are_layouts_too() {
+    let (p, t, f) = cube_and_torus();
+    let control = Control::default();
+    let field = field_compute(&p, &t, &f, &FieldParams::default(), &control).unwrap();
+    let params = TraceParams::default();
+    let usual = compute(&p, &t, &f, &field, &params, &control).unwrap();
+    let parts = crate::components::split(&t, p.len());
+    let faces: Vec<&[u32]> = parts.iter().map(|part| part.faces.as_slice()).collect();
+    let seeded = |seed: u64| compute_parts(&p, &t, &f, &field, &faces, &params, seed, &control).unwrap();
+    let zero = seeded(0);
+    assert_eq!(zero.mesh, usual.mesh);
+    assert_eq!(zero.patches, usual.patches);
+    let mut others = 0;
+    for seed in 1..=4 {
+        let out = seeded(seed);
+        assert_valid(&out);
+        // The cube has no near-ties to break: six faces whatever the seed.
+        assert!(same_part(&out, 0, &usual, 0), "seed {seed}");
+        others += usize::from(!same_part(&out, 1, &usual, 1));
+        // And a seed is a layout, not a draw: the same again.
+        assert_eq!(seeded(seed).patches, out.patches, "seed {seed}");
+    }
+    assert!(others > 0, "no seed in four gave the torus another layout");
+    // Only the torus asked for: the same layout of it.
+    let only = compute_parts(&p, &t, &f, &field, &faces[1..], &params, 2, &control).unwrap();
+    assert!(same_part(&only, 0, &seeded(2), 1));
 }

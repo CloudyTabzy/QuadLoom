@@ -364,3 +364,24 @@ def test_transfer_map_cancelled():
     with pytest.raises(ql.CancelledError) as e:
         ql.transfer_map(p, i, p, array("I", [0, 3, 6, 9, 12]), i, control)
     assert e.value.stage == "transfer"
+
+
+def test_advise_reads_a_kind_and_suggests_feature_settings():
+    # A tetrahedron's six edges are one line of creases folded 109 degrees:
+    # hard surface, every crease kept. Nothing is remeshed.
+    p, i = tet()
+    advice = ql.advise(p, i, ql.Control(), params={"features": {"min_fold": 7.0}})
+    assert advice["kind"] == "hard_surface"
+    assert (advice["lines"], advice["form_lines"], advice["scraps"]) == (1, 1, 0)
+    assert advice["form_share"] == pytest.approx(1.0)
+    assert (advice["use_angle"], advice["min_fold"]) == (True, 0.0)
+    assert set(advice) == {"kind", "lines", "length", "form_lines", "form_share", "scraps", "scrap_length",
+                           "scrap_fold_deg", "use_angle", "min_fold", "mirror_axes", "mirror_offsets",
+                           "mirror_asymmetry", "mirror_worst", "symmetry"}
+    # Symmetry's Auto Detect is suggested when a mirror plane was found, and only then.
+    assert advice["symmetry"] == any(advice["mirror_axes"])
+    # It takes the same inputs and settings as a run, and refuses the same things.
+    with pytest.raises(ql.InvalidInputError):
+        ql.advise(p, i, ql.Control(), params={"features": {"angle_deg": 500.0}})
+    with pytest.raises(ql.InvalidInputError):
+        ql.advise(p, array("I", [0, 1, 9]), ql.Control())

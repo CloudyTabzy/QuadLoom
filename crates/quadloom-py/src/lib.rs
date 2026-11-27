@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 /// Version of the settings and result layout shared with the add-on (`bridge.API_VERSION`).
 /// Bump it whenever either side changes.
-pub const API_VERSION: u32 = 9;
+pub const API_VERSION: u32 = 13;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -247,6 +247,82 @@ mod quadloom_native {
             Ok(Ok((output, reused))) => {
                 let dict = convert::run_output(py, &output)?;
                 dict.set_item("reused", reused)?;
+                Ok(dict)
+            }
+            Ok(Err(error)) => Err(errors::to_py_err(py, &error)),
+            Err((payload, stage)) => Err(errors::from_panic(py, payload.as_ref(), stage)),
+        }
+    }
+
+    /// Reads a mesh's kind from its crease lines and suggests feature settings
+    /// for it (`quadloom_core::advise`): cleanup and the angle test, no remesh.
+    /// Returns `kind` (`smooth`, `hard_surface`, `creased_sculpt`,
+    /// `surface_detail` or `unsure`), the numbers it was read from (`lines`,
+    /// `length`, `form_lines`, `form_share`, `scraps`, `scrap_length`,
+    /// `scrap_fold_deg`) and the suggestion (`use_angle`, `min_fold`).
+    /// Also the mirror planes Symmetry's Auto Detect finds, per axis
+    /// (`mirror_axes`, `mirror_offsets`, `mirror_asymmetry` and
+    /// `mirror_worst`, the last two as fractions of the mesh's size), and
+    /// whether Auto Detect is suggested (`symmetry`).
+    #[pyfunction]
+    #[pyo3(signature = (
+        positions, indices, control, *,
+        sharp_edges = None, seam_edges = None, material = None, face_set = None, params = None,
+        max_faces = quadloom_core::params::DEFAULT_MAX_FACES,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn advise<'py>(
+        py: Python<'py>,
+        positions: &Bound<'py, PyAny>,
+        indices: &Bound<'py, PyAny>,
+        control: &Bound<'py, Control>,
+        sharp_edges: Option<&Bound<'py, PyAny>>,
+        seam_edges: Option<&Bound<'py, PyAny>>,
+        material: Option<&Bound<'py, PyAny>>,
+        face_set: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyDict>>,
+        max_faces: usize,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let mut core_params = base_params(py, max_faces, None)?;
+        settings::apply(py, &mut core_params, params)?;
+        let params = core_params;
+        let vertex_floats = convert::item_count(py, positions, "positions")?;
+        let index_count = convert::item_count(py, indices, "indices")?;
+        quadloom_core::check_limits(vertex_floats / 3, index_count, &params)
+            .map_err(|e| errors::to_py_err(py, &e))?;
+        let positions = convert::positions(py, positions)?;
+        let indices = convert::indices(py, indices, "indices")?;
+        let feature_input = quadloom_core::features::FeatureInput {
+            sharp_edges: convert::edge_pairs(py, sharp_edges, "sharp_edges")?,
+            seam_edges: convert::edge_pairs(py, seam_edges, "seam_edges")?,
+            material: convert::groups(py, material, "material")?,
+            face_set: convert::groups(py, face_set, "face_set")?,
+        };
+        let control = Arc::clone(&control.get().inner);
+        let outcome = py.detach(move || {
+            catch_unwind(AssertUnwindSafe(|| {
+                quadloom_core::advise::advise(&positions, &indices, &feature_input, &params, &control)
+            }))
+            .map_err(|payload| (payload, control.progress().0))
+        });
+        match outcome {
+            Ok(Ok(advice)) => {
+                let dict = PyDict::new(py);
+                dict.set_item("kind", advice.kind.name())?;
+                dict.set_item("lines", advice.lines)?;
+                dict.set_item("length", advice.length)?;
+                dict.set_item("form_lines", advice.form_lines)?;
+                dict.set_item("form_share", advice.form_share)?;
+                dict.set_item("scraps", advice.scraps)?;
+                dict.set_item("scrap_length", advice.scrap_length)?;
+                dict.set_item("scrap_fold_deg", advice.scrap_fold_deg)?;
+                dict.set_item("use_angle", advice.use_angle)?;
+                dict.set_item("min_fold", advice.min_fold)?;
+                dict.set_item("mirror_axes", advice.mirror.axes.to_vec())?;
+                dict.set_item("mirror_offsets", advice.mirror.offsets.to_vec())?;
+                dict.set_item("mirror_asymmetry", advice.mirror.asymmetry.to_vec())?;
+                dict.set_item("mirror_worst", advice.mirror.worst.to_vec())?;
+                dict.set_item("symmetry", advice.symmetry)?;
                 Ok(dict)
             }
             Ok(Err(error)) => Err(errors::to_py_err(py, &error)),

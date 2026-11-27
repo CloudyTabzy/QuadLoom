@@ -41,6 +41,12 @@ pub(crate) fn count_floor(t: f64) -> u32 {
     if t.is_finite() { (t * FLOOR_SHARE).floor().max(1.0).min(u32::MAX as f64) as u32 } else { 1 }
 }
 
+/// The fewest quads segment `s` of `segments` may get at target `t`: its
+/// share of the target, and two if it is a twin ([`Segments::least`]).
+pub(crate) fn floor_of(segments: &Segments, s: usize, t: f64) -> u32 {
+    count_floor(t).max(segments.least(s))
+}
+
 /// Passes of integer moves.
 const MAX_PASSES: usize = 12;
 /// Longest chord walked through 4-sided patches.
@@ -68,19 +74,15 @@ pub fn quantize(
     q.fix_parity(&mut n);
     control.checkpoint(stage)?;
     control.set_progress(stage, 0.2);
-    // The integer program, seeded with these counts, keeps only real improvements.
+    // The integer program of each connected part, seeded with these counts,
+    // keeps only real improvements.
     let spec = super::ilp::Spec { segments, targets, fixed: &q.fixed, regularity, effort };
-    if let Some(candidate) = super::ilp::refine(spec, &n)
-        && q.all_even(&candidate)
-        && q.total(&candidate) < q.total(&n) - 1e-9
-    {
-        n = candidate;
-    }
+    let mut accept = |old: &[u32], new: &[u32], changed: &[usize]| q.improves(old, new, changed);
+    super::ilp::refine(spec, &mut n, &mut accept);
     // Then region by region where problems remain.
     control.checkpoint(stage)?;
     control.set_progress(stage, 0.6);
     let bad = |n: &[u32], p: usize| q.patch_cost(n, p) > 0.0;
-    let mut accept = |old: &[u32], new: &[u32]| q.all_even(new) && q.total(new) < q.total(old) - 1e-9;
     super::ilp::neighbourhoods(spec, &mut n, &bad, &mut accept, control)?;
     Ok(n)
 }
@@ -119,7 +121,7 @@ struct Problem<'a> {
     regularity: f64,
     fixed: Vec<Option<u32>>,
     weight: Vec<f64>,
-    /// [`count_floor`] of each segment's target.
+    /// [`floor_of`] each segment.
     floor: Vec<u32>,
 }
 
@@ -132,20 +134,20 @@ impl<'a> Problem<'a> {
             .collect();
         // Relative deviation: long segments tolerate an extra quad more easily.
         let weight = targets.iter().map(|&t| 1.0 / t.max(1.0)).collect();
-        let floor = targets.iter().map(|&t| count_floor(t)).collect();
+        let floor = targets.iter().enumerate().map(|(s, &t)| floor_of(segments, s, t)).collect();
         Self { segments, targets, regularity, fixed, weight, floor }
     }
 
-    /// Total cost: deviation plus weighted pattern cost.
-    fn total(&self, n: &[u32]) -> f64 {
-        let dev: f64 = (0..n.len()).map(|s| self.deviation(n, s)).sum();
-        let pattern: f64 = (0..self.segments.sides.len()).map(|p| self.patch_cost(n, p)).sum();
-        dev + self.regularity * pattern
-    }
-
-    fn all_even(&self, n: &[u32]) -> bool {
-        (0..self.segments.sides.len())
-            .all(|p| self.side_counts(n, p).is_none_or(|l| l.iter().sum::<u32>() % 2 == 0))
+    /// Whether the counts `new`, which differ from `old` in the segments
+    /// `changed` only, are the better: every patch those are sides of has an
+    /// even total, and the cost is lower. Only those segments and patches
+    /// are looked at, the rest being the same in both.
+    fn improves(&self, old: &[u32], new: &[u32], changed: &[usize]) -> bool {
+        let even = changed
+            .iter()
+            .flat_map(|&s| self.patches_of(s))
+            .all(|p| self.side_counts(new, p).is_none_or(|l| l.iter().sum::<u32>() % 2 == 0));
+        even && self.cost_of(new, changed) < self.cost_of(old, changed) - 1e-9
     }
 
     fn side_counts(&self, n: &[u32], p: usize) -> Option<TinyVec<[u32; 8]>> {

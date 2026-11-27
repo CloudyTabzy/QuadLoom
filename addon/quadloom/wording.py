@@ -23,6 +23,7 @@ STAGE_NAMES = {
     "patterns": "Patterns",
     "map": "Mapping",
     "smooth": "Smoothing",
+    "attempts": "Layout Attempts",
     "output": "Output",
     "transfer": "Attributes",
 }
@@ -60,3 +61,27 @@ def sentence(text):
 def stage_name(name):
     """The panel's name for a native stage name ("prep_remesh" → "Prep Remesh")."""
     return STAGE_NAMES.get(name, title(name.replace("_", " ")))
+
+
+# What Detect Settings calls each kind of model, and why its suggestion suits it.
+KINDS = {
+    "smooth": ("Smooth Surface",
+               "No crease lines to speak of, so Sharp Edges has nothing to follow. The settings stay as they are."),
+    "hard_surface": ("Hard Surface",
+                     "Nearly all its crease is in long or sharp lines. Every edge over the angle is kept."),
+    "creased_sculpt": ("Sculpt With Creases",
+                       "Long or sharp creases shape it, with scraps of surface detail beside them. "
+                       "The scraps are ignored so they don't bend the edge flow."),
+    "surface_detail": ("Surface Detail Only",
+                       "Its creases are short scraps: fur, pores, scan noise or rounded rims. No setting "
+                       "did better than another on models like this, so the settings stay as they are. "
+                       "If the edge flow wanders, try Ignore Faint Creases at 9."),
+    "unsure": ("Not Clear",
+               "The crease lines don't say what kind of model this is. The settings stay as they are."),
+}
+
+
+def kind(name):
+    """`(title, reason)` for a detected kind; an unknown name reads as not clear."""
+    return KINDS.get(name, KINDS["unsure"])
+

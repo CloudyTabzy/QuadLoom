@@ -2,7 +2,7 @@
 
 pub const MAX_TARGET_QUADS: usize = 2_000_000;
 
-use super::{Prepared, QuadOutput, QuadParams, Sizing, pattern, quantize};
+use super::{Assembled, Prepared, QuadOutput, QuadParams, Sizing, pattern, quantize};
 use crate::{Control, Error, ErrorKind, Stage, TraceOutput};
 
 const MAX_ATTEMPTS: usize = 8;
@@ -53,7 +53,8 @@ fn pattern_rank(kind: pattern::PatternKind) -> u8 {
         pattern::PatternKind::Grid => 0,
         pattern::PatternKind::Center => 1,
         pattern::PatternKind::Split => 2,
-        pattern::PatternKind::Fan => 3,
+        pattern::PatternKind::Bridge => 3,
+        pattern::PatternKind::Fan => 4,
     }
 }
 
@@ -120,7 +121,7 @@ fn refine_with_budget(
                 if moved.iter().any(|&s| {
                     let after = i64::from(plan.counts[s]) + delta;
                     prepared.segs.segments[s].polyline
-                        || after < i64::from(quantize::count_floor(ideals[s]))
+                        || after < i64::from(quantize::floor_of(&prepared.segs, s, ideals[s]))
                         || after > i64::from(upper[s])
                 }) {
                     continue;
@@ -371,7 +372,20 @@ pub fn compute(
             "target_quads or symmetry multiplier is out of range",
         ));
     }
-    let prepared = Prepared::new(trace, control)?;
+    super::retrying_clashes(trace, |keep| plan(trace, sizing, params, mirror_factor, keep, control))
+}
+
+/// One planning and assembly with the patches in `keep` kept as triangles.
+fn plan(
+    trace: &TraceOutput,
+    sizing: Sizing<'_>,
+    params: &QuadParams,
+    mirror_factor: usize,
+    keep: &[bool],
+    control: &Control,
+) -> Result<Assembled, Error> {
+    let wanted = params.target_quads;
+    let prepared = Prepared::new(trace, keep, control)?;
     let unit = super::targets(trace, &prepared.segs, sizing, 1.0);
     let fixed: usize = prepared
         .faces_of
@@ -453,12 +467,17 @@ pub fn compute(
         }));
     }
     let (best, refinement) = refine_best(&prepared, &unit, plans, wanted, mirror_factor, control)?;
-    let mut output =
+    let assembled =
         prepared.assemble(trace, &best.counts, best.edge, params, Some((&best.patterns, limit)), control)?;
-    output.report.target_quads = wanted;
-    output.report.target_attempts = attempts;
-    output.report.target_refinements = refinement.selected;
-    Ok(output)
+    Ok(match assembled {
+        Assembled::Mesh(mut output) => {
+            output.report.target_quads = wanted;
+            output.report.target_attempts = attempts;
+            output.report.target_refinements = refinement.selected;
+            Assembled::Mesh(output)
+        }
+        clash => clash,
+    })
 }
 
 #[cfg(test)]
@@ -515,7 +534,10 @@ mod tests {
                 )
             })
             .collect();
-        let prepared = Prepared { faces_of: vec![vec![], vec![]], segs: Segments { segments, sides } };
+        let prepared = Prepared {
+            faces_of: vec![vec![], vec![]],
+            segs: Segments { segments, sides, twins: Vec::new() },
+        };
         let plan =
             Plan { counts: vec![2; 7], patterns: vec![pattern::build(&[2; 4]); 2], quads: 8, edge: 1.0 };
         (prepared, plan)
@@ -611,7 +633,11 @@ mod tests {
             .collect();
         let prepared = Prepared {
             faces_of: vec![vec![]],
-            segs: Segments { segments, sides: vec![Some((0..3).map(|s| vec![(s, false)]).collect())] },
+            segs: Segments {
+                segments,
+                sides: vec![Some((0..3).map(|s| vec![(s, false)]).collect())],
+                twins: Vec::new(),
+            },
         };
         let mut plan =
             Plan { counts: vec![4; 3], patterns: vec![pattern::build(&[4; 3])], quads: 12, edge: 1.0 };

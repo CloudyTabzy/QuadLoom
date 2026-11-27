@@ -47,6 +47,10 @@ pub struct FeatureParams {
     /// Angle-only spurs up to this many edges (and under 5% of the bbox
     /// diagonal) that dangle from the feature network are removed. 0 disables.
     pub prune_steps: usize,
+    /// A line of angle-only edges is a feature only if it carries at least
+    /// this much fold ([`drop_faint`]): its length in nominal edges times its
+    /// fold in radians. 0 keeps every line.
+    pub min_fold: f64,
 }
 
 impl Default for FeatureParams {
@@ -60,6 +64,7 @@ impl Default for FeatureParams {
             use_face_set_boundaries: true,
             use_open_boundaries: true,
             prune_steps: 4,
+            min_fold: DEFAULT_MIN_FOLD,
         }
     }
 }
@@ -94,17 +99,73 @@ impl FeatureSet {
     }
 }
 
+/// One line of angle-only edges (edges the angle test alone found, joined
+/// at shared vertices), as it stood before any line was dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct CreaseLine {
+    /// Its length in nominal edges ([`crate::remesh::nominal_length`]).
+    pub length: f64,
+    /// The mean angle between its edges' faces, weighted by length (radians).
+    pub fold: f64,
+    pub edges: u32,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct FeatureReport {
+    /// The mesh's angle-only lines before [`drop_faint`], longest first:
+    /// what [`crate::advise`] reads a model's kind from.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub lines: Vec<CreaseLine>,
     pub edges: usize,
     /// Edges carrying each source, in [`source::ALL`] order.
     pub by_source: [usize; 6],
     pub pruned_edges: usize,
+    /// Angle-only edges dropped with their line for carrying too little fold.
+    pub faint_edges: usize,
     pub corners: usize,
     /// Total feature length over √area (QuadWild's "sharp factor" measure).
     pub length_ratio: f64,
 }
+
+/// The default [`FeatureParams::min_fold`]: 0, every line kept.
+///
+/// The filter is a setting, not a default, because no one value suits every
+/// model. What it does at 35°, by the angle-only lines of five models (in
+/// nominal edges by mean fold):
+///
+/// | Model | Lines | The longest |
+/// |---|---|---|
+/// | armadillo (scan detail) | 680 | 6.6 at 49° |
+/// | bunny (fur) | 222, 190 of them under 2 | 27 at 60°, 18 at 48° |
+/// | rocker arm (blunt rims) | 229 | 7.8 at 47°, 5.8 at 70° |
+/// | cheburashka (creases) | 41 | nine of 10 to 33, at 85° to 107° |
+/// | fandisk | 2 | 572 at 88°, and its fading crease's tail, 11.5 at 47° |
+///
+/// With every line kept, the bunny has 549 feature edges, each pinning the
+/// cross field along a scrap of crease: 115 singular vertices and a flow that
+/// wanders. At 9 it keeps four lines, has 91, and a third of the badly bent
+/// vertices; the rocker arm and cheburashka gain as much.
+///
+/// But a layout also leans on those scraps to cut its patches, and soft real
+/// creases come out of the angle test in pieces. At 9, six of 70 models were
+/// clearly worse (SpecularSilkPouf 9.4% off its input). At 4, over all 70:
+/// irregular vertices fewer on 27 and more on 13, the mean scaled Jacobian
+/// better on 23 and worse on 20, and three models much worse
+/// (`thingi10k/105762`, a vase whose ribs are such creases, lost 0.57 of its
+/// 5th percentile). So: 0 unless asked, 4 to 9 for a sculpt with surface noise.
+///
+/// A bar on how far the fold is *past the threshold* was tried first. It
+/// dropped the fandisk's tail, and left the rocker arm two stray lines six
+/// edges long, which did more harm alone than all 229 had together (mean
+/// scaled Jacobian 0.959 with them all, 0.931 with the two, 0.970 with none):
+/// a short hard line by itself pins the flow to a direction nothing else has.
+pub const DEFAULT_MIN_FOLD: f64 = 0.0;
+
+/// A line folded this sharply on average is kept however short: a right
+/// angle is a hard edge, down to a notch two quads long.
+const HARD_FOLD_DEG: f64 = 80.0;
 
 /// Fraction of the bbox diagonal below which a dangling spur may be pruned.
 const PRUNE_MAX_LENGTH_RATIO: f64 = 0.05;
@@ -113,6 +174,17 @@ pub fn detect(
     mesh: &RepairedMesh,
     input: &FeatureInput,
     params: &FeatureParams,
+) -> (FeatureSet, FeatureReport) {
+    detect_in(mesh, input, params, crate::symmetry::Whole::new(&mesh.positions, &[]))
+}
+
+/// [`detect`] on a mesh that is one side of `whole` (the kept side of
+/// mirror planes): lengths are judged at the whole model's scale.
+pub fn detect_in(
+    mesh: &RepairedMesh,
+    input: &FeatureInput,
+    params: &FeatureParams,
+    whole: crate::symmetry::Whole,
 ) -> (FeatureSet, FeatureReport) {
     let positions = &mesh.positions;
     let normals: Vec<DVec3> = mesh
@@ -146,10 +218,13 @@ pub fn detect(
     let region = Region::new(mesh, &normals, &uses);
     // Every edge first (marking looks edges up by vertex pair), most dropped below.
     let mut edges = Vec::with_capacity(uses.len() / 2 + 1);
+    // Per edge, the angle between its faces' normals (0 for an edge with one face).
+    let mut folds: Vec<f32> = Vec::with_capacity(uses.len() / 2 + 1);
     let mut on_boundary = vec![false; positions.len()];
     for group in uses.chunk_by(|x, y| (x.0, x.1) == (y.0, y.1)) {
         let v = [group[0].0, group[0].1];
         let (mut sources, mut convex) = (0u8, true);
+        let mut fold = 0.0f32;
         match group {
             [_] => {
                 on_boundary[v[0] as usize] = true;
@@ -160,7 +235,9 @@ pub fn detect(
             }
             [x, y] => {
                 let (fx, fy) = (x.2 as usize, y.2 as usize);
-                let raw_sharp = normals[fx].dot(normals[fy]) < cos_threshold;
+                let cos = normals[fx].dot(normals[fy]);
+                let raw_sharp = cos < cos_threshold;
+                fold = cos.clamp(-1.0, 1.0).acos() as f32;
                 if params.use_angle && raw_sharp && region.salient(v, fx, fy, cos_threshold) {
                     sources |= source::ANGLE;
                     let apex_height = (positions[y.3 as usize] - positions[v[0] as usize]).dot(normals[fx]);
@@ -177,6 +254,7 @@ pub fn detect(
             _ => {} // repaired meshes are manifold
         }
         edges.push(FeatureEdge { v, sources, convex });
+        folds.push(fold);
     }
 
     let mut mark = |list: &[[u32; 2]], flag: u8| {
@@ -198,20 +276,10 @@ pub fn detect(
     if params.use_seams {
         mark(&input.seam_edges, source::SEAM);
     }
+    let mut kept = edges.iter().map(|e| e.sources != 0);
+    folds.retain(|_| kept.next().unwrap_or(false));
     edges.retain(|e| e.sources != 0);
-    // The set lives through the remesh; give back the room the other edges took.
-    edges.shrink_to_fit();
 
-    let diagonal = {
-        let (lo, hi) = positions
-            .iter()
-            .fold((DVec3::INFINITY, DVec3::NEG_INFINITY), |(lo, hi), &p| (lo.min(p), hi.max(p)));
-        if positions.is_empty() { 0.0 } else { (hi - lo).length() }
-    };
-    let pruned_edges =
-        prune(&mut edges, positions, &on_boundary, params.prune_steps, PRUNE_MAX_LENGTH_RATIO * diagonal);
-
-    let features = FeatureSet { edges };
     let area: f64 = mesh
         .triangles
         .iter()
@@ -220,6 +288,18 @@ pub fn detect(
             0.5 * (pb - pa).cross(pc - pa).length()
         })
         .sum();
+    let nominal = crate::remesh::nominal_length(area * whole.copies);
+    let lines = crease_lines(&edges, &folds, positions, nominal);
+    let faint_edges = drop_faint(&mut edges, &folds, positions, nominal, params.min_fold);
+    drop(folds);
+    // The set lives through the remesh; give back the room the other edges took.
+    edges.shrink_to_fit();
+
+    let diagonal = whole.diagonal;
+    let pruned_edges =
+        prune(&mut edges, positions, &on_boundary, params.prune_steps, PRUNE_MAX_LENGTH_RATIO * diagonal);
+
+    let features = FeatureSet { edges };
     let mut by_source = [0usize; 6];
     for e in &features.edges {
         for (count, flag) in by_source.iter_mut().zip(source::ALL) {
@@ -227,9 +307,11 @@ pub fn detect(
         }
     }
     let report = FeatureReport {
+        lines,
         edges: features.edges.len(),
         by_source,
         pruned_edges,
+        faint_edges,
         corners: features.corners().len(),
         length_ratio: if area > 0.0 { features.total_length(positions) / area.sqrt() } else { 0.0 },
     };
@@ -321,6 +403,98 @@ impl<'a> Region<'a> {
         }
         nx.dot(ny) < cos_threshold
     }
+}
+
+/// The lines of angle-only edges among `edges`, longest first (ties by fold,
+/// then edge count, so the order never depends on a map's). `folds[i]` is
+/// the angle between the faces of `edges[i]`.
+pub(crate) fn crease_lines(
+    edges: &[FeatureEdge],
+    folds: &[f32],
+    positions: &[DVec3],
+    nominal: f64,
+) -> Vec<CreaseLine> {
+    if nominal.is_nan() || nominal <= 0.0 {
+        return Vec::new();
+    }
+    let angle_only = |e: &FeatureEdge| e.sources == source::ANGLE;
+    let mut lines = crate::unionfind::UnionFind::new(positions.len());
+    for e in edges.iter().filter(|e| angle_only(e)) {
+        lines.union(e.v[0], e.v[1]);
+    }
+    // Per line: length, length times fold, edges.
+    let mut sums: hashbrown::HashMap<u32, (f64, f64, u32)> = hashbrown::HashMap::new();
+    for (e, &fold) in edges.iter().zip(folds) {
+        if angle_only(e) {
+            let length = (positions[e.v[0] as usize] - positions[e.v[1] as usize]).length();
+            let line = sums.entry(lines.find(e.v[0])).or_default();
+            line.0 += length;
+            line.1 += length * f64::from(fold);
+            line.2 += 1;
+        }
+    }
+    let mut out: Vec<CreaseLine> = sums
+        .into_values()
+        .filter(|&(length, ..)| length > 0.0)
+        .map(|(length, folded, edges)| CreaseLine { length: length / nominal, fold: folded / length, edges })
+        .collect();
+    out.sort_by(|a, b| {
+        b.length.total_cmp(&a.length).then(b.fold.total_cmp(&a.fold)).then(b.edges.cmp(&a.edges))
+    });
+    out
+}
+
+/// Drops lines of angle-only edges that carry too little fold, and returns
+/// how many edges went. `folds[i]` is the angle between the faces of
+/// `edges[i]` (radians); `folds` is not updated.
+///
+/// A line here is a set of angle-only edges connected through shared
+/// vertices. What it carries is the sum over its edges of length times
+/// fold, over the nominal edge length. Lines carrying less than `min_fold`
+/// are sculpting detail, not form: fur, pores, the ragged rim of a scanned
+/// fold, scraps along a rounded rim. As features each would pin the cross
+/// field along a few edges, in a direction nothing round it shares, and the
+/// flow of a smooth surface would bend to meet every one.
+///
+/// A line whose mean fold is [`HARD_FOLD_DEG`] or more is kept whatever it
+/// carries. Edges with any other source (marked sharp, a seam, a border, a
+/// material or face-set boundary) are never dropped, and don't join lines.
+pub(crate) fn drop_faint(
+    edges: &mut Vec<FeatureEdge>,
+    folds: &[f32],
+    positions: &[DVec3],
+    nominal: f64,
+    min_fold: f64,
+) -> usize {
+    if min_fold.is_nan() || min_fold <= 0.0 || nominal.is_nan() || nominal <= 0.0 {
+        return 0;
+    }
+    let angle_only = |e: &FeatureEdge| e.sources == source::ANGLE;
+    // Lines: angle-only edges joined at shared vertices.
+    let mut lines = crate::unionfind::UnionFind::new(positions.len());
+    for e in edges.iter().filter(|e| angle_only(e)) {
+        lines.union(e.v[0], e.v[1]);
+    }
+    // Per line: its length, and its length times fold.
+    let mut carried: hashbrown::HashMap<u32, (f64, f64)> = hashbrown::HashMap::new();
+    for (e, &fold) in edges.iter().zip(folds) {
+        if angle_only(e) {
+            let length = (positions[e.v[0] as usize] - positions[e.v[1] as usize]).length();
+            let line = carried.entry(lines.find(e.v[0])).or_default();
+            line.0 += length;
+            line.1 += length * f64::from(fold);
+        }
+    }
+    let hard = HARD_FOLD_DEG.to_radians();
+    let before = edges.len();
+    edges.retain(|e| {
+        if !angle_only(e) {
+            return true;
+        }
+        let (length, fold) = carried.get(&lines.find(e.v[0])).copied().unwrap_or((0.0, 0.0));
+        fold >= min_fold * nominal || fold >= hard * length
+    });
+    before - edges.len()
 }
 
 /// Removes angle-only chains that dangle from the network: a chain starting at
@@ -580,6 +754,53 @@ mod tests {
         assert!(!kept.contains(&[3, 7]) && !kept.contains(&[10, 11]));
         assert!(kept.contains(&[3, 8]) && kept.contains(&[8, 9]));
         assert_eq!(kept.len(), 8);
+    }
+
+    #[test]
+    fn lines_that_carry_little_fold_are_dropped() {
+        // Along x: a line of 12 unit edges folded 45 degrees, a scrap of 3
+        // folded the same, a scrap of 2 folded 90, and a marked scrap of 2.
+        // Nominal edge 1.
+        let positions: Vec<DVec3> = (0..40).map(|i| DVec3::new(f64::from(i), 0.0, 0.0)).collect();
+        let run = |from: u32, count: u32, sources: u8| {
+            (from..from + count).map(move |i| FeatureEdge { v: [i, i + 1], sources, convex: true })
+        };
+        let all: Vec<FeatureEdge> = run(0, 12, source::ANGLE)
+            .chain(run(14, 3, source::ANGLE))
+            .chain(run(20, 2, source::ANGLE))
+            .chain(run(30, 2, source::ANGLE | source::SHARP))
+            .collect();
+        let deg = |d: f64| d.to_radians() as f32;
+        let folds: Vec<f32> =
+            [vec![deg(45.0); 12], vec![deg(45.0); 3], vec![deg(90.0); 2], vec![deg(36.0); 2]].concat();
+        let starts = |edges: &[FeatureEdge]| edges.iter().map(|e| e.v[0]).collect::<Vec<u32>>();
+        let mut edges = all.clone();
+        assert_eq!(drop_faint(&mut edges, &folds, &positions, 1.0, 0.0), 0, "0 keeps every line");
+        // The long line carries 12 x 45 degrees = 9.4, the short one 2.4:
+        // gone at a bar of 9. The scrap folded 90 degrees carries 3.1 and
+        // stays: a right angle is a hard edge however short. The marked one
+        // is not asked.
+        let mut edges = all.clone();
+        assert_eq!(drop_faint(&mut edges, &folds, &positions, 1.0, 9.0), 3);
+        assert_eq!(starts(&edges), [(0..12).collect::<Vec<u32>>(), vec![20, 21, 30, 31]].concat());
+        // A higher bar takes the long line too, never the hard or the marked one.
+        let mut edges = all.clone();
+        assert_eq!(drop_faint(&mut edges, &folds, &positions, 1.0, 12.0), 15);
+        assert_eq!(starts(&edges), [20, 21, 30, 31]);
+        // The bar is in nominal edges: on a mesh with twice the nominal edge, the same line carries half.
+        let mut edges = all;
+        assert_eq!(drop_faint(&mut edges, &folds, &positions, 2.0, 9.0), 15);
+    }
+
+    #[test]
+    fn a_cube_s_edges_carry_plenty() {
+        // Twelve edges in one line, each 27 nominal edges long and folded 90 degrees.
+        let m = repaired(&CUBE_P, &CUBE_T);
+        let params = FeatureParams { min_fold: 9.0, ..only(source::ANGLE) };
+        let (set, report) = detect(&m, &FeatureInput::default(), &params);
+        assert_eq!((set.edges.len(), report.faint_edges), (12, 0));
+        // And the filter is off unless asked for.
+        assert_eq!(FeatureParams::default().min_fold, 0.0);
     }
 
     #[test]

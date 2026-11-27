@@ -12,7 +12,7 @@ features, UV seams and open borders. The remesher runs as a native module
 (`quadloom_native`) behind a Python Blender extension, so the viewport stays
 responsive and a backend failure can be contained in a worker process.
 
-> **Status:** 0.4.0, Windows x64, Blender 5.2. This is a pre-1.0 release; the
+> **Status:** 0.4.6, Windows x64, Blender 5.2. This is a pre-1.0 release; the
 > target-count mode is approximate. See [Known limitations](#known-limitations).
 
 ## Screenshots
@@ -22,9 +22,15 @@ responsive and a backend failure can be contained in a worker process.
 
 ## Install
 
-1. Download `quadloom-0.4.0.zip` from the [Releases](https://github.com/CloudyTabzy/QuadLoom/releases) page.
+1. Download `quadloom-0.4.6.zip` from the [Releases](https://github.com/CloudyTabzy/QuadLoom/releases) page.
 2. In Blender: **Edit → Preferences → Extensions → Install from Disk...**, choose the zip.
 3. Enable **QuadLoom** if it is not enabled automatically.
+4. When updating from an older version, restart Blender: Windows cannot replace the
+   native backend while it is loaded.
+
+The release also carries the native backend on its own
+(`quadloom_native-<version>-cp311-abi3-win_amd64.whl`) for scripting outside
+Blender with Python 3.11+. The extension zip already contains it.
 
 The extension is currently built for **Windows x64**. Linux and macOS wheels are not
 published yet. The manifest permits Blender 4.2+, but 5.2 is the only version covered
@@ -34,23 +40,29 @@ by the current test suite.
 
 1. Select a mesh object.
 2. Open the 3D Viewport sidebar (`N`) and choose the **QuadLoom** tab.
-3. Pick a preset (Balanced, Organic, Hard Surface, Regular Quads, Low Poly, High Detail).
+3. Pick a preset (Balanced, Organic, Hard Surface, Regular Quads, Low Poly, High Detail),
+   or press **Detect Settings** to have the mesh read and settings suggested for it
+   (Sharp Edges, Ignore Faint Creases, Symmetry).
 4. Choose **Density** for a relative quad size, or **Target Quads** for an approximate
    total count.
 5. Press **Remesh**. The result is a new object; the original is left untouched.
 
-The panel also exposes sharp-feature detection, symmetry, optional UV-seam handling,
-solver effort, smoothing and attribute transfer under **Advanced**.
+The main panel also has Adaptive Detail, Layout Attempts, Sharp Edges and Symmetry
+(X, Y, Z or Auto Detect). Optional UV-seam handling, solver effort, smoothing and
+attribute transfer are under **Advanced**.
 
 ## Features
 
 - Feature-line-driven tracing and patch layout, with the cross field solved on the
   input surface.
-- Quad-dominant output with closed-form patch patterns, stitching and smoothing;
-  patches that cannot be filled safely fall back to triangles instead of forcing a
-  folded quad.
-- Sharp edges, open borders, symmetry (X/Y/Z, auto-detect) and per-part fallback for
-  meshes that cannot be repaired.
+- Quad-dominant output with closed-form patch patterns, stitching and a relaxer that
+  keeps thin parts and lets feature vertices slide; patches that cannot be filled
+  safely fall back to triangles instead of forcing a folded quad.
+- Layout Attempts: each connected part is laid out several times and keeps the best
+  quads, with the same result on every run.
+- Detect Settings: reads a mesh's crease lines and mirror planes and suggests settings.
+- Sharp edges, open borders, symmetry (X/Y/Z, auto-detect, exact mirror) and per-part
+  fallback for meshes that cannot be repaired.
 - UVs, materials, vertex groups, colour attributes and armature deformation are
   transferred to the result.
 - Remeshing runs in an isolated, memory-limited worker; a backend panic or abort
@@ -62,8 +74,27 @@ solver effort, smoothing and attribute transfer under **Advanced**.
 
 The benchmark set is 70 public meshes (96 files, 272 MB) with per-model license notes
 in [`benchmark/sources.json`](benchmark/sources.json). The meshes are downloaded
-locally and never committed. The 0.4.0 target-count sweep below uses six
-representative models (18 requests).
+locally and never committed.
+
+**0.4.6 against QRemeshify 1.5.0** (all 70 models through the add-on at default
+settings; medians over the 60 that QRemeshify finishes):
+
+| | QuadLoom 0.4.6 | QRemeshify 1.5.0 | QuadLoom better on |
+|---|---:|---:|---:|
+| Completed | 70 of 70 | 60 of 70 | |
+| Mean scaled Jacobian | 0.961 | 0.922 | 53 of 60 |
+| 5th-percentile scaled Jacobian | 0.828 | 0.650 | 50 of 60 |
+| Irregular vertices | 117 | 248 | 46 of 60 |
+| Hausdorff distance, % of diagonal | 0.290 | 0.491 | 52 of 60 |
+| Mean distance, % of diagonal | 0.017 | 0.037 | 58 of 60 |
+| Results over 1% from the input | 1 | 10 | |
+| Time | 3.7 s | 13.0 s | 60 of 60 |
+
+Scaled Jacobian is per-quad shape quality (1.0 is a perfect square). The
+[full report](benchmark/reports/20261127-q046-default/README.md) has every model;
+QuadLoom uses about 1.4 times QRemeshify's quad count at the default Density.
+
+The 0.4.0 target-count sweep below uses six representative models (18 requests).
 
 **Target-count accuracy (0.4.0, Windows / Blender 5.2.2; representative rows):**
 
@@ -88,16 +119,19 @@ explains the inventory and how to fetch the meshes.
 
 ## Known limitations
 
-These are the main user-facing limits for 0.4.0; measured details are in the
-benchmark reports.
+These are the main user-facing limits for 0.4.6; measured details are in the
+benchmark reports and release notes.
 
 - **Target Quads is approximate.** Coarse requests can miss substantially (for
   example 500 requested → 1,660 on the armadillo); constrained feature/layout cases
   are the hardest.
 - Crowded organic regions can still keep a few patches with multiple singularities.
 - UV-sphere poles and similar high-index singularities are not fully handled.
-- Layouts with more than 2,500 free segments skip the global ILP and use regional
-  repair.
+- A connected part with more than 2,500 free segments skips the whole-part integer
+  program and uses regional repair.
+- An inverted quad still appears in about 40 of the 70 benchmark results.
+- Symmetry mirrors across the object's own axes only, through its origin or the
+  middle of its bounding box.
 - Shape keys and edge attributes (crease/bevel weights) are not transferred; custom
   normals are recomputed.
 - Windows x64 only for now.

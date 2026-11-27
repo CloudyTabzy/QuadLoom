@@ -47,6 +47,32 @@ pub(crate) fn cylinder(rings: u32, segments: u32) -> (Vec<DVec3>, Vec<[u32; 3]>)
     (p, t)
 }
 
+/// An open tube `length` long whose section is `outline(j)` for `j` in
+/// `0..around`, counter-clockwise seen from +z, `rings` rings along z.
+/// Vertex (ring i, j) is `i·around + j`.
+pub(crate) fn extrusion(
+    around: u32,
+    rings: u32,
+    length: f64,
+    outline: impl Fn(u32) -> (f64, f64),
+) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let mut p = Vec::new();
+    for i in 0..=rings {
+        for j in 0..around {
+            let (x, y) = outline(j);
+            p.push(DVec3::new(x, y, length * f64::from(i) / f64::from(rings)));
+        }
+    }
+    let mut t = Vec::new();
+    for i in 0..rings {
+        for j in 0..around {
+            let (a, b) = (i * around + j, i * around + (j + 1) % around);
+            t.extend([[a, b, b + around], [a, b + around, a + around]]);
+        }
+    }
+    (p, t)
+}
+
 /// A torus (radii 1 and 0.4), `rings` × `segments` quads.
 pub(crate) fn torus(rings: u32, segments: u32) -> (Vec<DVec3>, Vec<[u32; 3]>) {
     let (big, small) = (1.0, 0.4);

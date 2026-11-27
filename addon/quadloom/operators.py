@@ -333,6 +333,8 @@ def quad_summary(quads, error=None):
     parts = [f"{report['grid_patches']:,} grid", f"{report['center_patches']:,} center"]
     if report["split_patches"]:
         parts.append(f"{report['split_patches']:,} split")
+    if report.get("bridge_patches"):
+        parts.append(f"{report['bridge_patches']:,} bridged")
     if report["fan_patches"]:
         parts.append(f"{report['fan_patches']:,} fallback")
     text = f"Quads: {report['quads']:,} (" + ", ".join(parts) + " patches)"
@@ -342,6 +344,13 @@ def quad_summary(quads, error=None):
     if target:
         delta = 100.0 * (report["quads"] - target) / target
         text += f"; Target {target:,}, {delta:+.1f}%"
+    attempts = report.get("attempts", 1)
+    if attempts > 1:
+        # "Best of 4 Layouts: 5 of 12 Parts Took Another" (a part is tried again only where a
+        # later layout differs from its first).
+        text += f"; Best of {attempts} Layouts"
+        if report.get("parts_retried"):
+            text += f": {report.get('parts_improved', 0):,} of {_count(report['parts_retried'], 'part')} took another"
     return wording.title(text)
 
 
@@ -559,7 +568,103 @@ def _run_job_blocking(context, timeout_s=30.0, on_started=None):
     return finish_job(context, job)
 
 
-classes = (QUADLOOM_OT_remesh, QUADLOOM_OT_cancel)
+def detection_is_current(context):
+    """Whether the stored detection is of the active object as it is now."""
+    detection = getattr(context.scene, "quadloom_detection", None)
+    obj = context.active_object
+    if detection is None or not detection.valid or obj is None or obj.type != "MESH":
+        return False
+    return (detection.object_name == obj.name
+            and detection.fingerprint == props.detection_fingerprint(obj, context.scene.quadloom))
+
+
+def detection_suggests_symmetry(context):
+    """Whether the stored detection found a mirror plane that Symmetry isn't set to find.
+
+    Never a suggestion to turn Symmetry off: a mesh without a plane leaves the setting alone.
+    """
+    detection, settings = context.scene.quadloom_detection, context.scene.quadloom
+    return detection.symmetry and not settings.symmetry_auto
+
+
+def detection_differs(context):
+    """Whether applying the stored detection would change a setting."""
+    detection, settings = context.scene.quadloom_detection, context.scene.quadloom
+    return (detection.use_angle != settings.use_angle or abs(detection.min_fold - settings.min_fold) > 1e-6
+            or detection_suggests_symmetry(context))
+
+
+class QUADLOOM_OT_detect(bpy.types.Operator):
+    bl_idname = "quadloom.detect"
+    bl_label = "Detect Settings"
+    bl_description = ("Read the active mesh's crease lines and mirror planes and suggest Sharp Edges "
+                      "and Symmetry settings for it. Nothing changes until you apply the suggestion")
+
+    @classmethod
+    def poll(cls, context):
+        return QUADLOOM_OT_remesh.poll(context)
+
+    def execute(self, context):
+        settings, detection = context.scene.quadloom, context.scene.quadloom_detection
+        obj = context.active_object
+        detection.valid = False
+        try:
+            if obj.mode == "EDIT":
+                obj.update_from_editmode()
+            snapshot = mesh_io.extract(obj, context.evaluated_depsgraph_get(), settings.max_faces)
+            advice = bridge.advise(snapshot.positions, snapshot.indices, bridge.new_control(),
+                                   max_faces=settings.max_faces, params=props.run_params(settings),
+                                   **snapshot.feature_kwargs())
+        except Exception as e:
+            self.report({"ERROR"}, f"QuadLoom could not read the mesh: {e}")
+            return {"CANCELLED"}
+        detection.object_name = obj.name
+        detection.fingerprint = props.detection_fingerprint(obj, settings)
+        detection.kind = advice["kind"]
+        detection.lines = advice["lines"]
+        detection.form_lines = advice["form_lines"]
+        detection.form_share = advice["form_share"]
+        detection.scraps = advice["scraps"]
+        detection.scrap_fold_deg = advice["scrap_fold_deg"]
+        detection.use_angle = advice["use_angle"]
+        detection.min_fold = advice["min_fold"]
+        found = list(advice["mirror_axes"])
+        detection.mirror_axes = found
+        detection.mirror_asymmetry = max((a for a, on in zip(advice["mirror_asymmetry"], found) if on), default=0.0)
+        detection.mirror_worst = max((w for w, on in zip(advice["mirror_worst"], found) if on), default=0.0)
+        detection.symmetry = advice["symmetry"]
+        detection.valid = True
+        _redraw_panels(context)
+        self.report({"INFO"}, f"QuadLoom: {wording.kind(detection.kind)[0]}")
+        return {"FINISHED"}
+
+
+class QUADLOOM_OT_apply_detected(bpy.types.Operator):
+    bl_idname = "quadloom.apply_detected"
+    bl_label = "Apply Suggested Settings"
+    bl_description = ("Set Sharp Edges and Ignore Faint Creases to what Detect Settings suggested, "
+                      "and turn on Symmetry's Auto Detect if it found a mirror plane")
+    bl_options = {"UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        if not detection_is_current(context):
+            cls.poll_message_set("Detect the active mesh's settings first")
+            return False
+        return True
+
+    def execute(self, context):
+        settings, detection = context.scene.quadloom, context.scene.quadloom_detection
+        settings.use_angle = detection.use_angle
+        settings.min_fold = detection.min_fold
+        if detection.symmetry:
+            settings.symmetry_auto = True
+        _redraw_panels(context)
+        self.report({"INFO"}, "QuadLoom: suggested settings applied")
+        return {"FINISHED"}
+
+
+classes = (QUADLOOM_OT_remesh, QUADLOOM_OT_cancel, QUADLOOM_OT_detect, QUADLOOM_OT_apply_detected)
 
 
 def register_handlers():

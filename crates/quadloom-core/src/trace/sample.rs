@@ -90,17 +90,19 @@ impl DistanceField {
 }
 
 /// Up to `count` vertices for which `eligible` holds, spread out: the first
-/// is the lowest eligible id, each next one the eligible vertex farthest from
-/// those chosen (ties: lower id; unreachable vertices count as farthest).
+/// is the `start`-th eligible one (counted round if past the last; 0 is the
+/// lowest id), each next one the eligible vertex farthest from those chosen
+/// (ties: lower id; unreachable vertices count as farthest).
 pub fn farthest_points(
     cut: &CutMesh,
     eligible: &dyn Fn(u32) -> bool,
     count: usize,
+    start: usize,
     control: &Control,
 ) -> Result<Vec<u32>, Error> {
     let candidates: Vec<u32> = (0..cut.vertex_count() as u32).filter(|&v| eligible(v)).collect();
     let mut chosen = Vec::with_capacity(count.min(candidates.len()));
-    let Some(&first) = candidates.first() else { return Ok(chosen) };
+    let Some(&first) = candidates.get(start % candidates.len().max(1)) else { return Ok(chosen) };
     let mut field = DistanceField::new(cut);
     let mut next = first;
     while chosen.len() < count {
@@ -127,14 +129,24 @@ mod tests {
         let (p, t) = grid(10, 10);
         let cut = CutMesh::new(&p, &t, &[]);
         let interior = |v: u32| !cut.boundary[v as usize];
-        let a = farthest_points(&cut, &interior, 4, &Control::default()).unwrap();
-        assert_eq!(a, farthest_points(&cut, &interior, 4, &Control::default()).unwrap());
+        let a = farthest_points(&cut, &interior, 4, 0, &Control::default()).unwrap();
+        assert_eq!(a, farthest_points(&cut, &interior, 4, 0, &Control::default()).unwrap());
         assert_eq!(a.len(), 4);
         assert_eq!(a[0], 12, "lowest interior id first");
         // The second seed is the far interior corner.
         assert_eq!(cut.positions[a[1] as usize], glam::DVec3::new(9.0, 9.0, 0.0));
-        let all = farthest_points(&cut, &interior, 1000, &Control::default()).unwrap();
+        let all = farthest_points(&cut, &interior, 1000, 0, &Control::default()).unwrap();
         assert_eq!(all.len(), 81, "stops once every eligible vertex is chosen");
+        // Another start: as many, as spread out, from another vertex (counted round past the last).
+        let other = farthest_points(&cut, &interior, 4, 40 + 81, &Control::default()).unwrap();
+        assert_eq!((other.len(), other[0]), (4, all_sorted(&all)[40]));
+        assert_ne!(other, a);
+    }
+
+    fn all_sorted(vertices: &[u32]) -> Vec<u32> {
+        let mut sorted = vertices.to_vec();
+        sorted.sort_unstable();
+        sorted
     }
 
     #[test]

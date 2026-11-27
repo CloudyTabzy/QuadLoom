@@ -6,7 +6,9 @@
 
 #![forbid(unsafe_code)]
 
+pub mod advise;
 mod allocation;
+mod attempts;
 pub mod components;
 pub mod control;
 pub mod edit;

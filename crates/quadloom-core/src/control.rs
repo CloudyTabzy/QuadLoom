@@ -28,6 +28,8 @@ pub enum Stage {
     Patterns,
     Map,
     Smooth,
+    /// Other layouts of the parts, tried after the first quads are built.
+    Attempts,
     Output,
     /// Mapping a result onto its source for attribute transfer (after the run).
     Transfer,
@@ -35,7 +37,7 @@ pub enum Stage {
 
 impl Stage {
     /// Every stage, in pipeline order.
-    pub const ALL: [Stage; 14] = [
+    pub const ALL: [Stage; 15] = [
         Self::Validate,
         Self::Repair,
         Self::Features,
@@ -48,6 +50,7 @@ impl Stage {
         Self::Patterns,
         Self::Map,
         Self::Smooth,
+        Self::Attempts,
         Self::Output,
         Self::Transfer,
     ];
@@ -66,6 +69,7 @@ impl Stage {
             Self::Patterns => "patterns",
             Self::Map => "map",
             Self::Smooth => "smooth",
+            Self::Attempts => "attempts",
             Self::Output => "output",
             Self::Transfer => "transfer",
         }
@@ -92,6 +96,8 @@ pub struct Control {
     /// `(stage index) << 24 | (fraction * FRACTION_SCALE)`, so a reader never
     /// sees a stage from one update paired with a fraction from another.
     progress: AtomicU32,
+    /// Set while a [`Held`] reports for the stages that run under it.
+    held: AtomicBool,
 }
 
 impl Control {
@@ -104,7 +110,26 @@ impl Control {
     }
 
     /// Records progress. `fraction` is clamped to `0..=1`; NaN counts as 0.
+    /// Does nothing while progress is held ([`Control::hold`]).
     pub fn set_progress(&self, stage: Stage, fraction: f32) {
+        if !self.held.load(Ordering::Relaxed) {
+            self.store(stage, fraction);
+        }
+    }
+
+    /// Takes over progress until the returned guard is dropped: the stages
+    /// that run meanwhile report nothing, and the guard reports as `stage`.
+    ///
+    /// For a step that runs earlier stages again, several times and side by
+    /// side. Each would report its own stage from zero, and a reader would
+    /// see the run jump back and forth between stages it had already left.
+    pub fn hold(&self, stage: Stage) -> Held<'_> {
+        self.store(stage, 0.0);
+        self.held.store(true, Ordering::Relaxed);
+        Held { control: self, stage }
+    }
+
+    fn store(&self, stage: Stage, fraction: f32) {
         let fraction = if fraction.is_nan() { 0.0 } else { fraction.clamp(0.0, 1.0) };
         let packed = (stage as u32) << 24 | (fraction * FRACTION_SCALE) as u32;
         self.progress.store(packed, Ordering::Relaxed);
@@ -125,6 +150,25 @@ impl Control {
     pub fn ticker(&self, stage: Stage, total: usize) -> Ticker<'_> {
         self.set_progress(stage, 0.0);
         Ticker { control: self, stage, total: total.max(1), calls: 0 }
+    }
+}
+
+/// Progress held for one stage (see [`Control::hold`]).
+#[derive(Debug)]
+pub struct Held<'a> {
+    control: &'a Control,
+    stage: Stage,
+}
+
+impl Held<'_> {
+    pub fn set(&self, fraction: f32) {
+        self.control.store(self.stage, fraction);
+    }
+}
+
+impl Drop for Held<'_> {
+    fn drop(&mut self) {
+        self.control.held.store(false, Ordering::Relaxed);
     }
 }
 
@@ -180,6 +224,16 @@ mod tests {
         assert_eq!(control.progress(), (Stage::Trace, 0.0));
         control.set_progress(Stage::Smooth, f32::NAN);
         assert_eq!(control.progress(), (Stage::Smooth, 0.0));
+        control.set_progress(Stage::Quantize, 0.25);
+        // Held: only the guard reports, and the stages under it are not seen.
+        {
+            let held = control.hold(Stage::Attempts);
+            assert_eq!(control.progress(), (Stage::Attempts, 0.0));
+            control.set_progress(Stage::Trace, 0.9);
+            assert_eq!(control.progress(), (Stage::Attempts, 0.0));
+            held.set(0.5);
+            assert_eq!(control.progress(), (Stage::Attempts, 0.5));
+        }
         control.set_progress(Stage::Quantize, 0.25);
         let (stage, fraction) = control.progress();
         assert_eq!(stage, Stage::Quantize);

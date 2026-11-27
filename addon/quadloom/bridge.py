@@ -34,7 +34,7 @@ unavailable_reason = None
 
 # Must equal the backend's build_info()["api"]. Blender can't unload a native
 # module, so after an update the old backend stays loaded until a restart.
-API_VERSION = 9
+API_VERSION = 13
 
 
 def _load(import_module=importlib.import_module):
@@ -104,6 +104,22 @@ def transfer_map(source_positions, source_indices, positions, face_offsets, face
     if native is None:
         raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
     return native.transfer_map(source_positions, source_indices, positions, face_offsets, face_indices, control, **kwargs)
+
+
+def advise(positions, indices, control, **kwargs):
+    """Reads a mesh's kind from its crease lines and suggests feature settings; blocks briefly.
+
+    Cleanup and the angle test only, no remesh. Returns `kind` (`smooth`,
+    `hard_surface`, `creased_sculpt`, `surface_detail` or `unsure`), the numbers
+    it was read from (`lines`, `length`, `form_lines`, `form_share`, `scraps`,
+    `scrap_length`, `scrap_fold_deg`) and the suggestion (`use_angle`, `min_fold`).
+    Also the mirror planes Symmetry's Auto Detect finds, per axis (`mirror_axes`,
+    `mirror_offsets`, `mirror_asymmetry`, `mirror_worst`), and whether Auto Detect
+    is suggested (`symmetry`).
+    """
+    if native is None:
+        raise QuadLoomError(f"backend unavailable: {unavailable_reason}")
+    return native.advise(positions, indices, control, **kwargs)
 
 
 def run_job(positions, indices, control, **kwargs):

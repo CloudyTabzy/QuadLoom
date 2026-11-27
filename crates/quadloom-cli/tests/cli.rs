@@ -197,6 +197,103 @@ fn run_with_frame_reports_frame() {
 }
 
 #[test]
+fn run_with_quad_settings_changes_the_quads() {
+    let input = scratch("run_torus_quad.obj", &torus_obj(24, 16));
+    let output = input.with_file_name("run_torus_quad_out.obj");
+    let run = |quad: &str| -> serde_json::Value {
+        let out = quadloom(&["run", input.to_str().unwrap(), output.to_str().unwrap(), "--quad", quad]);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+    let coarse = run(r#"{"edge_scale": 1.5}"#);
+    let fine = run(r#"{"edge_scale": 0.75}"#);
+    let (coarse, fine) =
+        (coarse["quads"]["quads"].as_u64().unwrap(), fine["quads"]["quads"].as_u64().unwrap());
+    assert!(coarse > 0 && fine > 2 * coarse, "coarse {coarse}, fine {fine}");
+    let target = run(r#"{"target_quads": 600}"#);
+    assert_eq!(target["quads"]["target_quads"], 600);
+    let off = run(r#"{"enabled": false}"#);
+    assert!(off["quads"].is_null(), "{}", off["quads"]);
+}
+
+#[test]
+fn run_with_remesh_settings_changes_the_prep_mesh() {
+    let input = scratch("run_torus_remesh.obj", &torus_obj(24, 16));
+    let output = input.with_file_name("run_torus_remesh_out.obj");
+    let run = |remesh: &str| {
+        quadloom(&["run", input.to_str().unwrap(), output.to_str().unwrap(), "--remesh", remesh])
+    };
+    let faces = |remesh: &str| -> u64 {
+        let out = run(remesh);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        json["prep_faces"].as_u64().unwrap()
+    };
+    // One edge length everywhere, so the count goes by the target alone.
+    let coarse = faces(r#"{"adaptive": false, "target_edge_rel": 0.05}"#);
+    let fine = faces(r#"{"adaptive": false, "target_edge_rel": 0.025}"#);
+    assert!(coarse > 0 && fine > 2 * coarse, "coarse {coarse}, fine {fine}");
+    assert_eq!(faces(r#"{"enabled": false}"#), 2 * 24 * 16, "the input's own triangles");
+    let out = run(r#"{"bogus": 1}"#);
+    assert_eq!(out.status.code(), Some(2), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("params.remesh.bogus"));
+}
+
+#[test]
+fn run_with_symmetry_mirrors_the_quads_at_the_same_density() {
+    let input = scratch("run_torus_symmetry.obj", &torus_obj(48, 24));
+    let output = input.with_file_name("run_torus_symmetry_out.obj");
+    let run = |args: &[&str]| {
+        let mut all = vec!["run", input.to_str().unwrap(), output.to_str().unwrap()];
+        all.extend(args);
+        quadloom(&all)
+    };
+    let report = |args: &[&str]| -> serde_json::Value {
+        let out = run(args);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+    let one = ["--quad", r#"{"attempts": 1}"#];
+    let whole = report(&one);
+    assert!(whole["symmetry"].is_null());
+    let mirrored = report(&[one[0], one[1], "--symmetry", r#"{"auto_detect": true}"#]);
+    assert_eq!(mirrored["symmetry"]["axes"], serde_json::json!([true, true, true]));
+    // One side is remeshed at the whole model's scale: an eighth of the
+    // torus gets an eighth of its triangles, and the quads follow as nearly
+    // as whole counts along a few long patch sides allow.
+    let faces = |r: &serde_json::Value| r["prep_faces"].as_f64().unwrap();
+    assert!(
+        (8.0 * faces(&mirrored) / faces(&whole) - 1.0).abs() < 0.05,
+        "{} {}",
+        faces(&whole),
+        faces(&mirrored)
+    );
+    let (a, b) = (whole["quads"]["quads"].as_f64().unwrap(), mirrored["quads"]["quads"].as_f64().unwrap());
+    assert!(a > 0.0 && b > 0.6 * a && b < 1.6 * a, "{a} whole, {b} mirrored");
+    let by_hand = report(&[one[0], one[1], "--symmetry", r#"{"x": true, "keep_negative": true}"#]);
+    assert_eq!(by_hand["symmetry"]["axes"], serde_json::json!([true, false, false]));
+    assert!(
+        (2.0 * faces(&by_hand) / faces(&whole) - 1.0).abs() < 0.05,
+        "{} {}",
+        faces(&whole),
+        faces(&by_hand)
+    );
+    let out = run(&["--symmetry", r#"{"w": true}"#]);
+    assert_eq!(out.status.code(), Some(2), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("params.symmetry.w"));
+}
+
+#[test]
+fn run_quad_unknown_key_exits_2() {
+    let input = scratch("run_quad_bad_key.obj", TETRAHEDRON_OBJ);
+    let output = input.with_file_name("run_quad_bad_key_out.obj");
+    let out =
+        quadloom(&["run", input.to_str().unwrap(), output.to_str().unwrap(), "--quad", r#"{"bogus": 1}"#]);
+    assert_eq!(out.status.code(), Some(2), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("params.quad.bogus"));
+}
+
+#[test]
 fn run_frame_unknown_key_exits_2() {
     let input = scratch("run_frame_bad_key.obj", TETRAHEDRON_OBJ);
     let output = input.with_file_name("run_frame_bad_key_out.obj");

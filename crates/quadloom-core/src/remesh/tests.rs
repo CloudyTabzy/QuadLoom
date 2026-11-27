@@ -98,13 +98,72 @@ fn auto_target_length_matches_oracle_formula_on_a_cube() {
 }
 
 #[test]
-fn open_surface_target_is_floored() {
-    // A flat square has no volume: the sphericity term would collapse to zero.
+fn an_open_surface_gets_the_nominal_length() {
+    // A flat square has no volume. Sphericity read from it said "as thin as
+    // can be" and gave sixteen times the faces: a 1,267-triangle flat figure
+    // came back as 145,000 quads.
     let p = vec![DVec3::ZERO, DVec3::X, DVec3::new(1.0, 1.0, 0.0), DVec3::Y];
     let t = vec![[0, 1, 2], [0, 2, 3]];
     let l1 = (1.0f64 * 2.309 / 10_000.0).sqrt();
     let l = target_length(&p, &t, &RemeshParams::default());
-    assert!((l - 0.25 * l1).abs() < 1e-12, "{l} vs floor {}", 0.25 * l1);
+    assert!((l - l1).abs() < 1e-12, "{l} vs nominal {l1}");
+}
+
+/// `count` unit cubes in a row, two apart, each scaled by `scale`.
+fn boxes(count: u32, scale: DVec3) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+    let (cube_p, cube_t) = cube();
+    let (mut p, mut t) = (Vec::new(), Vec::new());
+    for k in 0..count {
+        let base = p.len() as u32;
+        p.extend(cube_p.iter().map(|&v| v * scale + DVec3::new(2.0 * f64::from(k), 0.0, 0.0)));
+        t.extend(cube_t.iter().map(|tri| tri.map(|v| v + base)));
+    }
+    (p, t)
+}
+
+#[test]
+fn compact_parts_side_by_side_get_the_nominal_length() {
+    // 27 cubes are as compact as one, but their sphericity as one body is
+    // 0.27 (it falls with the cube root of the count), which asked for 2.8
+    // times the faces. A chess set is not a thin shape.
+    let (p, t) = boxes(27, DVec3::ONE);
+    let l1 = (27.0 * 6.0f64 * 2.309 / 10_000.0).sqrt();
+    let l = target_length(&p, &t, &RemeshParams::default());
+    assert!((l - l1).abs() < 1e-9, "{l} vs nominal {l1}");
+}
+
+#[test]
+fn a_thin_closed_part_gets_shorter_edges_up_to_a_limit() {
+    // A slab 1 x 1 x 0.25: sphericity 0.72, compact enough for the nominal length.
+    let (p, t) = boxes(1, DVec3::new(1.0, 1.0, 0.25));
+    let nominal = |area: f64| (area * 2.309 / 10_000.0).sqrt();
+    let l = target_length(&p, &t, &RemeshParams::default());
+    assert!((l - nominal(3.0)).abs() < 1e-9, "{l}");
+    // 1 x 1 x 0.05: sphericity 0.30, so 0.2 / 0.30² = 2.2 times the faces.
+    let (p, t) = boxes(1, DVec3::new(1.0, 1.0, 0.05));
+    let l = target_length(&p, &t, &RemeshParams::default());
+    let sphericity = std::f64::consts::PI.cbrt() * (6.0f64 * 0.05).powf(2.0 / 3.0) / 2.2;
+    assert!((l - nominal(2.2) * (5.0f64).sqrt() * sphericity).abs() < 1e-9, "{l}");
+    assert!(l < nominal(2.2) && l > 0.25 * nominal(2.2));
+    // A sheet 1 x 1 x 0.001 would ask for hundreds of times the faces: sixteen times is the most.
+    let (p, t) = boxes(1, DVec3::new(1.0, 1.0, 0.001));
+    let l = target_length(&p, &t, &RemeshParams::default());
+    assert!((l - 0.25 * nominal(2.004)).abs() < 1e-9, "{l}");
+}
+
+#[test]
+fn a_thin_part_among_compact_ones_shortens_the_length_by_its_share() {
+    // One cube (area 6) and one sheet (area 2.004, sixteen times the faces):
+    // faces per area rise by (6 + 16 x 2.004) / 8.004.
+    let (mut p, mut t) = boxes(1, DVec3::ONE);
+    let (sheet_p, sheet_t) = boxes(1, DVec3::new(1.0, 1.0, 0.001));
+    let base = p.len() as u32;
+    p.extend(sheet_p.iter().map(|&v| v + DVec3::new(5.0, 0.0, 0.0)));
+    t.extend(sheet_t.iter().map(|tri| tri.map(|v| v + base)));
+    let l1 = (8.004f64 * 2.309 / 10_000.0).sqrt();
+    let l = target_length(&p, &t, &RemeshParams::default());
+    let denser = (6.0 + 16.0 * 2.004) / 8.004;
+    assert!((l - l1 / f64::sqrt(denser)).abs() < 1e-9, "{l}");
 }
 
 #[test]

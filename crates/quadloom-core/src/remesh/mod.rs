@@ -25,7 +25,10 @@ use crate::error::Error;
 use crate::spatial::TriangleBvh;
 
 pub use project::Projector;
-pub use sizing::target_length;
+pub use sizing::{
+    EDGES_PER_TURN, PartMeasure, feature_density, longest_length, nominal_length, part_measure, side_measure,
+    target_length,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RemeshParams {

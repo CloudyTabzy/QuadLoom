@@ -41,7 +41,7 @@ def final_geometry(result):
 def report_progress(directory, control, cache, stop):
     while not stop.is_set():
         stage, fraction = control.progress()
-        protocol.publish(directory / "progress.json", {
+        protocol.publish_progress(directory / "progress.json", {
             "stage": stage, "fraction": fraction, "filled": cache.filled(), "reusing": cache.reusing()})
         stop.wait(0.05)
 

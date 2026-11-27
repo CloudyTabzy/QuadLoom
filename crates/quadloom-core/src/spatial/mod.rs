@@ -8,6 +8,10 @@
 //! scalar routine would, so results are bit for bit those of a plain binary
 //! BVH on any CPU. Both the build and the queries use explicit stacks, never
 //! recursion.
+//!
+//! A triangle far longer than the rest is held as several pieces
+//! ([`cut_long`]): a box round a long sliver is mostly empty, and a mesh made
+//! of them is boxes that all overlap.
 
 use fearless_simd::{Level, dispatch, f64x4, prelude::*};
 pub use glam::DVec3;
@@ -70,8 +74,17 @@ pub struct TriangleBvh {
     /// The input index of each packet lane (`NONE` past a leaf's triangles).
     ids: Vec<u32>,
     bounds: Option<Aabb>,
+    /// The mean length of a triangle's edges: the scale a search widens by.
+    spacing: f64,
     level: Level,
 }
+
+/// A filtered search looks within this many [`TriangleBvh::spacing`]s first,
+/// then [`WIDER`] times as far each time, [`WIDENINGS`] times in all before
+/// it looks everywhere.
+const NEAR: f64 = 2.0;
+const WIDER: f64 = 4.0;
+const WIDENINGS: usize = 3;
 
 impl TriangleBvh {
     pub fn new(positions: &[DVec3], triangles: &[[u32; 3]]) -> Self {
@@ -80,9 +93,33 @@ impl TriangleBvh {
 
     /// A BVH whose queries run at SIMD `level`.
     fn with_level(positions: &[DVec3], triangles: &[[u32; 3]], level: Level) -> Self {
+        match cut_long(positions, triangles) {
+            Some(cut) => {
+                // The tree is of the pieces; what a query names is the
+                // triangle a piece is of.
+                let mut bvh = Self::of(&cut.positions, &cut.triangles, level);
+                for id in bvh.ids.iter_mut().filter(|id| **id != NONE) {
+                    *id = cut.source[*id as usize];
+                }
+                bvh
+            }
+            None => Self::of(positions, triangles, level),
+        }
+    }
+
+    /// The BVH of these triangles as they are.
+    fn of(positions: &[DVec3], triangles: &[[u32; 3]], level: Level) -> Self {
         let (binary, packets, ids) = build_binary(positions, triangles);
         let bounds = binary.first().map(|root| root.bounds);
-        Self { nodes: flatten(&binary), packets, ids, bounds, level }
+        let edges: f64 = triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|i| positions[i as usize]);
+                (a - b).length() + (b - c).length() + (c - a).length()
+            })
+            .sum();
+        let spacing = if triangles.is_empty() { 0.0 } else { edges / (3 * triangles.len()) as f64 };
+        Self { nodes: flatten(&binary), packets, ids, bounds, spacing, level }
     }
 
     /// The closest point on any triangle to `p`, and its distance. `None` if empty.
@@ -98,22 +135,75 @@ impl TriangleBvh {
 
     /// [`closest_point_where`](Self::closest_point_where) that also returns
     /// the input index of the triangle the point lies on.
+    ///
+    /// The search widens. A search that has found nothing yet has no bound,
+    /// and goes through every triangle of each subtree it enters; with a
+    /// choosy `accept` (one patch's triangles out of a whole mesh, the faces
+    /// turned one way) that was most of the work, ten to a hundred times a
+    /// plain search's. So it looks within a couple of triangle sizes first,
+    /// then four times as far, and again, and only then everywhere. What a
+    /// bounded pass finds is what the unbounded one would have, down to
+    /// which of two equally near triangles: the passes visit in the same
+    /// order and a bound only leaves out what lies past it. A point close to
+    /// what it is looking for, which is nearly every query, is answered by
+    /// the first pass; a point far from everything pays three passes that
+    /// end at the root.
     pub fn closest_triangle_where(
         &self,
         p: DVec3,
         accept: impl Fn(u32) -> bool,
     ) -> Option<(DVec3, f64, u32)> {
-        dispatch!(self.level, simd => self.search(simd, p, &accept))
+        let mut reach = NEAR * self.spacing;
+        for _ in 0..WIDENINGS {
+            if reach.is_nan() || reach <= 0.0 || !reach.is_finite() {
+                break;
+            }
+            let found = dispatch!(self.level, simd => self.search(simd, p, reach * reach, &accept));
+            if found.is_some() {
+                return found;
+            }
+            reach *= WIDER;
+        }
+        self.closest_triangle_anywhere(p, accept)
     }
 
+    /// [`closest_triangle_where`](Self::closest_triangle_where) in one pass
+    /// with no bound: what the widening search is measured against.
+    fn closest_triangle_anywhere(&self, p: DVec3, accept: impl Fn(u32) -> bool) -> Option<(DVec3, f64, u32)> {
+        dispatch!(self.level, simd => self.search(simd, p, f64::INFINITY, &accept))
+    }
+
+    /// [`closest_triangle_where`](Self::closest_triangle_where) among the
+    /// triangles nearer to `p` than `reach`; `None` if `accept` lets none of
+    /// those through. For a caller that knows how far the answer can be
+    /// (where the thing was a moment ago) and wants one pass at that reach.
+    pub fn closest_triangle_within(
+        &self,
+        p: DVec3,
+        reach: f64,
+        accept: impl Fn(u32) -> bool,
+    ) -> Option<(DVec3, f64, u32)> {
+        if reach.is_nan() || reach <= 0.0 {
+            return None;
+        }
+        dispatch!(self.level, simd => self.search(simd, p, reach * reach, &accept))
+    }
+
+    /// `limit` is the squared distance a triangle must be under to count.
     #[inline(always)]
-    fn search<S: Simd>(&self, simd: S, p: DVec3, accept: &impl Fn(u32) -> bool) -> Option<(DVec3, f64, u32)> {
+    fn search<S: Simd>(
+        &self,
+        simd: S,
+        p: DVec3,
+        limit: f64,
+        accept: &impl Fn(u32) -> bool,
+    ) -> Option<(DVec3, f64, u32)> {
         if self.nodes.is_empty() {
             return None;
         }
         let ps = [p.x, p.y, p.z].map(|x| f64x4::splat(simd, x));
         let zero = f64x4::splat(simd, 0.0);
-        let mut best = (DVec3::ZERO, f64::INFINITY, 0u32); // (point, squared distance, triangle)
+        let mut best = (DVec3::ZERO, limit, NONE); // (point, squared distance, triangle)
         let mut stack: TinyVec<[(u32, f64); 64]> = TinyVec::new();
         stack.push((0, 0.0));
         while let Some((child, box_d2)) = stack.pop() {
@@ -163,7 +253,7 @@ impl TriangleBvh {
                 }
             }
         }
-        best.1.is_finite().then(|| (best.0, best.1.sqrt(), best.2))
+        (best.2 != NONE).then(|| (best.0, best.1.sqrt(), best.2))
     }
 
     pub fn bounds(&self) -> Option<(DVec3, DVec3)> {
@@ -196,6 +286,139 @@ fn leaf_count(n: usize) -> usize {
 
 /// The binary tree (root first), its leaves' packets and the packets' lane
 /// ids, each allocated at its final size.
+/// A triangle is cut up for the tree when its longest edge is over this
+/// many edges of an equilateral triangle of the mesh's mean triangle area
+/// (the mesh's own size of triangle), into pieces no longer than one such
+/// edge.
+const LONG: f64 = 4.0;
+/// Cutting adds at most this many pieces per triangle, or [`SPARE_PIECES`]
+/// in all if that is more, and never over [`MOST_PIECES`]: the pieces are
+/// made as long as it takes to keep to that.
+const PIECES_PER_TRIANGLE: usize = 4;
+const SPARE_PIECES: usize = 1 << 19;
+const MOST_PIECES: usize = 1 << 21;
+/// A triangle is halved at most this many times over.
+const DEEPEST_CUT: u32 = 40;
+/// A mesh is cut only if it is made of long triangles: if their lengths,
+/// in pieces, come to this many per triangle of the mesh or more
+/// (`crane/oloid`: 29; `thingi10k/1514900`: 8).
+///
+/// A few long triangles among compact ones cost a query nothing, and a tree
+/// of pieces is a copy of the whole mesh. Most prep meshes and quad meshes
+/// have a handful, and CAD exports have a tenth to a third of their
+/// triangles long (1 to 2.5 by this measure): cutting those made the tree
+/// up to sixteen times the mesh for no gain that showed.
+const WORTH_CUTTING: f64 = 4.0;
+
+/// Triangles cut into pieces: a soup (three positions a piece), and the
+/// input triangle each piece is of.
+#[derive(Debug, Default)]
+struct Cut {
+    positions: Vec<DVec3>,
+    triangles: Vec<[u32; 3]>,
+    source: Vec<u32>,
+}
+
+/// The mesh with its long triangles ([`LONG`]) cut into pieces of its own
+/// size of triangle, for the tree to be built of. `None` if it has none or
+/// only a few ([`WORTH_CUTTING`]), which is most meshes: they are built as
+/// they are, to the bit as before.
+///
+/// A query costs what it has to look into, and it looks into every box that
+/// reaches nearer than the best found so far. Round a compact triangle the
+/// box is the triangle, near enough. Round a sliver that runs across the
+/// model it is a slab of empty space, and a surface made of such slivers (a
+/// ruled surface triangulated along its rulings, the long flats of a CAD
+/// export) is boxes that all overlap: every query went through thousands of
+/// triangles, 31 microseconds where a mesh of compact triangles takes one.
+/// Cut into pieces, each piece has a box its own size. The points of the
+/// surface are the same points, so a query finds what it found. (The idea
+/// is early split clipping, Ernst and Greiner 2007, done before the build.)
+fn cut_long(positions: &[DVec3], triangles: &[[u32; 3]]) -> Option<Cut> {
+    let corners = |t: &[u32; 3]| t.map(|i| positions[i as usize]);
+    let area: f64 = triangles
+        .iter()
+        .map(|t| {
+            let [a, b, c] = corners(t);
+            0.5 * (b - a).cross(c - a).length()
+        })
+        .filter(|area| area.is_finite())
+        .sum();
+    // The edge of an equilateral triangle of the mean area.
+    let mut even = (4.0 / 3f64.sqrt() * area / triangles.len().max(1) as f64).sqrt();
+    if !(even.is_finite() && even > 0.0) {
+        return None;
+    }
+    let most = triangles.len() + (PIECES_PER_TRIANGLE * triangles.len()).clamp(SPARE_PIECES, MOST_PIECES);
+    loop {
+        let long = LONG * even;
+        // What cutting would add, roughly: each long triangle's length in pieces.
+        let added: f64 = triangles
+            .iter()
+            .map(|t| longest_edge(corners(t)).1.sqrt())
+            .filter(|&length| length > long)
+            .map(|length| length / even)
+            .sum();
+        if added < WORTH_CUTTING * triangles.len() as f64 {
+            return None;
+        }
+        if let Some(cut) = cut_at(positions, triangles, long, even, most) {
+            return Some(cut);
+        }
+        // Too many pieces: longer ones, of fewer triangles.
+        even *= 2.0;
+    }
+}
+
+/// Which edge of a triangle is the longest (0: a to b, 1: b to c, 2: c to
+/// a; the first of equals), and its squared length.
+fn longest_edge([a, b, c]: [DVec3; 3]) -> (usize, f64) {
+    let lengths = [(a - b).length_squared(), (b - c).length_squared(), (c - a).length_squared()];
+    let mut k = 0;
+    for (i, &length) in lengths.iter().enumerate().skip(1) {
+        if length > lengths[k] {
+            k = i;
+        }
+    }
+    (k, lengths[k])
+}
+
+/// [`cut_long`] at one size: every triangle with an edge over `long`
+/// halved across its longest edge, and its halves again, until none is
+/// over `piece`. `None` if that takes more than `most` pieces.
+fn cut_at(positions: &[DVec3], triangles: &[[u32; 3]], long: f64, piece: f64, most: usize) -> Option<Cut> {
+    let over = |length_squared: f64, limit: f64| {
+        length_squared.partial_cmp(&(limit * limit)) == Some(std::cmp::Ordering::Greater)
+    };
+    let mut cut = Cut::default();
+    let mut stack: Vec<([DVec3; 3], u32)> = Vec::new();
+    for (t, triangle) in triangles.iter().enumerate() {
+        stack.push((triangle.map(|i| positions[i as usize]), 0));
+        while let Some((piece_of, depth)) = stack.pop() {
+            let (k, longest) = longest_edge(piece_of);
+            // A triangle is cut at all only if it is long; once cut, down to the piece size.
+            let limit = if depth == 0 { long } else { piece };
+            if depth >= DEEPEST_CUT || !over(longest, limit) {
+                if cut.source.len() >= most {
+                    return None;
+                }
+                let first = cut.positions.len() as u32;
+                cut.positions.extend(piece_of);
+                cut.triangles.push([first, first + 1, first + 2]);
+                cut.source.push(t as u32);
+                continue;
+            }
+            // Turned so that the longest edge is p to q: both halves keep
+            // the triangle's winding.
+            let [p, q, r] = [piece_of[k], piece_of[(k + 1) % 3], piece_of[(k + 2) % 3]];
+            let middle = 0.5 * (p + q);
+            stack.push(([middle, q, r], depth + 1));
+            stack.push(([p, middle, r], depth + 1));
+        }
+    }
+    Some(cut)
+}
+
 fn build_binary(positions: &[DVec3], triangles: &[[u32; 3]]) -> (Vec<Binary>, Vec<Packet>, Vec<u32>) {
     if triangles.is_empty() {
         return (Vec::new(), Vec::new(), Vec::new());
@@ -644,6 +867,206 @@ mod tests {
             let want = bits(binary_search(&positions, &tris, p));
             assert_eq!(bits(fast.closest_triangle_where(p, |_| true)), want, "{p:?}");
             assert_eq!(bits(baseline.closest_triangle_where(p, |_| true)), want, "{p:?}");
+        }
+    }
+
+    #[test]
+    fn a_widening_search_is_the_one_pass_search() {
+        // A bumpy grid of unit cells, so the spacing is a little over 1.
+        let n = 24;
+        let positions: Vec<DVec3> =
+            (0..n * n).map(|i| v((i % n) as f64, (i / n) as f64, ((i % 5) as f64) * 0.1)).collect();
+        let mut tris = Vec::new();
+        for y in 0..n - 1 {
+            for x in 0..n - 1 {
+                let i = (y * n + x) as u32;
+                tris.extend([[i, i + 1, i + n as u32 + 1], [i, i + n as u32 + 1, i + n as u32]]);
+            }
+        }
+        let levels = [
+            TriangleBvh::new(&positions, &tris),
+            TriangleBvh::with_level(&positions, &tris, Level::baseline()),
+        ];
+        // From everything let through to one triangle in 97, and none at all.
+        let filters: [&dyn Fn(u32) -> bool; 5] =
+            [&|_| true, &|t| t.is_multiple_of(7), &|t| t.is_multiple_of(97), &|t| t == 1000, &|_| false];
+        for bvh in &levels {
+            assert!(bvh.spacing > 1.0 && bvh.spacing < 1.5, "{}", bvh.spacing);
+            for i in 0..600 {
+                // On the grid, a little off it, and far outside every widening.
+                let off = [0.0, 0.3, 3.0, 40.0, 900.0][i % 5];
+                let p = v((i % 29) as f64 * 0.83 - 1.0, (i / 29) as f64 * 1.07 - 1.0, off);
+                for accept in filters {
+                    assert_eq!(
+                        bits(bvh.closest_triangle_where(p, accept)),
+                        bits(bvh.closest_triangle_anywhere(p, accept)),
+                        "{p:?}"
+                    );
+                }
+            }
+        }
+        // Nothing to scale by: straight to the one pass.
+        let point = TriangleBvh::new(&[v(1.0, 2.0, 3.0)], &[[0, 0, 0]]);
+        assert_eq!(point.spacing, 0.0);
+        assert_eq!(point.closest_triangle_where(v(0.0, 0.0, 0.0), |_| true).map(|f| f.2), Some(0));
+        assert_eq!(TriangleBvh::new(&[], &[]).closest_triangle_where(v(0.0, 0.0, 0.0), |_| true), None);
+    }
+
+    /// A ruled strip: `n` pairs of slivers 100 long and a quarter wide,
+    /// leaning and a little bumpy.
+    fn slivers(n: usize) -> (Vec<DVec3>, Vec<[u32; 3]>) {
+        let positions: Vec<DVec3> = (0..=n)
+            .flat_map(|i| {
+                let x = i as f64 * 0.25;
+                [v(x, 0.0, (i % 3) as f64 * 0.2), v(x + 3.0, 100.0, (i % 4) as f64 * 0.2)]
+            })
+            .collect();
+        let tris =
+            (0..n as u32).flat_map(|i| [[2 * i, 2 * i + 2, 2 * i + 1], [2 * i + 2, 2 * i + 3, 2 * i + 1]]);
+        (positions, tris.collect())
+    }
+
+    #[test]
+    fn long_triangles_are_cut_into_pieces_for_the_tree() {
+        let (positions, tris) = slivers(200);
+        let area = |p: &[DVec3], t: &[[u32; 3]]| -> f64 {
+            t.iter()
+                .map(|t| {
+                    let [a, b, c] = t.map(|i| p[i as usize]);
+                    0.5 * (b - a).cross(c - a).length()
+                })
+                .sum()
+        };
+        let cut = cut_long(&positions, &tris).unwrap();
+        // The same surface, in pieces of the mesh's own size of triangle
+        // (7.6 for slivers of this area), each triangle's pieces together
+        // and in the triangles' order.
+        assert!((area(&cut.positions, &cut.triangles) - area(&positions, &tris)).abs() < 1e-6);
+        assert!(
+            cut.source.len() >= 16 * tris.len() && cut.source.len() <= 128 * tris.len(),
+            "{}",
+            cut.source.len()
+        );
+        assert!(
+            cut.source.windows(2).all(|w| w[0] <= w[1])
+                && cut.source.last() == Some(&(tris.len() as u32 - 1))
+        );
+        let longest = cut
+            .triangles
+            .iter()
+            .map(|t| longest_edge(t.map(|i| cut.positions[i as usize])).1)
+            .fold(0.0, f64::max);
+        assert!(longest.sqrt() > 3.5 && longest.sqrt() < 8.0, "{}", longest.sqrt());
+        // With no room for that many there are none; and a triangle that
+        // is not long is not cut, whatever the piece size.
+        assert!(cut_at(&positions, &tris, 30.0, 7.6, 1000).is_none());
+        assert_eq!(cut_at(&positions, &tris, 200.0, 7.6, 1000).unwrap().source.len(), tris.len());
+        let coarse = cut_at(&positions, &tris, 30.0, 60.0, 4000).unwrap();
+        assert!(coarse.source.len() >= 2 * tris.len() && coarse.source.len() <= 4 * tris.len());
+        // Compact triangles are left as they are, and so is a mesh with no
+        // area to go by.
+        let n = 24;
+        let grid: Vec<DVec3> = (0..n * n).map(|i| v((i % n) as f64, (i / n) as f64, 0.0)).collect();
+        let mut cells = Vec::new();
+        for y in 0..n - 1 {
+            for x in 0..n - 1 {
+                let i = (y * n + x) as u32;
+                cells.extend([[i, i + 1, i + n as u32 + 1], [i, i + n as u32 + 1, i + n as u32]]);
+            }
+        }
+        assert!(cut_long(&grid, &cells).is_none());
+        assert!(cut_long(&[v(0.0, 0.0, 0.0), v(9.0, 0.0, 0.0)], &[[0, 1, 1], [0, 0, 0]]).is_none());
+        assert!(cut_long(&[], &[]).is_none());
+        // A few long triangles among compact ones are not worth a tree of
+        // pieces: one triangle a hundred times the size of the rest.
+        let mut mixed = grid.clone();
+        mixed.extend([v(0.0, 0.0, 5.0), v(300.0, 0.0, 5.0), v(0.0, 300.0, 5.0)]);
+        let base = (n * n) as u32;
+        let mut both = cells.clone();
+        both.push([base, base + 1, base + 2]);
+        assert!(cut_long(&mixed, &both).is_none());
+        // A corner that is not a number is passed over, not gone round for ever.
+        let (mut broken, mut with_it) = slivers(200);
+        broken.push(v(f64::NAN, 0.0, 0.0));
+        with_it.push([0, 2, broken.len() as u32 - 1]);
+        let cut = cut_long(&broken, &with_it).unwrap();
+        assert_eq!(cut.source.iter().filter(|&&s| s as usize == with_it.len() - 1).count(), 1);
+        assert!(cut.source.len() > 16 * tris.len());
+    }
+
+    #[test]
+    fn a_tree_of_pieces_answers_as_the_triangles_do() {
+        let (positions, tris) = slivers(60);
+        let whole = TriangleBvh::of(&positions, &tris, Level::new());
+        let levels = [
+            TriangleBvh::new(&positions, &tris),
+            TriangleBvh::with_level(&positions, &tris, Level::baseline()),
+        ];
+        let filters: [&dyn Fn(u32) -> bool; 4] =
+            [&|_| true, &|t| t.is_multiple_of(7), &|t| t == 101, &|_| false];
+        for bvh in &levels {
+            assert!(bvh.packets.len() > 16 * whole.packets.len());
+            assert!(bvh.spacing < 0.2 * whole.spacing, "{} {}", bvh.spacing, whole.spacing);
+            for i in 0..160 {
+                let off = [0.0, 0.3, 4.0, 60.0][i % 4];
+                let p = v((i % 13) as f64 * 1.6 - 3.0, (i / 13) as f64 * 9.5 - 5.0, off);
+                for accept in filters {
+                    let (cut, plain) =
+                        (bvh.closest_triangle_where(p, accept), whole.closest_triangle_where(p, accept));
+                    let (Some((q, d, t)), Some((_, e, _))) = (cut, plain) else {
+                        assert_eq!((cut, plain), (None, None), "{p:?}");
+                        continue;
+                    };
+                    // The same distance, to a triangle of the mesh that is let
+                    // through and lies that near (which of two that share
+                    // an edge is not told apart).
+                    assert!((d - e).abs() < 1e-9 && (q - p).length() - d < 1e-9, "{p:?}: {d} {e}");
+                    assert!((t as usize) < tris.len() && accept(t), "{p:?}: {t}");
+                    let [a, b, c] = tris[t as usize].map(|i| positions[i as usize]);
+                    assert!(((closest_point_on_triangle(p, a, b, c) - p).length() - d).abs() < 1e-9, "{p:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_bounded_search_finds_what_the_unbounded_one_does() {
+        // The same grid, with one triangle in seven let through: most of what
+        // is near a query is refused, as when a vertex looks for its own patch.
+        let n = 24;
+        let positions: Vec<DVec3> =
+            (0..n * n).map(|i| v((i % n) as f64, (i / n) as f64, ((i % 5) as f64) * 0.1)).collect();
+        let mut tris = Vec::new();
+        for y in 0..n - 1 {
+            for x in 0..n - 1 {
+                let i = (y * n + x) as u32;
+                tris.extend([[i, i + 1, i + n as u32 + 1], [i, i + n as u32 + 1, i + n as u32]]);
+            }
+        }
+        let choosy = |t: u32| t.is_multiple_of(7);
+        let levels = [
+            TriangleBvh::new(&positions, &tris),
+            TriangleBvh::with_level(&positions, &tris, Level::baseline()),
+        ];
+        for bvh in levels {
+            for i in 0..2000 {
+                let p = v((i % 47) as f64 * 0.5, (i / 47) as f64 * 0.5, ((i % 7) as f64 - 3.0) * 0.4);
+                let (q, d, t) = bvh.closest_triangle_where(p, choosy).expect("some triangle is let through");
+                let want = bits(Some((q, d, t)));
+                // Any reach past the answer gives the answer, bit for bit.
+                for reach in [d * 1.000_001 + 1e-9, d + 3.0, f64::INFINITY] {
+                    assert_eq!(
+                        bits(bvh.closest_triangle_within(p, reach, choosy)),
+                        want,
+                        "{p:?} within {reach}"
+                    );
+                }
+                // A reach short of it gives nothing, and so does no reach at all.
+                assert_eq!(bvh.closest_triangle_within(p, d * 0.999, choosy), None, "{p:?}");
+                assert_eq!(bvh.closest_triangle_within(p, 0.0, choosy), None);
+                assert_eq!(bvh.closest_triangle_within(p, f64::NAN, choosy), None);
+            }
+            assert_eq!(bvh.closest_triangle_within(v(1.0, 1.0, 0.0), 100.0, |_| false), None);
         }
     }
 }

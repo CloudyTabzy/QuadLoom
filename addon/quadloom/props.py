@@ -2,9 +2,12 @@
 """Scene-level settings and the record of the last run."""
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import (BoolProperty, BoolVectorProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty,
+                       StringProperty)
 
 DEFAULT_MAX_FACES = 2_000_000
+# Layouts each part gets by default (the setting Layout Attempts): the backend's own default.
+DEFAULT_ATTEMPTS = 4
 
 # Presets: what each sets, which is every setting on the main panel plus the
 # quad-stage settings that change the result. Symmetry and the System
@@ -330,6 +333,16 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=2,
         update=_mark_custom,
     )
+    quad_attempts: IntProperty(
+        name="Layout Attempts",
+        description=(
+            "How many patch layouts each part of the mesh gets. With more than one, the quads of every layout "
+            "are built and each part keeps its best. More attempts take longer; the result is the same on every run"
+        ),
+        default=DEFAULT_ATTEMPTS,
+        min=1,
+        max=8,
+    )
     quad_regularity: FloatProperty(
         name="Regularity",
         description=(
@@ -445,6 +458,19 @@ class QUADLOOM_PG_settings(bpy.types.PropertyGroup):
         precision=1,
         update=_mark_custom,
     )
+    min_fold: FloatProperty(
+        name="Ignore Faint Creases",
+        description="How much crease a line must carry to count as a sharp edge: its length in "
+        "quad-sized steps times how sharply it folds. Short or shallow creases below this stop "
+        "bending the edge flow on smooth surfaces. 0 keeps every edge over the angle; try 4 to 9 "
+        "on a sculpt with fur, pores or scan noise. Right-angle edges, edges you marked sharp, "
+        "seams and borders are always kept",
+        default=0.0,
+        min=0.0,
+        soft_max=40.0,
+        max=1000.0,
+        precision=1,
+    )
     use_marked_sharp: BoolProperty(
         name="Marked Sharp",
         description="Edges you marked Sharp become features",
@@ -555,16 +581,47 @@ class QUADLOOM_PG_last_run(bpy.types.PropertyGroup):
     warnings: StringProperty(name="Warnings")
 
 
-classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run)
+class QUADLOOM_PG_detection(bpy.types.PropertyGroup):
+    """What Detect Settings last read from a mesh, and what it suggests."""
+
+    valid: BoolProperty(name="Has a Detection", default=False)
+    object_name: StringProperty(name="Object")
+    # The mesh and the angle the lines were read at: see `detection_fingerprint`.
+    fingerprint: StringProperty(name="Fingerprint")
+    kind: StringProperty(name="Kind")
+    lines: IntProperty(name="Crease Lines")
+    form_lines: IntProperty(name="Long or Sharp Lines")
+    form_share: FloatProperty(name="Share of Length in Long or Sharp Lines")
+    scraps: IntProperty(name="Scraps")
+    scrap_fold_deg: FloatProperty(name="Mean Fold of Scraps")
+    use_angle: BoolProperty(name="Suggested Sharp Edges")
+    min_fold: FloatProperty(name="Suggested Ignore Faint Creases")
+    # The mirror planes Auto Detect finds (X, Y, Z), and across them: the typical
+    # and the largest difference between the two sides, as fractions of the size.
+    mirror_axes: BoolVectorProperty(name="Mirror Planes", size=3)
+    mirror_asymmetry: FloatProperty(name="Difference Between the Sides")
+    mirror_worst: FloatProperty(name="Largest Difference Between the Sides")
+    symmetry: BoolProperty(name="Suggested Symmetry Auto Detect")
+
+
+def detection_fingerprint(obj, settings):
+    """What a detection depends on: the mesh's size, the angle its lines were read at
+    and the tolerance its mirror planes were found at."""
+    return (f"{len(obj.data.vertices)}:{len(obj.data.edges)}:{len(obj.data.polygons)}"
+            f":{settings.angle_deg:.2f}:{settings.symmetry_tolerance:.5f}")
+
+
+classes = (QUADLOOM_PG_settings, QUADLOOM_PG_last_run, QUADLOOM_PG_detection)
 
 
 def register_props():
     bpy.types.Scene.quadloom = PointerProperty(type=QUADLOOM_PG_settings)
     bpy.types.Scene.quadloom_last_run = PointerProperty(type=QUADLOOM_PG_last_run)
+    bpy.types.Scene.quadloom_detection = PointerProperty(type=QUADLOOM_PG_detection)
 
 
 def unregister_props():
-    for name in ("quadloom_last_run", "quadloom"):
+    for name in ("quadloom_detection", "quadloom_last_run", "quadloom"):
         if hasattr(bpy.types.Scene, name):
             delattr(bpy.types.Scene, name)
 
@@ -588,6 +645,7 @@ def run_params(settings):
             "use_face_set_boundaries": settings.use_face_set_boundaries,
             "use_open_boundaries": settings.use_open_boundaries,
             "prune_steps": settings.prune_steps,
+            "min_fold": settings.min_fold,
         },
         "remesh": {
             "enabled": settings.remesh_enabled,
@@ -628,6 +686,7 @@ def run_params(settings):
             "regularity": regularity_weight(settings.quad_regularity),
             "solver_effort": SOLVER_EFFORT[settings.quad_solver_effort],
             "smoothing": settings.quad_smoothing,
+            "attempts": settings.quad_attempts,
         },
         "symmetry": {
             "x": settings.symmetry_x,

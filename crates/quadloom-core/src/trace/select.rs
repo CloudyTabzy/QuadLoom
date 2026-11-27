@@ -70,6 +70,49 @@ pub struct Settings {
     pub cost: TraceCost,
     pub drift: f64,
     pub cut_ears: bool,
+    /// Which way near-ties are broken: 0 by the fixed rules (the cheaper
+    /// path, the lower id, the lowest vertex), any other value its own way,
+    /// the same on every run. See [`Settings::among_equals`].
+    pub seed: u64,
+}
+
+/// Candidates this close to each other in cost (or in how far they lie from
+/// the paths so far) count as equally good, and a seed orders them.
+///
+/// The layout is greedy: it takes candidates best first, and each one taken
+/// changes what the rest can do. Which of two near-equals goes first is
+/// decided by a hair, and decides the layout. A seed makes that choice
+/// another way, as randomised restarts do for a search that breaks ties by a
+/// fixed rule (Gomes, Selman & Kautz 1998, whose "heuristic equivalence"
+/// this band is). At 5%, 10% and 20% the best of several seeds gains the
+/// same, within what the 70 benchmark models can tell (decision 0027).
+const EQUIVALENT: f64 = 0.1;
+
+impl Settings {
+    /// A factor for one candidate's cost, from 1 to 1 + [`EQUIVALENT`],
+    /// that depends on the seed and on the candidate (its end nodes): the
+    /// candidates within the band of each other come out in an order of the
+    /// seed's own, and the rest stay as they were. Seed 0 leaves every cost
+    /// alone.
+    fn among_equals(&self, path: &TracePath) -> f64 {
+        if self.seed == 0 {
+            return 1.0;
+        }
+        let (Some(first), Some(last)) = (path.nodes.first(), path.nodes.last()) else { return 1.0 };
+        1.0 + EQUIVALENT * unit(self.seed, u64::from(first.0), u64::from(last.0))
+    }
+}
+
+/// A number in [0, 1) from `seed` and what is being ordered (SplitMix64's mixer).
+fn unit(seed: u64, a: u64, b: u64) -> f64 {
+    let mut z = seed
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(a.wrapping_mul(0xBF58_476D_1CE4_E5B9))
+        .wrapping_add(b.rotate_left(32).wrapping_mul(0x94D0_49BB_1331_11EB));
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^= z >> 31;
+    (z >> 11) as f64 / (1u64 << 53) as f64
 }
 
 /// Counts for the report.
@@ -640,7 +683,8 @@ impl<'s> Layout<'s> {
         let receivers = self.receivers(to);
         let mut candidates = self.trace(&starts, mode, &receivers, self.reach(), control)?;
         self.tally.candidates += candidates.len();
-        candidates.sort_by(|a, b| a.cost.total_cmp(&b.cost).then(a.nodes[0].cmp(&b.nodes[0])));
+        let key = |p: &TracePath| p.cost * self.settings.among_equals(p);
+        candidates.sort_by(|a, b| key(a).total_cmp(&key(b)).then(a.nodes[0].cmp(&b.nodes[0])));
         let mut added = 0;
         for path in candidates {
             control.checkpoint(Stage::Trace)?;
@@ -749,9 +793,10 @@ impl<'s> Layout<'s> {
                 Some(self.cmp(o))
             }
         }
+        let factor: Vec<f64> = candidates.iter().map(|p| self.settings.among_equals(p)).collect();
         let mut heap: BinaryHeap<Scored> = BinaryHeap::with_capacity(candidates.len());
         for (i, p) in candidates.iter().enumerate() {
-            let s = self.mean_distance(p);
+            let s = factor[i] * self.mean_distance(p);
             heap.push(Scored(s, i));
         }
         let mut slots: Vec<Option<TracePath>> = candidates.into_iter().map(Some).collect();
@@ -759,7 +804,7 @@ impl<'s> Layout<'s> {
         while let Some(Scored(score, i)) = heap.pop() {
             control.checkpoint(Stage::Trace)?;
             let Some(path) = slots[i].take() else { continue };
-            let fresh = self.mean_distance(&path);
+            let fresh = factor[i] * self.mean_distance(&path);
             if fresh < score && heap.peek().is_some_and(|top| top.0 > fresh) {
                 slots[i] = Some(path);
                 heap.push(Scored(fresh, i));
@@ -784,7 +829,13 @@ impl<'s> Layout<'s> {
         let want = ((cut.vertex_count() as f64 * self.settings.loop_density).round() as usize)
             .clamp(self.min_seeds, MAX_SEEDS)
             .min(interior);
-        let seeds = farthest_points(cut, &eligible, want, control)?;
+        // The spread-out seeds start from one vertex, and any one will do: the
+        // lowest eligible id by the fixed rule, another with a seed.
+        let start = match self.settings.seed {
+            0 => 0,
+            seed => (unit(seed, cut.vertex_count() as u64, 0) * interior as f64) as usize,
+        };
+        let seeds = farthest_points(cut, &eligible, want, start, control)?;
         let starts: Vec<Node> =
             seeds.iter().flat_map(|&v| [Node::new(v, 0), Node::new(v, 1)]).filter(|&n| g.active(n)).collect();
         let reach = LOOP_REACH * self.region.area.sqrt();
@@ -1177,7 +1228,7 @@ impl<'s> Layout<'s> {
     /// non-convex one from the offending vertex to the far half of its
     /// boundary. Side counts out of range are fixed by re-declaring corners
     /// instead, which moves no geometry.
-    fn repair_seam(&self, info: &PatchInfo) -> Option<TracePath> {
+    pub(super) fn repair_seam(&self, info: &PatchInfo) -> Option<TracePath> {
         let loops = &info.loop_vertices;
         let (sources, targets): (Vec<u32>, Vec<u32>) = match info.kind {
             PatchKind::NonDisk if loops.len() >= 2 => {
@@ -1257,6 +1308,12 @@ impl<'s> Layout<'s> {
     /// A seam out of a non-convex boundary vertex, leaving along the
     /// continuation of its incoming boundary edge (so a 270° corner splits
     /// into 180° and 90°), then to the far half of the boundary.
+    ///
+    /// If that first step already lands on the boundary, it is the whole
+    /// seam, wherever on the boundary it lands. A feature line that stops an
+    /// edge short of a path running past its end is cut through to the path:
+    /// what the cut takes off is a few triangles, and the patch that was
+    /// kept as triangles for its one reflex vertex gets its quads.
     fn concave_seam(&self, info: &PatchInfo) -> Option<TracePath> {
         let cut = &self.region.cut;
         let ring = info.loop_vertices.first()?;
@@ -1284,7 +1341,7 @@ impl<'s> Layout<'s> {
         let targets = far_side(ring, v, 4);
         let along = |x: u32, y: u32| cut.positions[y as usize] - cut.positions[x as usize];
         if cut.boundary[first as usize] || ring.contains(&first) {
-            if !targets.contains(&first) {
+            if !ring.contains(&first) {
                 return None;
             }
             let nodes = self.axis_nodes(&[v, first], ahead);

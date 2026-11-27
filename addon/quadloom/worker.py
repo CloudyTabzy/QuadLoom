@@ -172,9 +172,8 @@ class _Session:
             self.process.stdin.flush()
             while True:
                 control.checkpoint()
-                progress = directory / "progress.json"
-                if progress.is_file():
-                    data = protocol.read_json(progress)
+                data = protocol.read_progress(directory / "progress.json")
+                if data is not None:
                     control._progress = (data["stage"], data["fraction"])
                     cache._filled, cache._reusing = data["filled"], data["reusing"]
                 if (directory / "output" / "manifest.json").is_file():
@@ -188,7 +187,9 @@ class _Session:
                         raise cls(error["message"], error["stage"], error["hint"], error["kind"])
                     cache._filled, cache._reusing = response["filled"], response["reusing"]
                     control._progress = tuple(response["progress"])
-                    shutil.rmtree(directory)
+                    # The result is already read: a file something still holds
+                    # open stays until the session's folder is removed.
+                    shutil.rmtree(directory, ignore_errors=True)
                     return response
                 code = self.process.poll()
                 if code is not None:

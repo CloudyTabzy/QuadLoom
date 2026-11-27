@@ -296,3 +296,162 @@ def test_prepared_runtime_uses_no_bpy_on_controller_thread(worker, monkeypatch):
     assert not failures, failures
     assert results[0]["result"]["validation"]["faces"] == 1
     assert calls == [threading.main_thread()]
+
+
+# --- Progress is advisory: a locked or half-replaced file never fails a run ---
+#
+# On Windows the child replaces progress.json while the parent polls it. Opening
+# a file that is being replaced, or replacing one the other side has open, is
+# refused with PermissionError. Under load that failed about one run in five.
+
+
+def test_locked_progress_file_does_not_fail_the_run(worker, monkeypatch):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    original, refused = protocol.read_json, []
+
+    def locked(path):
+        if Path(path).name == "progress.json":
+            refused.append(path)
+            raise PermissionError(13, "Permission denied", str(path))
+        return original(path)
+
+    monkeypatch.setattr(protocol, "read_json", locked)
+    result = run(worker, fault="slow:300")
+    assert refused, "the run must have polled its progress at least once"
+    assert result["result"]["validation"]["faces"] == 1
+
+
+def test_progress_reader_ignores_missing_locked_and_malformed_files(worker, monkeypatch, tmp_path):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    path = tmp_path / "progress.json"
+    assert protocol.read_progress(path) is None, "not published yet"
+    good = {"stage": "trace", "fraction": 0.5, "filled": False, "reusing": True}
+    protocol.publish(path, good)
+    assert protocol.read_progress(path) == good
+    for broken in (b"", b'{"stage": "tra', b"[]", b'{"stage": 3, "fraction": 0.5, "filled": false, "reusing": false}',
+                   b'{"stage": "trace", "fraction": "half", "filled": false, "reusing": false}',
+                   b'{"stage": "trace", "fraction": 0.5}'):
+        path.write_bytes(broken)
+        assert protocol.read_progress(path) is None, broken
+
+    def locked(_path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(protocol, "read_json", locked)
+    assert protocol.read_progress(path) is None
+
+
+def test_progress_writer_survives_a_reader_holding_the_file(worker, monkeypatch, tmp_path):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    path = tmp_path / "progress.json"
+    value = {"stage": "trace", "fraction": 0.25, "filled": False, "reusing": False}
+
+    def refused(_source, _target):
+        raise PermissionError(13, "Permission denied")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(protocol.os, "replace", refused)
+        assert protocol.publish_progress(path, value) is False
+    assert protocol.publish_progress(path, value) is True, "the next tick publishes again"
+    assert protocol.read_progress(path) == value
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows refuses to replace a file another handle holds open")
+def test_progress_writer_survives_a_real_open_handle(worker, tmp_path):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    path = tmp_path / "progress.json"
+    first = {"stage": "validate", "fraction": 0.0, "filled": False, "reusing": False}
+    second = {**first, "stage": "trace"}
+    assert protocol.publish_progress(path, first) is True
+    with path.open("rb"):
+        assert protocol.publish_progress(path, second) is False
+    assert protocol.publish_progress(path, second) is True
+    assert protocol.read_progress(path) == second
+
+
+def test_progress_polling_races_replacement_without_errors(worker, tmp_path):
+    """The real race: one thread republishes while another polls, as child and parent do."""
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    path = tmp_path / "progress.json"
+    stop, failures, seen = threading.Event(), [], []
+
+    def publish():
+        n = 0
+        while not stop.is_set():
+            try:
+                protocol.publish_progress(path, {"stage": "trace", "fraction": (n % 100) / 100,
+                                                 "filled": False, "reusing": False})
+            except Exception as error:
+                failures.append(error)
+                return
+            n += 1
+
+    def poll():
+        while not stop.is_set():
+            try:
+                data = protocol.read_progress(path)
+            except Exception as error:
+                failures.append(error)
+                return
+            if data is not None:
+                seen.append(data["fraction"])
+
+    threads = [threading.Thread(target=publish), threading.Thread(target=poll), threading.Thread(target=poll)]
+    for thread in threads:
+        thread.start()
+    time.sleep(0.5)
+    stop.set()
+    for thread in threads:
+        thread.join(5)
+    assert not failures, failures[:3]
+    assert seen, "the reader must still see progress between replacements"
+
+
+def test_manifest_publish_retries_a_briefly_held_file(worker, monkeypatch, tmp_path):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+    original, attempts = protocol.os.replace, []
+
+    def briefly_held(source, target):
+        attempts.append(target)
+        if len(attempts) < 3:
+            raise PermissionError(13, "Permission denied")
+        return original(source, target)
+
+    monkeypatch.setattr(protocol.os, "replace", briefly_held)
+    protocol.write(tmp_path, {"mesh": array.array("I", [0, 1, 2])}, 1024)
+    assert len(attempts) == 3
+    assert protocol.read(tmp_path, 1024)["mesh"] == array.array("I", [0, 1, 2])
+
+
+def test_manifest_publish_gives_up_on_a_file_that_stays_held(worker, monkeypatch, tmp_path):
+    protocol = importlib.import_module(worker.__package__ + ".worker_protocol")
+
+    def held(_source, _target):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(protocol.os, "replace", held)
+    monkeypatch.setattr(protocol.time, "sleep", lambda _seconds: None)
+    with pytest.raises(PermissionError):
+        protocol.write(tmp_path, {"mesh": b"abc"}, 1024)
+
+
+def test_cleanup_failure_keeps_the_finished_result(worker, monkeypatch):
+    original, refused = worker.shutil.rmtree, []
+
+    def locked(path, ignore_errors=False, **kwargs):
+        # Only a job's own folder (<session>/<number>) is held; the session's
+        # folder is removed by tempfile, later, through the same function.
+        if Path(path).name.isdecimal():
+            attempted.append(path)
+            if not ignore_errors:
+                refused.append(path)
+                raise PermissionError(13, "Permission denied", str(path))
+            return None
+        return original(path, ignore_errors=ignore_errors, **kwargs)
+
+    attempted = []
+    monkeypatch.setattr(worker.shutil, "rmtree", locked)
+    result = run(worker)
+    assert attempted, "the finished job's folder is still cleaned up when possible"
+    assert not refused, "removing a finished job's files must not be able to fail the run"
+    assert result["result"]["validation"]["faces"] == 1

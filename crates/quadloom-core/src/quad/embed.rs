@@ -27,8 +27,10 @@ pub struct PatchMap {
 
 impl PatchMap {
     /// Maps `faces` (indices into `triangles`) with the boundary vertices pinned
-    /// at `boundary`. `None` if a patch vertex is neither pinned nor connected
-    /// to the boundary, or the solve fails.
+    /// at `boundary`. `None` if the pins are not exactly the faces' own rim
+    /// (the map would not cover the polygon: Tutte's theorem needs the whole
+    /// rim on it), if a patch vertex is neither pinned nor connected to the
+    /// boundary, or if the solve fails.
     pub fn new(
         positions: &[DVec3],
         triangles: &[[u32; 3]],
@@ -36,6 +38,9 @@ impl PatchMap {
         boundary: &HashMap<u32, DVec2>,
     ) -> Option<Self> {
         let tris: Vec<[u32; 3]> = faces.iter().filter_map(|&f| triangles.get(f as usize).copied()).collect();
+        if !pins_are_the_rim(&tris, boundary) {
+            return None;
+        }
         let mut interior: Vec<u32> =
             tris.iter().flatten().copied().filter(|v| !boundary.contains_key(v)).collect();
         interior.sort_unstable();
@@ -108,6 +113,25 @@ impl PatchMap {
     }
 }
 
+/// Whether the pinned vertices are exactly the vertices on the rim of `tris`
+/// (the edges with one triangle).
+fn pins_are_the_rim(tris: &[[u32; 3]], pins: &HashMap<u32, DVec2>) -> bool {
+    let mut uses: HashMap<(u32, u32), u32> = HashMap::with_capacity(tris.len() * 3 / 2 + 1);
+    for t in tris {
+        for i in 0..3 {
+            let (a, b) = (t[i], t[(i + 1) % 3]);
+            *uses.entry((a.min(b), a.max(b))).or_default() += 1;
+        }
+    }
+    let mut on_rim: hashbrown::HashSet<u32> = hashbrown::HashSet::new();
+    for (&(a, b), &n) in &uses {
+        if n == 1 {
+            on_rim.extend([a, b]);
+        }
+    }
+    on_rim.len() == pins.len() && on_rim.iter().all(|v| pins.contains_key(v))
+}
+
 impl PatchMap {
     /// Keeps triangle `t` in `best` if `q` is less outside it than the current best.
     fn consider(&self, q: DVec2, t: usize, best: &mut Option<(f64, usize, [f64; 3])>) {
@@ -165,5 +189,62 @@ impl Grid {
     fn cell(&self, q: DVec2) -> &[u32] {
         let (x, y) = Self::coord(self.size, q);
         &self.cells[y * self.size + x]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A 2 × 2 grid of unit squares in the plane, two triangles each:
+    /// vertices 0..9 row by row, vertex 4 in the middle.
+    fn grid() -> (Vec<DVec3>, Vec<[u32; 3]>) {
+        let positions = (0..9).map(|i| DVec3::new(f64::from(i % 3), f64::from(i / 3), 0.0)).collect();
+        let square = |a: u32, b: u32, c: u32, d: u32| [[a, b, c], [a, c, d]];
+        let triangles =
+            [square(0, 1, 4, 3), square(1, 2, 5, 4), square(3, 4, 7, 6), square(4, 5, 8, 7)].concat();
+        (positions, triangles)
+    }
+
+    /// The rim of the grid pinned on the square [−1, 1]², in place.
+    fn rim() -> HashMap<u32, DVec2> {
+        [0u32, 1, 2, 3, 5, 6, 7, 8]
+            .into_iter()
+            .map(|v| (v, DVec2::new(f64::from(v % 3) - 1.0, f64::from(v / 3) - 1.0)))
+            .collect()
+    }
+
+    #[test]
+    fn a_patch_pinned_on_its_whole_rim_maps_and_locates() {
+        let (positions, triangles) = grid();
+        let faces: Vec<u32> = (0..8).collect();
+        let map = PatchMap::new(&positions, &triangles, &faces, &rim()).unwrap();
+        // The domain's centre is the grid's centre; a quarter point is a quarter point.
+        assert!((map.locate(&positions, DVec2::ZERO).unwrap() - DVec3::new(1.0, 1.0, 0.0)).length() < 1e-9);
+        assert!(
+            (map.locate(&positions, DVec2::new(-0.5, 0.5)).unwrap() - DVec3::new(0.5, 1.5, 0.0)).length()
+                < 1e-9
+        );
+    }
+
+    #[test]
+    fn pins_that_are_not_the_rim_are_refused() {
+        // Mapped anyway, such a patch covered a third of its polygon and its
+        // quads landed in two heaps (the benchmark's shoe).
+        let (positions, triangles) = grid();
+        let faces: Vec<u32> = (0..8).collect();
+        let mut missing = rim();
+        missing.remove(&7);
+        assert!(
+            PatchMap::new(&positions, &triangles, &faces, &missing).is_none(),
+            "a rim vertex left unpinned"
+        );
+        let mut inside = rim();
+        inside.insert(4, DVec2::ZERO);
+        assert!(PatchMap::new(&positions, &triangles, &faces, &inside).is_none(), "a pin inside the patch");
+        let mut elsewhere = rim();
+        elsewhere.remove(&7);
+        elsewhere.insert(99, DVec2::ZERO);
+        assert!(PatchMap::new(&positions, &triangles, &faces, &elsewhere).is_none(), "a pin off the patch");
     }
 }

@@ -106,7 +106,7 @@ impl Default for TraceParams {
 }
 
 impl TraceParams {
-    fn settings(&self) -> select::Settings {
+    fn settings(&self, seed: u64) -> select::Settings {
         select::Settings {
             max_sides: self.max_sides,
             match_valence: self.match_valence,
@@ -116,6 +116,7 @@ impl TraceParams {
             cost: self.cost,
             drift: self.drift,
             cut_ears: true,
+            seed,
         }
     }
 }
@@ -281,7 +282,24 @@ pub struct TraceOutput {
     pub patches: Vec<Patch>,
     /// Each traced path as a chain of `mesh` vertices (a loop repeats its first vertex).
     pub paths: Vec<Vec<u32>>,
+    /// Where each connected part's layout lies in the lists above, in the
+    /// order the parts were laid out.
+    pub parts: Vec<PartSpan>,
     pub report: TraceReport,
+}
+
+/// One connected part's share of a [`TraceOutput`]: its triangles, patches,
+/// paths and the vertices refinement added for it are each one run of the
+/// list. (Its other vertices are the input's, which parts that touch at a
+/// vertex share.)
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PartSpan {
+    pub faces: std::ops::Range<u32>,
+    pub patches: std::ops::Range<u32>,
+    pub paths: std::ops::Range<u32>,
+    /// The vertices refinement added (ids past the input's).
+    pub added: std::ops::Range<u32>,
+    tally: select::Tally,
 }
 
 /// Lays out `triangles` (each connected part on its own, in parallel): cuts
@@ -295,17 +313,39 @@ pub fn compute(
     params: &TraceParams,
     control: &Control,
 ) -> Result<TraceOutput, Error> {
+    let parts = crate::components::split(triangles, positions.len());
+    let faces: Vec<&[u32]> = parts.iter().map(|part| part.faces.as_slice()).collect();
+    compute_parts(positions, triangles, feature_edges, field, &faces, params, 0, control)
+}
+
+/// [`compute`] for some of the mesh's connected parts, each given as its
+/// triangles (indices into `triangles`), and with a `seed`.
+///
+/// The layout is built greedily, and wherever two choices are as good as
+/// each other a fixed rule picks one (the lower id, the lowest vertex). Seed
+/// 0 is those rules. Any other seed breaks the same near-ties another way
+/// ([`select::Settings::seed`]), which gives another layout that the rounds
+/// rate as highly: what a second attempt at a part is made of.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compute_parts(
+    positions: &[DVec3],
+    triangles: &[[u32; 3]],
+    feature_edges: &[[u32; 2]],
+    field: &FieldOutput,
+    parts: &[&[u32]],
+    params: &TraceParams,
+    seed: u64,
+    control: &Control,
+) -> Result<TraceOutput, Error> {
     let stage = Stage::Trace;
     control.checkpoint(stage)?;
-    let settings = params.settings();
-    let parts = crate::components::split(triangles, positions.len());
+    let settings = params.settings(seed);
     let done = AtomicUsize::new(0);
     let results: Vec<Result<PartLayout, Error>> = parts
         .par_iter()
-        .map(|part| {
+        .map(|faces| {
             control.checkpoint(stage)?;
-            let layout =
-                layout_part(positions, triangles, feature_edges, field, &part.faces, &settings, control)?;
+            let layout = layout_part(positions, triangles, feature_edges, field, faces, &settings, control)?;
             let finished = done.fetch_add(1, Ordering::Relaxed) + 1;
             control.set_progress(stage, finished as f32 / parts.len().max(1) as f32);
             Ok(layout)
@@ -315,10 +355,179 @@ pub fn compute(
         mesh: TraceMesh { positions: positions.to_vec(), ..TraceMesh::default() },
         ..TraceOutput::default()
     };
-    out.report.parts = parts.len();
     for result in results {
         merge(&mut out, result?);
     }
+    finish(&mut out);
+    control.set_progress(stage, 1.0);
+    Ok(out)
+}
+
+/// One layout from parts of several layouts of the same mesh: each of
+/// `picks` is a layout (an index into `sources`) and one of its parts. The
+/// sources' first `original` vertices are the mesh's own.
+///
+/// Parts that share a vertex must come from the same source (their feature
+/// edges and singularities at that vertex are told apart by nothing else).
+pub(crate) fn compose(original: usize, sources: &[&TraceOutput], picks: &[(usize, usize)]) -> TraceOutput {
+    let mut out = TraceOutput::default();
+    let Some(first) = sources.first() else { return out };
+    out.mesh.positions = first.mesh.positions.get(..original).unwrap_or_default().to_vec();
+    // Per source in use: the feature edges and singularities of each part.
+    let mut used = vec![false; sources.len()];
+    for &(s, _) in picks {
+        if let Some(flag) = used.get_mut(s) {
+            *flag = true;
+        }
+    }
+    type Bins = (Vec<Vec<[u32; 2]>>, Vec<Vec<(u32, i32)>>);
+    let bins: Vec<Option<Bins>> = sources
+        .iter()
+        .zip(&used)
+        .map(|(source, &used)| {
+            used.then(|| {
+                let mut part_of = vec![u32::MAX; source.mesh.positions.len()];
+                for (i, span) in source.parts.iter().enumerate() {
+                    let faces = source.mesh.triangles.get(span.faces.start as usize..span.faces.end as usize);
+                    for &v in faces.unwrap_or_default().iter().flatten() {
+                        if let Some(slot) = part_of.get_mut(v as usize) {
+                            *slot = i as u32;
+                        }
+                    }
+                }
+                let part = |v: u32| part_of.get(v as usize).copied().filter(|&i| i != u32::MAX);
+                let mut edges = vec![Vec::new(); source.parts.len()];
+                for &[a, b] in &source.mesh.feature_edges {
+                    if let Some(i) = part(a) {
+                        edges[i as usize].push([a, b]);
+                    }
+                }
+                let mut singular = vec![Vec::new(); source.parts.len()];
+                for &(v, k) in &source.mesh.singularities {
+                    if let Some(i) = part(v) {
+                        singular[i as usize].push((v, k));
+                    }
+                }
+                (edges, singular)
+            })
+        })
+        .collect();
+    for &(s, index) in picks {
+        let (Some(source), Some(Some((edges, singular)))) = (sources.get(s), bins.get(s)) else { continue };
+        let Some(span) = source.parts.get(index) else { continue };
+        let range = |r: &std::ops::Range<u32>| r.start as usize..r.end as usize;
+        let base = out.mesh.positions.len() as u32;
+        let map = |v: u32| if (v as usize) < original { v } else { base + (v - span.added.start) };
+        let start = PartSpan {
+            faces: out.mesh.triangles.len() as u32..0,
+            patches: out.patches.len() as u32..0,
+            paths: out.paths.len() as u32..0,
+            added: base..0,
+            tally: span.tally.clone(),
+        };
+        out.mesh
+            .positions
+            .extend_from_slice(source.mesh.positions.get(range(&span.added)).unwrap_or_default());
+        let faces = range(&span.faces);
+        out.mesh
+            .triangles
+            .extend(source.mesh.triangles.get(faces.clone()).unwrap_or_default().iter().map(|t| t.map(map)));
+        out.mesh.directions.extend_from_slice(source.mesh.directions.get(faces.clone()).unwrap_or_default());
+        out.mesh.feature_edges.extend(edges[index].iter().map(|&[a, b]| {
+            let (x, y) = (map(a), map(b));
+            [x.min(y), x.max(y)]
+        }));
+        out.mesh.singularities.extend(singular[index].iter().map(|&(v, k)| (map(v), k)));
+        out.patch_of_face.extend(
+            source
+                .patch_of_face
+                .get(faces.clone())
+                .unwrap_or_default()
+                .iter()
+                .map(|&p| p - span.patches.start + start.patches.start),
+        );
+        out.source_face.extend_from_slice(source.source_face.get(faces).unwrap_or_default());
+        out.patches.extend(source.patches.get(range(&span.patches)).unwrap_or_default().iter().map(|p| {
+            Patch {
+                corners: p.corners.iter().map(|&v| map(v)).collect(),
+                sides: p
+                    .sides
+                    .iter()
+                    .map(|s| Side {
+                        vertices: s.vertices.iter().map(|&v| map(v)).collect(),
+                        length: s.length,
+                    })
+                    .collect(),
+                singularities: p.singularities.iter().map(|&(v, k)| (map(v), k)).collect(),
+                kind: p.kind,
+                cc_margin: p.cc_margin,
+            }
+        }));
+        out.paths.extend(
+            source
+                .paths
+                .get(range(&span.paths))
+                .unwrap_or_default()
+                .iter()
+                .map(|chain| chain.iter().map(|&v| map(v)).collect()),
+        );
+        close(&mut out, start);
+    }
+    finish(&mut out);
+    out
+}
+
+/// Whether part `i` of `a` and part `j` of `b` (two layouts of the same
+/// mesh) are the same layout: the same triangles in the same patches with
+/// the same corners.
+pub(crate) fn same_part(a: &TraceOutput, i: usize, b: &TraceOutput, j: usize) -> bool {
+    let (Some(x), Some(y)) = (a.parts.get(i), b.parts.get(j)) else { return false };
+    let range = |r: &std::ops::Range<u32>| r.start as usize..r.end as usize;
+    let (Some(fa), Some(fb)) = (a.patch_of_face.get(range(&x.faces)), b.patch_of_face.get(range(&y.faces)))
+    else {
+        return false;
+    };
+    let (Some(pa), Some(pb)) = (a.patches.get(range(&x.patches)), b.patches.get(range(&y.patches))) else {
+        return false;
+    };
+    // Vertices refinement added are numbered from wherever the part's run starts.
+    let (from_a, from_b) = (x.added.start, y.added.start);
+    let same_vertex = |u: u32, v: u32| {
+        if u < from_a || v < from_b { u == v } else { u - from_a == v - from_b }
+    };
+    fa.len() == fb.len()
+        && pa.len() == pb.len()
+        && fa.iter().zip(fb).all(|(&p, &q)| p - x.patches.start == q - y.patches.start)
+        && pa.iter().zip(pb).all(|(p, q)| {
+            p.kind == q.kind
+                && p.corners.len() == q.corners.len()
+                && p.corners.iter().zip(&q.corners).all(|(&u, &v)| same_vertex(u, v))
+        })
+}
+
+/// Ends a part's span at the lists' current lengths and adds its counts to the report.
+fn close(out: &mut TraceOutput, start: PartSpan) {
+    let span = PartSpan {
+        faces: start.faces.start..out.mesh.triangles.len() as u32,
+        patches: start.patches.start..out.patches.len() as u32,
+        paths: start.paths.start..out.paths.len() as u32,
+        added: start.added.start..out.mesh.positions.len() as u32,
+        tally: start.tally,
+    };
+    let r = &mut out.report;
+    r.candidates += span.tally.candidates;
+    r.removed_paths += span.tally.removed_paths;
+    r.sub_passes_run += span.tally.sub_passes_run;
+    r.relaxed_patches += span.tally.relaxed_patches;
+    r.seams += span.tally.seams;
+    r.redeclared += span.tally.redeclared;
+    r.uncrowded += span.tally.uncrowded;
+    out.parts.push(span);
+}
+
+/// Puts the joined lists in order and counts the patches for the report.
+fn finish(out: &mut TraceOutput) {
+    out.report.parts = out.parts.len();
     out.mesh.feature_edges.sort_unstable();
     out.mesh.feature_edges.dedup();
     out.mesh.singularities.sort_unstable();
@@ -340,8 +549,6 @@ pub fn compute(
     }
     r.patches = out.patches.len();
     r.kept_paths = out.paths.len();
-    control.set_progress(stage, 1.0);
-    Ok(out)
 }
 
 /// One part's layout, in its own vertex ids (`global` maps the part's
@@ -504,6 +711,13 @@ fn layout_part(
 fn merge(out: &mut TraceOutput, part: PartLayout) {
     let original = part.global.len();
     let base_new = out.mesh.positions.len() as u32;
+    let start = PartSpan {
+        faces: out.mesh.triangles.len() as u32..0,
+        patches: out.patches.len() as u32..0,
+        paths: out.paths.len() as u32..0,
+        added: base_new..0,
+        tally: part.tally,
+    };
     let map = |v: u32| {
         if (v as usize) < original { part.global[v as usize] } else { base_new + v - original as u32 }
     };
@@ -531,12 +745,5 @@ fn merge(out: &mut TraceOutput, part: PartLayout) {
         }
     }));
     out.paths.extend(part.paths.into_iter().map(|c| c.into_iter().map(map).collect()));
-    let r = &mut out.report;
-    r.candidates += part.tally.candidates;
-    r.removed_paths += part.tally.removed_paths;
-    r.sub_passes_run += part.tally.sub_passes_run;
-    r.relaxed_patches += part.tally.relaxed_patches;
-    r.seams += part.tally.seams;
-    r.redeclared += part.tally.redeclared;
-    r.uncrowded += part.tally.uncrowded;
+    close(out, start);
 }

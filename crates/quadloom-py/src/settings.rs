@@ -90,6 +90,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("use_face_set_boundaries", Field::Bool(&mut f.use_face_set_boundaries)),
                 ("use_open_boundaries", Field::Bool(&mut f.use_open_boundaries)),
                 ("prune_steps", Field::Usize(&mut f.prune_steps)),
+                ("min_fold", Field::F64(&mut f.min_fold)),
             ],
             "remesh" => vec![
                 ("enabled", Field::Bool(&mut m.enabled)),
@@ -135,6 +136,7 @@ pub fn apply(py: Python<'_>, params: &mut Params, dict: Option<&Bound<'_, PyDict
                 ("smoothing", Field::Usize(&mut qd.smoothing)),
                 ("solver_effort", Field::F64(&mut qd.solver_effort)),
                 ("adaptivity", Field::F64(&mut qd.adaptivity)),
+                ("attempts", Field::Usize(&mut qd.attempts)),
             ],
             "symmetry" => {
                 let [x, y, z] = &mut sy.axes;

@@ -150,6 +150,7 @@ pub fn run_output<'py>(py: Python<'py>, output: &RunOutput) -> PyResult<Bound<'p
             report.set_item("axes", s.axes.to_vec())?;
             report.set_item("offsets", s.offsets.to_vec())?;
             report.set_item("asymmetry", s.asymmetry.to_vec())?;
+            report.set_item("worst", s.worst.to_vec())?;
             report.set_item("seam_edges", s.seam_edges)?;
             report.set_item("skipped", s.skipped.as_deref())?;
             dict.set_item("symmetry", report)?;
@@ -192,8 +193,12 @@ fn quads<'py>(py: Python<'py>, q: &QuadOutput) -> PyResult<Bound<'py, PyDict>> {
         ("grid_patches", r.grid_patches),
         ("center_patches", r.center_patches),
         ("split_patches", r.split_patches),
+        ("bridge_patches", r.bridge_patches),
         ("fan_patches", r.fan_patches),
         ("kept_patches", r.kept_patches),
+        ("attempts", r.attempts),
+        ("parts_retried", r.parts_retried),
+        ("parts_improved", r.parts_improved),
     ] {
         report.set_item(key, value)?;
     }
@@ -390,6 +395,7 @@ fn features<'py>(py: Python<'py>, f: &FeatureReport) -> PyResult<Bound<'py, PyDi
     dict.set_item("edges", f.edges)?;
     dict.set_item("by_source", f.by_source.to_vec())?;
     dict.set_item("pruned_edges", f.pruned_edges)?;
+    dict.set_item("faint_edges", f.faint_edges)?;
     dict.set_item("corners", f.corners)?;
     dict.set_item("length_ratio", f.length_ratio)?;
     Ok(dict)

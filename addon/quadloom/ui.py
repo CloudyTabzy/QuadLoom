@@ -42,11 +42,17 @@ class QUADLOOM_PT_main(bpy.types.Panel):
         col = layout.column(align=True)
         _sizing(col, settings)
         col.prop(settings, "quad_adaptivity")
+        col.prop(settings, "quad_attempts")
         row = layout.row(heading="Sharp Edges")
         row.prop(settings, "use_angle", text="")
         sub = row.row()
         sub.active = settings.use_angle
         sub.prop(settings, "angle_deg", text="Angle")
+        sub = layout.row()
+        sub.active = settings.use_angle
+        sub.prop(settings, "min_fold")
+        layout.operator("quadloom.detect", icon="VIEWZOOM")
+        _draw_detection(layout, context)
         col = layout.column(heading="Symmetry")
         axes = col.row(align=True)
         axes.active = not settings.symmetry_auto
@@ -63,6 +69,58 @@ class QUADLOOM_PT_main(bpy.types.Panel):
         else:
             row.operator("quadloom.remesh", icon="MOD_REMESH")
         _draw_result(layout, context.scene.quadloom_last_run)
+
+
+def _draw_detection(layout, context):
+    """What Detect Settings found, what it suggests against the settings now, and why."""
+    detection = context.scene.quadloom_detection
+    if not detection.valid:
+        return
+    settings = context.scene.quadloom
+    title, reason = wording.kind(detection.kind)
+    box = layout.box()
+    box.label(text=f"Detection: {detection.object_name}", icon="INFO")
+    col = box.column(align=True)
+    col.label(text=f"Kind: {title}")
+    col.label(text=f"Crease Lines: {detection.lines:,}")
+    if detection.lines:
+        col.label(text=f"Long or Sharp: {detection.form_lines:,}, {round(100 * detection.form_share)}% of the Length")
+        scraps = f"Scraps: {detection.scraps:,}"
+        if detection.scraps:
+            scraps += f", Folded About {detection.scrap_fold_deg:.0f}°"
+        col.label(text=scraps)
+    planes = ", ".join(name for name, on in zip("XYZ", detection.mirror_axes) if on)
+    if planes:
+        col.label(text=f"Mirror Planes: {planes}")
+        col.label(text=f"Sides Differ by {100 * detection.mirror_asymmetry:.2f}%,"
+                       f" at Most {100 * detection.mirror_worst:.2f}%")
+    else:
+        col.label(text="Mirror Planes: None")
+    col = box.column(align=True)
+    col.label(text="Suggested:" if operators.detection_differs(context) else "Suggested: No Change")
+    on_off = {True: "On", False: "Off"}
+    sharp = f"Sharp Edges: {on_off[detection.use_angle]}"
+    if detection.use_angle != settings.use_angle:
+        sharp += f" (Now {on_off[settings.use_angle]})"
+    col.label(text=sharp)
+    faint = f"Ignore Faint Creases: {detection.min_fold:.1f}"
+    if abs(detection.min_fold - settings.min_fold) > 1e-6:
+        faint += f" (Now {settings.min_fold:.1f})"
+    col.label(text=faint)
+    if detection.symmetry:
+        mirrored = "Symmetry: Auto Detect"
+        if operators.detection_suggests_symmetry(context):
+            mirrored += " (Now Off)"
+        col.label(text=mirrored)
+    col = box.column(align=True)
+    for line in _wrap(reason):
+        col.label(text=line)
+    current = operators.detection_is_current(context)
+    if not current:
+        box.label(text="The mesh or a setting it was read with changed: detect again", icon="ERROR")
+    row = box.row()
+    row.enabled = current and operators.detection_differs(context)
+    row.operator("quadloom.apply_detected", icon="CHECKMARK")
 
 
 def _sizing(layout, settings):
